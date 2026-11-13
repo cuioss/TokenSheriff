@@ -25,6 +25,8 @@ import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import javax.net.ssl.SSLContext;
 import java.net.URI;
@@ -32,6 +34,7 @@ import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -901,5 +904,177 @@ class HttpJwksLoaderConfigTest {
 
             assertEquals(Optional.of(Duration.ofMinutes(45)), copy.getMaxStaleness());
         }
+    }
+
+    static Stream<Duration> invalidUnknownKidRefreshWindows() {
+        return Stream.of(
+                null,
+                Duration.ZERO,
+                Duration.ofSeconds(-1),
+                Duration.ofSeconds(4),
+                Duration.ofMillis(4999),
+                Duration.ofSeconds(3601),
+                Duration.ofSeconds(3600).plusNanos(1));
+    }
+
+    @Nested
+    @DisplayName("unknownKidRefreshWindow")
+    class UnknownKidRefreshWindow {
+
+        @Test
+        @DisplayName("Should leave the unknown-kid refresh window absent by default")
+        void shouldLeaveWindowAbsentByDefault() {
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+                    .jwksUrl(VALID_URL)
+                    .issuerIdentifier("test-issuer")
+                    .build();
+
+            assertTrue(config.getUnknownKidRefreshWindow().isEmpty(), "the unknown-kid refresh must be opt-in");
+        }
+
+        @ParameterizedTest(name = "window {0}")
+        @MethodSource("de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfigTest#invalidUnknownKidRefreshWindows")
+        @DisplayName("Should reject a null, non-positive or out-of-range window")
+        void shouldRejectInvalidWindow(Duration window) {
+            var builder = HttpJwksLoaderConfig.builder();
+
+            assertThrows(IllegalArgumentException.class, () -> builder.unknownKidRefreshWindow(window),
+                    "only windows from 5 s to 3600 s inclusive are accepted");
+        }
+
+        @Test
+        @DisplayName("Should accept the 5 s and 3600 s boundaries")
+        void shouldAcceptBoundaryWindows() {
+            HttpJwksLoaderConfig lower = HttpJwksLoaderConfig.builder()
+                    .jwksUrl(VALID_URL)
+                    .issuerIdentifier("test-issuer")
+                    .unknownKidRefreshWindow(Duration.ofSeconds(5))
+                    .build();
+            HttpJwksLoaderConfig upper = HttpJwksLoaderConfig.builder()
+                    .jwksUrl(VALID_URL)
+                    .issuerIdentifier("test-issuer")
+                    .unknownKidRefreshWindow(Duration.ofSeconds(3600))
+                    .build();
+
+            assertAll("both boundaries are inclusive",
+                    () -> assertEquals(Optional.of(Duration.ofSeconds(5)), lower.getUnknownKidRefreshWindow()),
+                    () -> assertEquals(Optional.of(Duration.ofSeconds(3600)), upper.getUnknownKidRefreshWindow()));
+        }
+
+        @Test
+        @DisplayName("Should reject the window combined with refreshIntervalSeconds(0)")
+        void shouldRejectWindowWithoutBackgroundRefresh() {
+            var builder = HttpJwksLoaderConfig.builder()
+                    .jwksUrl(VALID_URL)
+                    .issuerIdentifier("test-issuer")
+                    .refreshIntervalSeconds(0)
+                    .unknownKidRefreshWindow(Duration.ofSeconds(30));
+
+            var exception = assertThrows(IllegalArgumentException.class, builder::build);
+
+            assertTrue(exception.getMessage().contains(
+                            "unknownKidRefreshWindow(...) cannot be combined with refreshIntervalSeconds(0)"),
+                    "the guard must name the conflict, but was: " + exception.getMessage());
+        }
+
+        @Test
+        @DisplayName("Should accept the window with a positive refresh interval")
+        void shouldAcceptWindowWithBackgroundRefresh() {
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+                    .jwksUrl(VALID_URL)
+                    .issuerIdentifier("test-issuer")
+                    .refreshIntervalSeconds(REFRESH_INTERVAL)
+                    .unknownKidRefreshWindow(Duration.ofSeconds(30))
+                    .build();
+
+            assertEquals(Optional.of(Duration.ofSeconds(30)), config.getUnknownKidRefreshWindow());
+        }
+    }
+
+    @Nested
+    @DisplayName("initialLoadRetry")
+    class InitialLoadRetry {
+
+        @Test
+        @DisplayName("Should leave the initial-load retry disabled by default")
+        void shouldLeaveRetryDisabledByDefault() {
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+                    .jwksUrl(VALID_URL)
+                    .issuerIdentifier("test-issuer")
+                    .build();
+
+            assertFalse(config.isInitialLoadRetry(), "the initial-load retry must be opt-in");
+        }
+
+        @Test
+        @DisplayName("Should enable the initial-load retry when set")
+        void shouldEnableRetryWhenSet() {
+            HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+                    .jwksUrl(VALID_URL)
+                    .issuerIdentifier("test-issuer")
+                    .initialLoadRetry(true)
+                    .build();
+
+            assertTrue(config.isInitialLoadRetry());
+        }
+
+        @Test
+        @DisplayName("Should reject initialLoadRetry(true) combined with refreshIntervalSeconds(0)")
+        void shouldRejectRetryWithoutBackgroundRefresh() {
+            var builder = HttpJwksLoaderConfig.builder()
+                    .jwksUrl(VALID_URL)
+                    .issuerIdentifier("test-issuer")
+                    .refreshIntervalSeconds(0)
+                    .initialLoadRetry(true);
+
+            var exception = assertThrows(IllegalArgumentException.class, builder::build);
+
+            assertTrue(exception.getMessage().contains(
+                            "initialLoadRetry(true) cannot be combined with refreshIntervalSeconds(0)"),
+                    "the guard must name the conflict, but was: " + exception.getMessage());
+        }
+
+        @Test
+        @DisplayName("Should accept initialLoadRetry(false) combined with refreshIntervalSeconds(0)")
+        void shouldAcceptDisabledRetryWithoutBackgroundRefresh() {
+            var builder = HttpJwksLoaderConfig.builder()
+                    .jwksUrl(VALID_URL)
+                    .issuerIdentifier("test-issuer")
+                    .refreshIntervalSeconds(0)
+                    .initialLoadRetry(false);
+
+            assertDoesNotThrow(builder::build, "only an enabled retry needs the background refresh");
+        }
+
+        @Test
+        @DisplayName("Should document the fixed retry delays")
+        void shouldExposeFixedRetryDelays() {
+            assertAll("1 s doubling to a 30 s cap",
+                    () -> assertEquals(HttpJwksLoaderConfig.INITIAL_LOAD_RETRY_INITIAL_DELAY, Duration.ofSeconds(1)),
+                    () -> assertEquals(2, HttpJwksLoaderConfig.INITIAL_LOAD_RETRY_BACKOFF_FACTOR),
+                    () -> assertEquals(HttpJwksLoaderConfig.INITIAL_LOAD_RETRY_MAX_DELAY, Duration.ofSeconds(30)));
+        }
+    }
+
+    @Test
+    @DisplayName("withIssuerIdentifier should preserve the unknown-kid refresh window and the initial-load retry")
+    void withIssuerIdentifierShouldPreserveOptInSettings() {
+        HttpJwksLoaderConfig original = HttpJwksLoaderConfig.builder()
+                .wellKnownUrl(WELL_KNOWN_URL)
+                .unknownKidRefreshWindow(Duration.ofSeconds(42))
+                .initialLoadRetry(true)
+                .build();
+        HttpJwksLoaderConfig defaults = HttpJwksLoaderConfig.builder()
+                .wellKnownUrl(WELL_KNOWN_URL)
+                .build();
+
+        HttpJwksLoaderConfig copy = original.withIssuerIdentifier("https://example.com");
+        HttpJwksLoaderConfig defaultsCopy = defaults.withIssuerIdentifier("https://example.com");
+
+        assertAll("the copy carries both opt-in settings unchanged",
+                () -> assertEquals(Optional.of(Duration.ofSeconds(42)), copy.getUnknownKidRefreshWindow()),
+                () -> assertTrue(copy.isInitialLoadRetry()),
+                () -> assertTrue(defaultsCopy.getUnknownKidRefreshWindow().isEmpty()),
+                () -> assertFalse(defaultsCopy.isInitialLoadRetry()));
     }
 }

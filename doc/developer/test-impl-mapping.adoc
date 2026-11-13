@@ -96,12 +96,14 @@ Package prefix: `de.cuioss.sheriff.token`.
 `JwksLoaderKeyIdsContractTest`, `LoaderStatusTest`
 
 |`validation.jwks.http`
-|`HttpJwksLoaderAsyncInitializationTest`, `HttpJwksLoaderEgressRefreshTest`,
-`HttpJwksLoaderFailureAdvertisedJwksUriTest`, `HttpJwksLoaderFailureTest`,
-`HttpJwksLoaderGracePeriodTest`, `HttpJwksLoaderIssuerTest`, `HttpJwksLoaderKeyRotationTest`,
-`HttpJwksLoaderLockFreeStatusTest`, `HttpJwksLoaderRediscoveryTest`,
-`HttpJwksLoaderSchedulerTest`, `HttpJwksLoaderTest`, `HttpJwksLoaderValidatorCloseTest`,
-`HttpJwksLoaderWellKnownAsyncTest`, `SimpleHttpJwksLoaderTest`
+|`HttpJwksLoaderAsyncInitializationTest`, `HttpJwksLoaderDefaultBehaviourUnchangedTest`,
+`HttpJwksLoaderEgressRefreshTest`, `HttpJwksLoaderFailureAdvertisedJwksUriTest`,
+`HttpJwksLoaderFailureTest`, `HttpJwksLoaderGracePeriodTest`, `HttpJwksLoaderInitialRetryTest`,
+`HttpJwksLoaderIssuerTest`, `HttpJwksLoaderKeyRotationTest`, `HttpJwksLoaderLockFreeStatusTest`,
+`HttpJwksLoaderRediscoveryTest`, `HttpJwksLoaderSchedulerTest`, `HttpJwksLoaderTest`,
+`HttpJwksLoaderUnknownKidAttackTest`, `HttpJwksLoaderUnknownKidRefreshTest`,
+`HttpJwksLoaderValidatorCloseTest`, `HttpJwksLoaderWellKnownAsyncTest`,
+`SimpleHttpJwksLoaderTest`
 
 |`validation.jwks.key`
 |`JWKSKeyLoaderExtendedTest`, `JWKSKeyLoaderTest`, `JwkKeyHandlerTest`, `KeyInfoTest`
@@ -153,9 +155,9 @@ tests check that infrastructure, not production code: `InMemoryKeyHandlingTest`,
 `TestTokenSourceProviderTest` (`test.junit`).
 
 Fixtures that are not test classes: `BoundedBodyHandlerTestSupport` (`commons.transport`),
-`DiscoveryGenerationDispatcher` (`validation.jwks.http`), `DpopProofValidatorSupport`
-(`validation.dpop`), `JwksLoaderKeyIdsContractSupport` (`validation.jwks`) and
-`JsonTypedIdentifierClaimFixture` (`validation.pipeline.validator`).
+`DiscoveryGenerationDispatcher` and `UnknownKidJwksDispatcher` (`validation.jwks.http`),
+`DpopProofValidatorSupport` (`validation.dpop`), `JwksLoaderKeyIdsContractSupport`
+(`validation.jwks`) and `JsonTypedIdentifierClaimFixture` (`validation.pipeline.validator`).
 
 [#client]
 == token-sheriff-client
@@ -246,8 +248,8 @@ Package prefix: `de.cuioss.sheriff.token.quarkus`.
 |`config`
 |`AccessLogFilterConfigResolverTest`, `AccessLogFilterConfigTest`,
 `AccessTokenCacheConfigResolverTest`, `ConfigValueParserTest`,
-`IssuerConfigResolverDpopTransportAndLoggingTest`, `IssuerConfigResolverMaxStalenessTest`,
-`IssuerConfigResolverTest`, `JwtPropertyKeysTest`, `ParserConfigResolverTest`,
+`IssuerConfigResolverDpopTransportAndLoggingTest`, `IssuerConfigResolverJwksLoaderOptInTest`,
+`IssuerConfigResolverMaxStalenessTest`, `IssuerConfigResolverTest`, `JwtPropertyKeysTest`, `ParserConfigResolverTest`,
 `RetryStrategyConfigResolverTest`
 
 |`error`
@@ -369,8 +371,8 @@ application and identity provider. Package prefix: `de.cuioss.sheriff.token.inte
 |Bearer-token binding
 |`BearerAuthSpecIT` (`bearer`)
 
-|Token validation and discovery retry
-|`TokenValidationSpecIT`, `WellKnownRetryConfigSpecIT` (`token`)
+|Token validation, discovery retry and unknown-`kid` refresh
+|`TokenValidationSpecIT`, `UnknownKidRefreshSpecIT`, `WellKnownRetryConfigSpecIT` (`token`)
 
 |DPoP and JWE on the validation side
 |`DpopSpecIT`, `JweDecryptionSpecIT` (`security`)

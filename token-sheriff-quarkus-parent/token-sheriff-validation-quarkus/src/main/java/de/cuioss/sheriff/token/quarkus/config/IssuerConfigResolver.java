@@ -439,13 +439,8 @@ public class IssuerConfigResolver {
      * @throws IllegalStateException naming the offending property when a dpop sub-property is present
      */
     private void validateNoOrphanedDpopProperties(String issuerName) {
-        List<String> dpopSubProperties = List.of(
-                JwtPropertyKeys.ISSUERS.DPOP_REQUIRED.formatted(issuerName),
-                JwtPropertyKeys.ISSUERS.DPOP_PROOF_MAX_AGE_SECONDS.formatted(issuerName),
-                JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_SIZE.formatted(issuerName),
-                JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_TTL_SECONDS.formatted(issuerName));
-
-        for (String property : dpopSubProperties) {
+        for (String template : JwtPropertyKeys.ISSUERS.DPOP_SUB_PROPERTIES) {
+            String property = template.formatted(issuerName);
             if (config.getOptionalValue(property, String.class).isPresent()) {
                 throw new IllegalStateException(
                         ("Property '%s' is configured but DPoP validation is not enabled for issuer '%s'. "
@@ -506,7 +501,7 @@ public class IssuerConfigResolver {
             }
 
         } else {
-            validateNoOrphanedMaxStaleness(issuerName);
+            validateNoOrphanedHttpProperties(issuerName);
             if (filePath.isPresent()) {
                 builder.jwksFilePath(filePath.get());
                 LOGGER.debug("Configured JWKS file path for %s: %s", issuerName, filePath.get());
@@ -518,22 +513,25 @@ public class IssuerConfigResolver {
     }
 
     /**
-     * Fails fast when the maximum key staleness is configured for an issuer without HTTP JWKS loading.
-     * Only an HTTP-based loader refreshes its keys, so the value would otherwise be silently ignored
-     * (ADR-0026).
+     * Fails fast when a property that only an HTTP-based JWKS loader honours is configured for an issuer
+     * without HTTP JWKS loading. The properties checked are those of
+     * {@link JwtPropertyKeys.ISSUERS#HTTP_ONLY_PROPERTIES}, the single definition of that set. Only an
+     * HTTP-based loader refreshes its keys, so such a value would otherwise be silently ignored (ADR-0026).
      *
      * @param issuerName the issuer name
-     * @throws IllegalStateException naming the offending property when it is present
+     * @throws IllegalStateException naming the first offending property that is present
      */
-    private void validateNoOrphanedMaxStaleness(String issuerName) {
-        String property = JwtPropertyKeys.ISSUERS.MAX_STALENESS_SECONDS.formatted(issuerName);
-        if (config.getOptionalValue(property, String.class).isPresent()) {
-            throw new IllegalStateException(
-                    ("Property '%s' is configured but issuer '%s' does not load its JWKS over HTTP. "
-                            + "Configure '%s' or '%s', or remove the property.")
-                            .formatted(property, issuerName,
-                                    JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(issuerName),
-                                    JwtPropertyKeys.ISSUERS.WELL_KNOWN_URL.formatted(issuerName)));
+    private void validateNoOrphanedHttpProperties(String issuerName) {
+        for (String template : JwtPropertyKeys.ISSUERS.HTTP_ONLY_PROPERTIES) {
+            String property = template.formatted(issuerName);
+            if (config.getOptionalValue(property, String.class).isPresent()) {
+                throw new IllegalStateException(
+                        ("Property '%s' is configured but issuer '%s' does not load its JWKS over HTTP. "
+                                + "Configure '%s' or '%s', or remove the property.")
+                                .formatted(property, issuerName,
+                                        JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(issuerName),
+                                        JwtPropertyKeys.ISSUERS.WELL_KNOWN_URL.formatted(issuerName)));
+            }
         }
     }
 
@@ -549,9 +547,71 @@ public class IssuerConfigResolver {
      */
     private void configureMaxStaleness(HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder builder, String issuerName) {
         String property = JwtPropertyKeys.ISSUERS.MAX_STALENESS_SECONDS.formatted(issuerName);
+        readPositiveSeconds(property).ifPresent(seconds -> {
+            builder.maxStaleness(Duration.ofSeconds(seconds));
+            LOGGER.debug("Set max key staleness for %s: %s seconds", issuerName, seconds);
+        });
+    }
+
+    /**
+     * Maps the opt-in unknown-{@code kid} refresh window onto the loader configuration.
+     * <p>
+     * The builder is only called when the property is present, so the default stays off: an unknown
+     * {@code kid} never causes a fetch. A value that is not a whole number or not positive fails startup
+     * with the property named. The accepted range and the combination with a refresh interval of
+     * {@code 0} are validated by the builder, which fails startup as well.
+     * </p>
+     *
+     * @throws IllegalStateException if the configured value is unparseable or not positive
+     */
+    private void configureUnknownKidRefreshWindow(HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder builder,
+            String issuerName) {
+        String property = JwtPropertyKeys.ISSUERS.UNKNOWN_KID_REFRESH_WINDOW_SECONDS.formatted(issuerName);
+        readPositiveSeconds(property).ifPresent(seconds -> {
+            builder.unknownKidRefreshWindow(Duration.ofSeconds(seconds));
+            LOGGER.debug("Set unknown-kid refresh window for %s: %s seconds", issuerName, seconds);
+        });
+    }
+
+    /**
+     * Maps the opt-in initial-load retry onto the loader configuration.
+     * <p>
+     * The builder is only called for an explicit {@code true}, so the default path keeps the builder
+     * default (off). The value must be {@code true} or {@code false}, ignoring case and surrounding
+     * whitespace; anything else fails startup with the property named rather than being read as
+     * {@code false}. The combination with a refresh interval of {@code 0} is validated by the builder.
+     * </p>
+     *
+     * @throws IllegalStateException if the configured value is not a boolean
+     */
+    private void configureInitialLoadRetry(HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder builder,
+            String issuerName) {
+        String property = JwtPropertyKeys.ISSUERS.INITIAL_LOAD_RETRY.formatted(issuerName);
         Optional<String> rawValue = config.getOptionalValue(property, String.class);
         if (rawValue.isEmpty()) {
             return;
+        }
+        String value = rawValue.get().trim();
+        if ("true".equalsIgnoreCase(value)) {
+            builder.initialLoadRetry(true);
+            LOGGER.debug("Enabled initial-load retry for %s", issuerName);
+        } else if (!"false".equalsIgnoreCase(value)) {
+            throw new IllegalStateException(
+                    "Property '%s' must be 'true' or 'false', but was '%s'".formatted(property, rawValue.get()));
+        }
+    }
+
+    /**
+     * Reads an optional property holding a positive whole number of seconds.
+     *
+     * @param property the fully qualified property name
+     * @return the value, empty when the property is not set
+     * @throws IllegalStateException naming the property if the value is unparseable or not positive
+     */
+    private Optional<Long> readPositiveSeconds(String property) {
+        Optional<String> rawValue = config.getOptionalValue(property, String.class);
+        if (rawValue.isEmpty()) {
+            return Optional.empty();
         }
         long seconds;
         try {
@@ -566,8 +626,7 @@ public class IssuerConfigResolver {
                     "Property '%s' must be a positive whole number of seconds, but was %s"
                             .formatted(property, seconds));
         }
-        builder.maxStaleness(Duration.ofSeconds(seconds));
-        LOGGER.debug("Set max key staleness for %s: %s seconds", issuerName, seconds);
+        return Optional.of(seconds);
     }
 
     /**
@@ -683,6 +742,10 @@ public class IssuerConfigResolver {
 
         // Opt-in maximum key staleness (ADR-0017) - off unless the property is set
         configureMaxStaleness(builder, issuerName);
+
+        // Opt-in unknown-kid refresh window and initial-load retry (ADR-0030) - off unless set
+        configureUnknownKidRefreshWindow(builder, issuerName);
+        configureInitialLoadRetry(builder, issuerName);
 
         // Set the retry configuration
         builder.retryConfig(retryConfig);

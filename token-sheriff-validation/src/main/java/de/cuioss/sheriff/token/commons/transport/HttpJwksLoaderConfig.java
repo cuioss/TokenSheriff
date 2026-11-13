@@ -89,6 +89,51 @@ public class HttpJwksLoaderConfig {
     private static final int DEFAULT_READ_TIMEOUT_SECONDS = 3;
 
     /**
+     * The smallest accepted unknown-{@code kid} refresh window (5 seconds, inclusive).
+     *
+     * @see HttpJwksLoaderConfigBuilder#unknownKidRefreshWindow(Duration)
+     * @since 0.9.10
+     */
+    public static final Duration MIN_UNKNOWN_KID_REFRESH_WINDOW = Duration.ofSeconds(5);
+
+    /**
+     * The largest accepted unknown-{@code kid} refresh window (3600 seconds, inclusive).
+     *
+     * @see HttpJwksLoaderConfigBuilder#unknownKidRefreshWindow(Duration)
+     * @since 0.9.10
+     */
+    public static final Duration MAX_UNKNOWN_KID_REFRESH_WINDOW = Duration.ofSeconds(3600);
+
+    /**
+     * The delay before the first retry of a failed initial load (1 second), when
+     * {@link HttpJwksLoaderConfigBuilder#initialLoadRetry(boolean) initialLoadRetry} is enabled.
+     *
+     * @see #INITIAL_LOAD_RETRY_BACKOFF_FACTOR
+     * @see #INITIAL_LOAD_RETRY_MAX_DELAY
+     * @since 0.9.10
+     */
+    public static final Duration INITIAL_LOAD_RETRY_INITIAL_DELAY = Duration.ofSeconds(1);
+
+    /**
+     * The factor (2) by which the delay grows from one retry of a failed initial load to the next.
+     *
+     * @see #INITIAL_LOAD_RETRY_INITIAL_DELAY
+     * @see #INITIAL_LOAD_RETRY_MAX_DELAY
+     * @since 0.9.10
+     */
+    public static final int INITIAL_LOAD_RETRY_BACKOFF_FACTOR = 2;
+
+    /**
+     * The upper bound (30 seconds) of the delay between two retries of a failed initial load. The delay
+     * never exceeds the configured refresh interval either, whichever is smaller.
+     *
+     * @see #INITIAL_LOAD_RETRY_INITIAL_DELAY
+     * @see #INITIAL_LOAD_RETRY_BACKOFF_FACTOR
+     * @since 0.9.10
+     */
+    public static final Duration INITIAL_LOAD_RETRY_MAX_DELAY = Duration.ofSeconds(30);
+
+    /**
      * The interval in seconds at which to refresh the keys.
      * If set to 0, no time-based caching will be used.
      * It defaults to 10 minutes (600 seconds).
@@ -204,6 +249,18 @@ public class HttpJwksLoaderConfig {
      */
     private final @Nullable Duration maxStaleness;
 
+    /**
+     * The opt-in unknown-{@code kid} refresh window, {@code null} when not configured. See
+     * {@link HttpJwksLoaderConfigBuilder#unknownKidRefreshWindow(Duration)}.
+     */
+    private final @Nullable Duration unknownKidRefreshWindow;
+
+    /**
+     * Whether a failed initial load is retried with backoff. See
+     * {@link HttpJwksLoaderConfigBuilder#initialLoadRetry(boolean)}.
+     */
+    private final boolean initialLoadRetry;
+
     @SuppressWarnings("java:S107") // ok for builder
     private HttpJwksLoaderConfig(int refreshIntervalSeconds,
             HttpHandler httpHandler,
@@ -217,7 +274,9 @@ public class HttpJwksLoaderConfig {
             ParserConfig parserConfig,
             EgressPolicy egressPolicy,
             CleartextEndpoints.TlsSettings tlsSettings,
-            @Nullable Duration maxStaleness) {
+            @Nullable Duration maxStaleness,
+            @Nullable Duration unknownKidRefreshWindow,
+            boolean initialLoadRetry) {
         this.refreshIntervalSeconds = refreshIntervalSeconds;
         this.httpHandler = httpHandler;
         this.wellKnownConfig = wellKnownConfig;
@@ -231,6 +290,8 @@ public class HttpJwksLoaderConfig {
         this.egressPolicy = egressPolicy;
         this.tlsSettings = tlsSettings;
         this.maxStaleness = maxStaleness;
+        this.unknownKidRefreshWindow = unknownKidRefreshWindow;
+        this.initialLoadRetry = initialLoadRetry;
     }
 
     /**
@@ -244,6 +305,39 @@ public class HttpJwksLoaderConfig {
      */
     public Optional<Duration> getMaxStaleness() {
         return Optional.ofNullable(maxStaleness);
+    }
+
+    /**
+     * Returns the opt-in unknown-{@code kid} refresh window.
+     * <p>
+     * When present, a key lookup that misses the installed and retired key sets schedules at most one
+     * background JWKS fetch per window and per loader (that is, per issuer); the lookup itself performs no
+     * I/O and does not wait for the fetch. When absent (the default), an unknown {@code kid} never causes
+     * a fetch, and new keys are picked up only by the periodic refresh.
+     *
+     * @return the configured window, empty when not configured
+     * @see HttpJwksLoaderConfigBuilder#unknownKidRefreshWindow(Duration)
+     * @since 0.9.10
+     */
+    public Optional<Duration> getUnknownKidRefreshWindow() {
+        return Optional.ofNullable(unknownKidRefreshWindow);
+    }
+
+    /**
+     * Returns whether a failed initial load is retried with backoff.
+     * <p>
+     * When {@code true}, an initial load that ends without installed keys is retried after
+     * {@link #INITIAL_LOAD_RETRY_INITIAL_DELAY}, the delay growing by
+     * {@link #INITIAL_LOAD_RETRY_BACKOFF_FACTOR} up to {@link #INITIAL_LOAD_RETRY_MAX_DELAY} and never above
+     * the refresh interval, until keys are installed. When {@code false} (the default), a failed initial
+     * load is retried only by the periodic refresh.
+     *
+     * @return {@code true} if a failed initial load is retried with backoff, {@code false} otherwise
+     * @see HttpJwksLoaderConfigBuilder#initialLoadRetry(boolean)
+     * @since 0.9.10
+     */
+    public boolean isInitialLoadRetry() {
+        return initialLoadRetry;
     }
 
     /**
@@ -327,7 +421,8 @@ public class HttpJwksLoaderConfig {
      * Every other setting is copied unchanged: the copy shares the HTTP handler, the
      * {@link WellKnownConfig}, the retry configuration, the scheduled executor (together with its
      * ownership flag), the parser configuration, the egress policy and the TLS settings of this
-     * instance, as is the maximum staleness. {@code IssuerConfig} uses this method to propagate its
+     * instance, as are the maximum staleness, the unknown-{@code kid} refresh window and the initial-load
+     * retry setting. {@code IssuerConfig} uses this method to propagate its
      * identifier into the loader configuration, so that the issuer advertised by a discovery document is
      * always compared with it.
      *
@@ -351,7 +446,9 @@ public class HttpJwksLoaderConfig {
                 parserConfig,
                 egressPolicy,
                 tlsSettings,
-                maxStaleness);
+                maxStaleness,
+                unknownKidRefreshWindow,
+                initialLoadRetry);
     }
 
     /**
@@ -406,6 +503,8 @@ public class HttpJwksLoaderConfig {
         private int connectTimeoutSeconds = DEFAULT_CONNECT_TIMEOUT_SECONDS;
         private int readTimeoutSeconds = DEFAULT_READ_TIMEOUT_SECONDS;
         private @Nullable Duration maxStaleness;
+        private @Nullable Duration unknownKidRefreshWindow;
+        private boolean initialLoadRetry = false;
         private final List<String> allowedEgressHosts = new ArrayList<>();
 
         // The directly configured JWKS endpoint, kept to fit the TLS settings to its scheme in build()
@@ -817,6 +916,72 @@ public class HttpJwksLoaderConfig {
         }
 
         /**
+         * Enables the opt-in refresh of the key set when a key lookup meets an unknown {@code kid}.
+         * <p>
+         * Not set by default: a lookup for a {@code kid} that is neither in the installed nor in a retired
+         * key set then simply misses, and a rotated key is picked up only by the next periodic refresh.
+         * When set, such a miss claims the window and schedules one background JWKS fetch; the lookup
+         * itself performs no I/O, does not wait, and still misses, so the triggering token is refused. The
+         * fetched key set is installed only if it holds the triggering {@code kid}; a failed or
+         * non-matching fetch changes nothing and does not count as a failed refresh cycle.
+         * <p>
+         * <strong>Bound:</strong> at most one such fetch per window and per loader, that is per issuer,
+         * whatever the request rate and the number of distinct {@code kid} values presented.
+         * <p>
+         * <strong>Trade-off:</strong> the lookup is reachable before any signature check, so an attacker
+         * presenting an invented {@code kid} consumes the window. An attacker who does so in every window
+         * defers the on-demand pickup of a legitimate rotation entirely, because the fetched key set is
+         * installed only if it holds the attacker's invented {@code kid}; such a rotation is then picked up
+         * by the next periodic refresh only. The window is a rate limit on fetches, not a pickup deadline:
+         * no point in time is guaranteed by which a rotated key is available.
+         * <p>
+         * The fetch runs on the loader's background refresh executor, so {@link #build()} rejects this
+         * setting combined with {@link #refreshIntervalSeconds(int) refreshIntervalSeconds(0)}.
+         *
+         * @param unknownKidRefreshWindow the window, from {@link #MIN_UNKNOWN_KID_REFRESH_WINDOW 5 seconds}
+         *                                to {@link #MAX_UNKNOWN_KID_REFRESH_WINDOW 3600 seconds} inclusive
+         * @return this builder instance
+         * @throws IllegalArgumentException if {@code unknownKidRefreshWindow} is {@code null}, zero,
+         *                                  negative, or outside the accepted range
+         * @since 0.9.10
+         */
+        public HttpJwksLoaderConfigBuilder unknownKidRefreshWindow(Duration unknownKidRefreshWindow) {
+            Preconditions.checkArgument(unknownKidRefreshWindow != null, "unknownKidRefreshWindow must not be null");
+            Preconditions.checkArgument(!unknownKidRefreshWindow.isZero() && !unknownKidRefreshWindow.isNegative(),
+                    "unknownKidRefreshWindow must be positive, but was %s", unknownKidRefreshWindow);
+            Preconditions.checkArgument(unknownKidRefreshWindow.compareTo(MIN_UNKNOWN_KID_REFRESH_WINDOW) >= 0
+                    && unknownKidRefreshWindow.compareTo(MAX_UNKNOWN_KID_REFRESH_WINDOW) <= 0,
+                    "unknownKidRefreshWindow must be between %s and %s inclusive, but was %s",
+                    MIN_UNKNOWN_KID_REFRESH_WINDOW, MAX_UNKNOWN_KID_REFRESH_WINDOW, unknownKidRefreshWindow);
+            this.unknownKidRefreshWindow = unknownKidRefreshWindow;
+            return this;
+        }
+
+        /**
+         * Enables the opt-in, backed-off retry of a failed initial load.
+         * <p>
+         * Disabled by default: an initial load that ends without installed keys is then retried only by the
+         * periodic refresh, one refresh interval later. When enabled, it is retried after
+         * {@link #INITIAL_LOAD_RETRY_INITIAL_DELAY 1 second}, the delay doubling
+         * ({@link #INITIAL_LOAD_RETRY_BACKOFF_FACTOR}) up to {@link #INITIAL_LOAD_RETRY_MAX_DELAY 30 seconds}
+         * and never above the refresh interval. Retries are strictly sequential and stop at the first
+         * installed key set, at a terminal error and when the loader is closed.
+         * <p>
+         * The retries run on the loader's background refresh executor, so {@link #build()} rejects enabling
+         * this setting ({@code true}) combined with {@link #refreshIntervalSeconds(int) refreshIntervalSeconds(0)};
+         * {@code false} is accepted with any refresh interval.
+         *
+         * @param initialLoadRetry {@code true} to retry a failed initial load with backoff, {@code false}
+         *                         (default) to leave it to the periodic refresh
+         * @return this builder instance
+         * @since 0.9.10
+         */
+        public HttpJwksLoaderConfigBuilder initialLoadRetry(boolean initialLoadRetry) {
+            this.initialLoadRetry = initialLoadRetry;
+            return this;
+        }
+
+        /**
          * Validates that the proposed endpoint source doesn't conflict with an already configured one.
          * <p>
          * This validation ensures mutual exclusivity between direct JWKS endpoint configuration
@@ -868,6 +1033,21 @@ public class HttpJwksLoaderConfig {
                         "HttpJwksLoaderConfigBuilder: maxStaleness(...) cannot be combined with refreshIntervalSeconds(0). "
                                 + "Staleness is evaluated on each background refresh cycle, which refreshIntervalSeconds(0) disables. "
                                 + "Either configure a positive refresh interval or drop maxStaleness(...).");
+            }
+
+            // Both opt-ins run on the background refresh executor; without a refresh they could never
+            // run, so the settings would be silently inert.
+            if (unknownKidRefreshWindow != null && refreshIntervalSeconds == 0) {
+                throw new IllegalArgumentException(
+                        "HttpJwksLoaderConfigBuilder: unknownKidRefreshWindow(...) cannot be combined with refreshIntervalSeconds(0). "
+                                + "The unknown-kid fetch runs on the background refresh executor, which refreshIntervalSeconds(0) disables. "
+                                + "Either configure a positive refresh interval or drop unknownKidRefreshWindow(...).");
+            }
+            if (initialLoadRetry && refreshIntervalSeconds == 0) {
+                throw new IllegalArgumentException(
+                        "HttpJwksLoaderConfigBuilder: initialLoadRetry(true) cannot be combined with refreshIntervalSeconds(0). "
+                                + "The retries run on the background refresh executor, which refreshIntervalSeconds(0) disables. "
+                                + "Either configure a positive refresh interval or drop initialLoadRetry(true).");
             }
 
             // Ensure at least one endpoint configuration method was used
@@ -974,7 +1154,9 @@ public class HttpJwksLoaderConfig {
                     resolvedParserConfig,
                     resolvedEgressPolicy,
                     tlsSettings,
-                    maxStaleness);
+                    maxStaleness,
+                    unknownKidRefreshWindow,
+                    initialLoadRetry);
         }
 
     }
