@@ -929,8 +929,11 @@ public class HttpJwksLoaderConfig {
          * whatever the request rate and the number of distinct {@code kid} values presented.
          * <p>
          * <strong>Trade-off:</strong> the lookup is reachable before any signature check, so an attacker
-         * presenting an invented {@code kid} consumes the window. A legitimate rotation is then picked up
-         * at the latest one window later or at the next periodic refresh, whichever is first.
+         * presenting an invented {@code kid} consumes the window. An attacker who does so in every window
+         * defers the on-demand pickup of a legitimate rotation entirely, because the fetched key set is
+         * installed only if it holds the attacker's invented {@code kid}; such a rotation is then picked up
+         * by the next periodic refresh only. Without a sustained attack, a legitimate rotation is picked up
+         * at the latest one window later.
          * <p>
          * The fetch runs on the loader's background refresh executor, so {@link #build()} rejects this
          * setting combined with {@link #refreshIntervalSeconds(int) refreshIntervalSeconds(0)}.

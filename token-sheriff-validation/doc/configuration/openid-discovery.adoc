@@ -226,9 +226,12 @@ periodic refresh. With `unknownKidRefreshWindow(Duration)` set:
   distinct key IDs presented; further misses inside the window log at DEBUG only.
 
 The lookup is reachable before any signature check, so an attacker presenting an invented key ID consumes
-the window. A legitimate rotation is then picked up at the latest one window later or at the next
-periodic refresh, whichever is first. Choose the window as the longest delay you accept for picking up a
-rotated key in that case; the setter rejects a `null`, zero, negative or out-of-range value.
+the window. An attacker who does so in every window defers the on-demand pickup of a legitimate rotation
+entirely, because the fetched key set is installed only if it holds the attacker's invented key ID; such a
+rotation is then picked up by the next periodic refresh only. Without a sustained attack, a legitimate
+rotation is picked up at the latest one window later. Choose the refresh interval as the longest delay
+you accept for picking up a rotated key under attack; the setter rejects a `null`, zero, negative or
+out-of-range value.
 
 === Initial load retry
 

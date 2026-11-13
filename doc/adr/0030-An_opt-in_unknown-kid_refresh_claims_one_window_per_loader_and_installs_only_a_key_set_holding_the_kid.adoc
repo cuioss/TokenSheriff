@@ -136,8 +136,11 @@ orphaned-configuration rule of ADR-0026.
 
 === Negative
 
-* An attacker presenting an invented `kid` consumes the window. A legitimate rotation is then picked up at the
-  latest one window later or at the next periodic refresh, whichever is first. The bound trades latency for
+* An attacker presenting an invented `kid` consumes the window. An attacker who does so in every window
+  defers the on-demand pickup of a legitimate rotation entirely, because the fetched key set is installed
+  only if it holds the attacker's invented `kid`; such a rotation is then picked up by the next periodic
+  refresh only, so the on-demand path never makes the loader worse than without it. Without a sustained
+  attack, a legitimate rotation is picked up at the latest one window later. The bound trades latency for
   amplification resistance, and the window length sets that trade-off.
 * The token that triggers a refresh is always rejected, even when its key becomes available a moment later;
   clients see one refusal per rotation.
