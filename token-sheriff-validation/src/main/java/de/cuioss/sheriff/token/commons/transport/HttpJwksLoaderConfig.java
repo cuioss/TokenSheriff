@@ -932,8 +932,8 @@ public class HttpJwksLoaderConfig {
          * presenting an invented {@code kid} consumes the window. An attacker who does so in every window
          * defers the on-demand pickup of a legitimate rotation entirely, because the fetched key set is
          * installed only if it holds the attacker's invented {@code kid}; such a rotation is then picked up
-         * by the next periodic refresh only. Without a sustained attack, a legitimate rotation is picked up
-         * at the latest one window later.
+         * by the next periodic refresh only. The window is a rate limit on fetches, not a pickup deadline:
+         * no point in time is guaranteed by which a rotated key is available.
          * <p>
          * The fetch runs on the loader's background refresh executor, so {@link #build()} rejects this
          * setting combined with {@link #refreshIntervalSeconds(int) refreshIntervalSeconds(0)}.
@@ -967,8 +967,9 @@ public class HttpJwksLoaderConfig {
          * and never above the refresh interval. Retries are strictly sequential and stop at the first
          * installed key set, at a terminal error and when the loader is closed.
          * <p>
-         * The retries run on the loader's background refresh executor, so {@link #build()} rejects this
-         * setting combined with {@link #refreshIntervalSeconds(int) refreshIntervalSeconds(0)}.
+         * The retries run on the loader's background refresh executor, so {@link #build()} rejects enabling
+         * this setting ({@code true}) combined with {@link #refreshIntervalSeconds(int) refreshIntervalSeconds(0)};
+         * {@code false} is accepted with any refresh interval.
          *
          * @param initialLoadRetry {@code true} to retry a failed initial load with backoff, {@code false}
          *                         (default) to leave it to the periodic refresh

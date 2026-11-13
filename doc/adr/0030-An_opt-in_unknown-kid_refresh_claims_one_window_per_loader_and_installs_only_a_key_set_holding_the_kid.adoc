@@ -159,10 +159,11 @@ orphaned-configuration rule of ADR-0026.
   going through the shared commit step; a new fetch path that bypasses either reopens overlap or displacement.
 * Known limitation: a periodic cycle that skips because the shared in-flight guard is held also skips its
   staleness evaluation, since the skip returns before the failed cycle is recorded and the opt-in
-  `maxStaleness` bound is checked. With the default single-thread, loader-owned executor the cycles serialise,
-  so this cannot occur. With a caller-supplied multi-thread executor and a slow identity provider, a caller
-  who claims a window in every window can keep the guard held and so defer the `maxStaleness` degradation. No
-  production caller supplies such an executor today.
+  `maxStaleness` bound is checked. The guard is taken on the request thread when a window is claimed, before
+  the fetch task runs, so even with the default single-thread, loader-owned executor a due periodic cycle that
+  falls into that gap skips once. Only a sustained deferral needs more: with a caller-supplied multi-thread
+  executor and a slow identity provider, a caller who claims a window in every window can keep the guard held
+  and so defer the `maxStaleness` degradation. No production caller supplies such an executor today.
 
 == Alternatives Considered
 
