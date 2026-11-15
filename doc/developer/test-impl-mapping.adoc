@@ -250,7 +250,7 @@ Package prefix: `de.cuioss.sheriff.token.quarkus`.
 |`AccessLogFilterConfigResolverTest`, `AccessLogFilterConfigTest`,
 `AccessTokenCacheConfigResolverTest`, `ConfigValueParserTest`,
 `IssuerConfigResolverDpopTransportAndLoggingTest`, `IssuerConfigResolverJwksLoaderOptInTest`,
-`IssuerConfigResolverMaxStalenessTest`, `IssuerConfigResolverTest`, `JwtPropertyKeysTest`, `ParserConfigResolverTest`,
+`IssuerConfigResolverJwksLoaderOrphanedTest`, `IssuerConfigResolverMaxStalenessTest`, `IssuerConfigResolverTest`, `JwtPropertyKeysTest`, `ParserConfigResolverTest`,
 `RetryStrategyConfigResolverTest`
 
 |`error`
