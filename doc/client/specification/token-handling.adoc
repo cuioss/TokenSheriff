@@ -7,7 +7,8 @@
 
 == Overview
 
-_Realizes xref:../requirements.adoc#CLIENT-15[CLIENT-15]–xref:../requirements.adoc#CLIENT-20[CLIENT-20].
+_Realizes xref:../requirements.adoc#CLIENT-15[CLIENT-15]–xref:../requirements.adoc#CLIENT-20[CLIENT-20]
+and xref:../requirements.adoc#CLIENT-28[CLIENT-28].
 See xref:../threat-model.adoc[Threat Model], xref:../best-practices.adoc[Best Practices] and
 xref:../architecture.adoc[Architecture]._
 
@@ -135,8 +136,8 @@ its own binding, closing that asymmetry:
 * When the bundle carries *no* subject yet, the check is skipped and the refreshed subject is
   adopted — the binding takes effect from the first refresh that names a principal.
 * Where the authorization server also returns a refreshed ID token, it is validated through the
-  pipeline and cross-checked for `iss`/`sub` consistency against the refreshed access token before
-  it is carried forward. A refreshed ID token is *not* checked for `nonce`: OIDC Core §12.2 states
+  pipeline and cross-checked for `iss`/`sub` consistency against the refreshed access token by
+  `RefreshResultVerifier` (xref:#_refresh_result_verifier[]) before it is carried forward. A refreshed ID token is *not* checked for `nonce`: OIDC Core §12.2 states
   it SHOULD NOT carry one, and no fresh flow `nonce` exists to compare against. A refreshed ID token
   that fails pipeline validation (a `TokenValidationException`) and one that is inconsistent are each
   refused on the same rotated-vs-not rule as a `sub` mismatch: the refusal attempts to revoke the
@@ -146,6 +147,85 @@ its own binding, closing that asymmetry:
   cleanup runs before the exception is rethrown, so the original exception is preserved only when
   that cleanup completes without an uncaught exception: an unchecked exception from a revocation
   call, or from the store's removal, propagates in its place.
+
+* Source: https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse[OIDC Core §12.2].
+
+== [[_refresh_result_verifier]] Refresh-result verifier
+
+`RefreshFlow.refresh` validates the refreshed access token, but leaves the refreshed ID token, and
+the question of whose session the refresh belongs to, to its caller. The checks every caller owes
+before it stores a refresh result are published once, as `RefreshResultVerifier`
+(xref:../requirements.adoc#CLIENT-28[CLIENT-28],
+xref:../threat-model.adoc#T-REFRESH-IDENTITY[T-REFRESH-IDENTITY]). The lifecycle manager uses it,
+and a gateway that drives `RefreshFlow` itself calls the same method rather than re-implementing
+the checks.
+
+`RefreshResultVerifier.verify(rotation, idTokenValidationBridge, boundSubject)` runs three steps,
+in this order, and stops at the first refusal:
+
+. *ID-token validation.* When the exchange returned a raw ID token, it is validated through
+  `IdTokenValidationBridge.validateRefreshedIdToken` — signature, `iss`, `aud`, `exp` / `iat`, and
+  no `nonce` (OIDC Core §12.2). An absent or blank ID token skips this step and the next.
+. *§12.2 consistency.* The validated ID token is refused when its `iss` differs from the refreshed
+  access token's issuer, or when the access token carries a `sub` that differs from the ID token's
+  `sub`. An access token without a `sub` is not cross-checked, because `sub` is optional on an
+  access token. The inconsistency is logged once at `WARN` as `TokenSheriffClient-109`.
+. *Subject binding.* When `boundSubject` is not `null`, the refresh is refused unless the refreshed
+  access token carries a `sub` equal to it. The comparison is constant-time over the UTF-8 octets,
+  and an access token without a `sub` never matches. The refusal is logged at `DEBUG` only. A `null`
+  bound subject skips this step; it runs even when the exchange issued no ID token.
+
+*Return value.* The verified raw ID token, or `null` when the exchange issued none. The caller
+carries that value forward instead of the pre-refresh ID token.
+
+*Refusals and their classification.* Every refusal is raised after the authorization server
+answered, so the server may already have rotated the presented refresh token. Each refusal
+therefore carries the redemption of the exchange: `RefreshRedemption.rotated(successor)` when
+`RotationResult.rotated()` is `true`, otherwise `RefreshRedemption.notRotated()`.
+
+[cols="2,2,3", options="header"]
+|===
+| Refusal | Carrier | Cause
+
+| ID token fails the pipeline
+| `RedeemedValidationRefusalException` (a `TokenValidationException`)
+| The bridge's `TokenValidationException`.
+
+| §12.2 inconsistency
+| `RedeemedIdentityRefusalException` (an `IllegalStateException`)
+| An `IllegalStateException` with the §12.2 message.
+
+| Bound subject not named
+| `RedeemedIdentityRefusalException`
+| An `IllegalStateException` naming the binding mismatch.
+|===
+
+Both carriers implement `RedeemedRefreshFailure`, so `RefreshFlow.classify` classifies every
+refusal as `REDEEMED` by the redemption it carries. The caller decides from that redemption what
+the session needs: when the refresh token *rotated*, the presented token is burned and the session
+must be quarantined (revoke the successor best-effort, clear the session); when it did *not rotate*,
+the presented token is still valid and nothing needs to be revoked or cleared. After
+deserialization a carrier reports `RefreshRedemption.rotationUnknown()`, never the successor token.
+
+The verifier is a pure check. It stores, revokes and clears nothing, never touches a refresh
+token's storage or its `RefreshTokenFamily`, and logs no token and no subject.
+
+*Use by the lifecycle manager.* `TokenLifecycleManager` calls the verifier with a `null` bound
+subject, before it advances the rotation family, so a refusal never leaves a half-applied rotation
+behind. The subject binding stays in `StoredToken.refreshed`, inside the atomic store transform
+(xref:#_refresh_identity_binding[];
+xref:../../adr/0007-The_refresh_path_binds_identity_against_a_retained_session_subject_not_a_re-parsed_stored_ID_token.adoc[ADR-0007]):
+only there can the bound subject be compared against the bundle that is actually replaced. On a
+refusal the lifecycle manager quarantines the session when the refresh token rotated, as described
+above, and then rethrows the refusal the carrier wraps — the `TokenValidationException` or the
+`IllegalStateException` — so its callers see the same exception types as before.
+
+*Why the verifier lives in `flow`.* `ClientArchitectureTest` requires the packages under
+`de.cuioss.sheriff.token.client` to be free of cycles. `flow` already depends on `token`
+(`RefreshFlow` returns `RotationResult`), and no production class in `token` depends on `flow`. The
+verifier throws the `flow` carriers and builds a `RefreshRedemption`, so placing it in `token` would
+add a `token -> flow` edge and a cycle. It therefore sits in `flow`, beside `RefreshFlow` and
+`StepUpResultVerifier`, and consumes `RotationResult` and `IdTokenValidationBridge` from `token`.
 
 * Source: https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse[OIDC Core §12.2].
 

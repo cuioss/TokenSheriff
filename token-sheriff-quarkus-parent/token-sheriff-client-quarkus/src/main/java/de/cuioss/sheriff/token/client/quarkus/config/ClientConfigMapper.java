@@ -17,9 +17,15 @@ package de.cuioss.sheriff.token.client.quarkus.config;
 
 import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
+import de.cuioss.sheriff.token.client.discovery.CachingDiscoveryResolver;
+import de.cuioss.sheriff.token.client.discovery.DiscoveryResolver;
 import org.eclipse.microprofile.config.Config;
 
+import java.time.Duration;
+import java.time.InstantSource;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Maps MicroProfile {@link Config} values under the {@link ClientRuntimeConfig} keys to the
@@ -105,6 +111,119 @@ public final class ClientConfigMapper {
                 .forEach(builder::allowedEgressHost);
 
         return builder.build();
+    }
+
+    /**
+     * The discovery cache properties that are meaningful only while
+     * {@link ClientRuntimeConfig#DISCOVERY_CACHE_ENABLED} is {@code true}.
+     */
+    private static final List<String> DISCOVERY_CACHE_SETTINGS = List.of(
+            ClientRuntimeConfig.DISCOVERY_CACHE_TTL,
+            ClientRuntimeConfig.DISCOVERY_CACHE_GRACE_PERIOD,
+            ClientRuntimeConfig.DISCOVERY_CACHE_MIN_REFRESH_INTERVAL,
+            ClientRuntimeConfig.DISCOVERY_CACHE_JITTER);
+
+    /**
+     * The settings of an enabled discovery cache, in the shape of the
+     * {@link CachingDiscoveryResolver} constructor arguments.
+     *
+     * @param ttl                how long a resolved document is served without a refresh
+     * @param gracePeriod        how long past its time to live a document is still served while
+     *                           refreshes fail
+     * @param minRefreshInterval the minimum time between a failed refresh and the next attempt
+     * @param jitter             the upper bound of the random shortening of each freshness window
+     */
+    public record DiscoveryCacheSettings(Duration ttl, Duration gracePeriod, Duration minRefreshInterval,
+    Duration jitter) {
+
+        /**
+         * Validates that every component is present.
+         *
+         * @throws NullPointerException if any component is {@code null}
+         */
+        public DiscoveryCacheSettings {
+            Objects.requireNonNull(ttl, "ttl must not be null");
+            Objects.requireNonNull(gracePeriod, "gracePeriod must not be null");
+            Objects.requireNonNull(minRefreshInterval, "minRefreshInterval must not be null");
+            Objects.requireNonNull(jitter, "jitter must not be null");
+        }
+
+        /**
+         * Creates the caching resolver these settings describe.
+         *
+         * @param delegate the resolver that fetches and validates the discovery document
+         * @param clock    the source of the current instant
+         * @return the caching resolver
+         * @throws IllegalArgumentException if a duration is out of range (see
+         *                                  {@link CachingDiscoveryResolver})
+         */
+        public CachingDiscoveryResolver create(DiscoveryResolver delegate, InstantSource clock) {
+            return new CachingDiscoveryResolver(delegate, ttl, gracePeriod, minRefreshInterval, jitter, clock);
+        }
+    }
+
+    /**
+     * Rejects an inconsistent discovery cache configuration (ADR-0026): a
+     * {@code sheriff.client.discovery-cache.*} property other than
+     * {@link ClientRuntimeConfig#DISCOVERY_CACHE_ENABLED} that is set while the cache is not enabled
+     * would otherwise be silently ignored, and an enabled cache needs a
+     * {@link ClientRuntimeConfig#DISCOVERY_CACHE_TTL}. A configuration without any discovery cache
+     * property passes.
+     *
+     * @param config the MicroProfile config to inspect; must not be {@code null}
+     * @throws IllegalStateException naming the offending property and the fix, when a cache property
+     *                               is set while the cache is not enabled, or when the cache is
+     *                               enabled without a TTL
+     */
+    public static void validateDiscoveryCache(Config config) {
+        if (!isDiscoveryCacheEnabled(config)) {
+            for (String key : DISCOVERY_CACHE_SETTINGS) {
+                if (config.getOptionalValue(key, String.class).isPresent()) {
+                    throw new IllegalStateException("Token-Sheriff client property '" + key + "' is set but '"
+                            + ClientRuntimeConfig.DISCOVERY_CACHE_ENABLED + "' is not true, so it would be ignored."
+                            + " Set '" + ClientRuntimeConfig.DISCOVERY_CACHE_ENABLED
+                            + "=true' to use the discovery cache, or remove '" + key + "'.");
+                }
+            }
+            return;
+        }
+        if (config.getOptionalValue(ClientRuntimeConfig.DISCOVERY_CACHE_TTL, String.class).isEmpty()) {
+            throw new IllegalStateException("Token-Sheriff client property '" + ClientRuntimeConfig.DISCOVERY_CACHE_TTL
+                    + "' is required when '" + ClientRuntimeConfig.DISCOVERY_CACHE_ENABLED + "' is true."
+                    + " Set it to how long a resolved discovery document may be reused (for example PT5M),"
+                    + " or disable the discovery cache.");
+        }
+    }
+
+    /**
+     * Maps the discovery cache properties, after {@link #validateDiscoveryCache(Config) validating}
+     * them.
+     *
+     * @param config the MicroProfile config to read; must not be {@code null}
+     * @return the settings of the enabled cache, or {@link Optional#empty()} when the cache is not
+     *         enabled
+     * @throws IllegalStateException when the configuration is inconsistent (see
+     *                               {@link #validateDiscoveryCache(Config)})
+     */
+    public static Optional<DiscoveryCacheSettings> mapDiscoveryCache(Config config) {
+        validateDiscoveryCache(config);
+        if (!isDiscoveryCacheEnabled(config)) {
+            return Optional.empty();
+        }
+        return Optional.of(new DiscoveryCacheSettings(
+                config.getValue(ClientRuntimeConfig.DISCOVERY_CACHE_TTL, Duration.class),
+                optionalDuration(config, ClientRuntimeConfig.DISCOVERY_CACHE_GRACE_PERIOD),
+                optionalDuration(config, ClientRuntimeConfig.DISCOVERY_CACHE_MIN_REFRESH_INTERVAL),
+                optionalDuration(config, ClientRuntimeConfig.DISCOVERY_CACHE_JITTER)));
+    }
+
+    private static boolean isDiscoveryCacheEnabled(Config config) {
+        return config.getOptionalValue(ClientRuntimeConfig.DISCOVERY_CACHE_ENABLED, Boolean.class)
+                .orElse(Boolean.FALSE);
+    }
+
+    private static Duration optionalDuration(Config config, String key) {
+        return config.getOptionalValue(key, Duration.class).orElse(Duration.ZERO);
     }
 
     private static String requiredValue(Config config, String key) {

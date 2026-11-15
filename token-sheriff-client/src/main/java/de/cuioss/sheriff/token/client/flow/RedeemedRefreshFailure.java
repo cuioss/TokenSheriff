@@ -18,7 +18,12 @@ package de.cuioss.sheriff.token.client.flow;
 /**
  * Implemented by every exception {@link RefreshFlow#refresh(
  * de.cuioss.sheriff.token.client.discovery.ProviderMetadata, String)} raises <em>after</em> the
- * authorization server has answered and therefore after it has redeemed the presented refresh token.
+ * authorization server has answered and therefore after it has redeemed the presented refresh token,
+ * and by every refusal {@link RefreshResultVerifier} raises over the result of such an exchange — a
+ * refreshed ID token that fails validation ({@link RedeemedValidationRefusalException}), or one that is
+ * inconsistent with the refreshed access token or a refreshed access token that does not name the bound
+ * subject ({@link RedeemedIdentityRefusalException}). Those checks run after the server answered too, so
+ * they owe the caller the same redemption state.
  * <p>
  * <strong>Why the signal rides on the exception.</strong> Several client-side checks run after the
  * {@code 2xx} — access-token validation and the strict scope-reconciliation refusal — and each of them

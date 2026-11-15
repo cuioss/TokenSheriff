@@ -97,3 +97,39 @@ expand scope sets as a matter of course. Enabling strict mode refuses such a gra
 `ClientProtocolException` — turning a benign server quirk into a total authentication outage, with no
 attacker in the loop. Enable it only against an authorization server known not to canonicalise or
 expand scope sets; the outage risk falls entirely on the deployment that opts in.
+
+== Discovery Cache
+
+The discovery cache is *off by default*. Without any `sheriff.client.discovery-cache.*` property the
+produced `DiscoveryResolver` bean fetches the discovery document on every call, exactly as before.
+Setting `sheriff.client.discovery-cache.enabled=true` makes a `CachingDiscoveryResolver` bean
+available alongside it; an application injects that bean explicitly to use the cache. The plain
+`DiscoveryResolver` bean stays the default and is unchanged either way.
+
+[source,properties]
+----
+sheriff.client.discovery-cache.enabled=true
+sheriff.client.discovery-cache.ttl=PT5M
+sheriff.client.discovery-cache.grace-period=PT10M
+----
+
+[cols="2,1,1,3", options="header"]
+|===
+|Property |Type |Default |Description
+|`sheriff.client.discovery-cache.enabled` |boolean |`false` |Enable the opt-in discovery cache and make the `CachingDiscoveryResolver` bean available. Injecting that bean while the cache is not enabled fails with an `IllegalStateException` naming this property
+|`sheriff.client.discovery-cache.ttl` |Duration |— (required when enabled) |How long a resolved discovery document is served without a refresh. Must be positive. There is no default: the deployment states how long a document may be reused
+|`sheriff.client.discovery-cache.grace-period` |Duration |`PT0S` |How long past its TTL the last resolved document is still served while refreshes fail. After `lastSuccess + ttl + grace-period` a resolution fails closed. At `PT0S` it fails closed as soon as the TTL has elapsed and a refresh fails. Must not be negative
+|`sheriff.client.discovery-cache.min-refresh-interval` |Duration |`PT0S` |The minimum time between a failed refresh and the next refresh attempt; within it the stale policy answers from the cache. At `PT0S` every call after a failure retries. Must not be negative
+|`sheriff.client.discovery-cache.jitter` |Duration |`PT0S` |The upper bound of a random amount by which each freshness window is shortened, so clients sharing a TTL do not refresh at the same instant. Must not be negative and must be smaller than the TTL
+|===
+
+NOTE: A refresh runs on demand, on the calling thread — there is no background thread — and
+concurrent callers share a single refresh. Every refreshed document passes the same checks as an
+uncached resolution (TLS, the issuer match, the endpoint schemes, the media type, the size bound), so
+a refused document never replaces the cached one.
+
+NOTE: An orphaned discovery cache property fails application startup with an `IllegalStateException`
+naming the property and the fix: setting `ttl`, `grace-period`, `min-refresh-interval` or `jitter`
+while `sheriff.client.discovery-cache.enabled` is not `true` would otherwise be silently ignored, and
+`sheriff.client.discovery-cache.enabled=true` without a `ttl` has no usable time to live. The check
+reads the configuration only; every client bean stays lazy.

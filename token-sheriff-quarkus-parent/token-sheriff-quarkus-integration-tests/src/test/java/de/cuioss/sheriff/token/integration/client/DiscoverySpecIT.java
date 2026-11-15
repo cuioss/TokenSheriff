@@ -15,6 +15,11 @@
  */
 package de.cuioss.sheriff.token.integration.client;
 
+import de.cuioss.sheriff.token.client.discovery.CachingDiscoveryResolver;
+import de.cuioss.sheriff.token.client.discovery.DiscoveryCacheStatus;
+import de.cuioss.sheriff.token.client.discovery.DiscoveryResolver;
+import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
+import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
 import de.cuioss.sheriff.token.integration.BaseIntegrationTest;
 import de.cuioss.tools.logging.CuiLogger;
 import org.junit.jupiter.api.DisplayName;
@@ -30,6 +35,8 @@ import java.net.http.HttpResponse;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.InstantSource;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -40,6 +47,11 @@ import static org.junit.jupiter.api.Assertions.*;
  * the endpoints and PKCE {@code S256} capability the client engine consumes. The container uses a
  * self-signed certificate, so the request runs against a trust-all TLS context (integration-test
  * scope only), mirroring {@link BaseIntegrationTest}'s relaxed HTTPS posture.
+ * <p>
+ * A second case resolves the {@code client-engine} realm through the production engine
+ * {@link DiscoveryResolver} wrapped in a {@link CachingDiscoveryResolver}, over the chain-validating
+ * trust material {@link RefreshEngineSupport} assembles: two resolutions within the TTL return equal,
+ * independent copies and the cache reports itself resolved.
  */
 @DisplayName("OIDC discovery against real Keycloak")
 class DiscoverySpecIT extends BaseIntegrationTest {
@@ -51,6 +63,11 @@ class DiscoverySpecIT extends BaseIntegrationTest {
     private static final String WELL_KNOWN =
             KeycloakUrlSupport.EXTERNAL_BASE + "/realms/integration/.well-known/openid-configuration";
     private static final String EXPECTED_ISSUER = KeycloakUrlSupport.EXTERNAL_BASE + "/realms/integration";
+
+    // The client of the client-engine realm RefreshEngineSupport runs its own discovery round trip under;
+    // discovery itself is unauthenticated.
+    private static final String CACHED_DISCOVERY_CLIENT_ID = "integration-client";
+    private static final String CACHED_DISCOVERY_CLIENT_SECRET = "integration-secret";
 
     @Test
     @DisplayName("Should serve a discovery document with the expected endpoints and S256 support")
@@ -69,6 +86,43 @@ class DiscoverySpecIT extends BaseIntegrationTest {
                 () -> assertTrue(body.contains("\"authorization_endpoint\""), "authorization_endpoint present"),
                 () -> assertTrue(body.contains("\"jwks_uri\""), "jwks_uri present"),
                 () -> assertTrue(body.contains("S256"), "PKCE S256 advertised (CLIENT-2 groundwork)"));
+    }
+
+    @Test
+    @DisplayName("Should serve a cached engine-level resolution within the TTL as independent, equal copies")
+    void shouldServeCachedEngineResolution() {
+        // The integration-test module does not wire the Quarkus client extension, so the production
+        // engine resolver is assembled exactly as RefreshEngineSupport does and wrapped in the cache.
+        Instant now = Instant.now();
+        CachingDiscoveryResolver resolver = new CachingDiscoveryResolver(
+                new DiscoveryResolver(RefreshEngineSupport.clientConfiguration(
+                        CACHED_DISCOVERY_CLIENT_ID, CACHED_DISCOVERY_CLIENT_SECRET)),
+                Duration.ofMinutes(5), Duration.ZERO, InstantSource.fixed(now));
+
+        ProviderMetadata first = resolver.resolve();
+        ProviderMetadata second = resolver.resolve();
+        DiscoveryCacheStatus status = resolver.status();
+
+        assertAll("cached engine-level resolution",
+                () -> assertNotSame(first, second, "each resolution hands out a defensive copy"),
+                () -> assertEquals(RefreshEngineSupport.ISSUER, first.issuer,
+                        "the resolved issuer is the realm's advertised identity"),
+                () -> assertEquals(first.issuer, second.issuer, "issuer is content-equal"),
+                () -> assertEquals(first.authorizationEndpoint, second.authorizationEndpoint,
+                        "authorization endpoint is content-equal"),
+                () -> assertEquals(first.tokenEndpoint, second.tokenEndpoint, "token endpoint is content-equal"),
+                () -> assertEquals(first.jwksUri, second.jwksUri, "jwks_uri is content-equal"),
+                () -> assertEquals(first.revocationEndpoint, second.revocationEndpoint,
+                        "revocation endpoint is content-equal"),
+                () -> assertEquals(first.codeChallengeMethodsSupported, second.codeChallengeMethodsSupported,
+                        "advertised PKCE methods are content-equal"),
+                () -> assertEquals(DiscoveryCacheStatus.State.RESOLVED, status.state(),
+                        "the cache reports the real-realm resolution as RESOLVED"),
+                () -> assertEquals(now, status.lastSuccess(),
+                        "the single resolution is stamped with the injected clock's instant"),
+                () -> assertNull(status.lastFailureCause(), "no resolution attempt failed"),
+                () -> assertEquals(LoaderStatus.OK, resolver.getLoaderStatus(),
+                        "a resolved cache reports its loader status as OK"));
     }
 
     private static HttpResponse<String> fetch(String url) throws Exception {

@@ -163,4 +163,51 @@ public final class ClientRuntimeConfig {
      * @see de.cuioss.sheriff.token.client.config.ClientConfiguration#getAllowedEgressHosts()
      */
     public static final String ALLOWED_EGRESS_HOSTS = PREFIX + ".allowed-egress-hosts";
+
+    /** The common prefix for the opt-in discovery cache properties. */
+    public static final String DISCOVERY_CACHE_PREFIX = PREFIX + ".discovery-cache";
+
+    /**
+     * Whether the opt-in discovery cache is enabled. Property:
+     * {@code sheriff.client.discovery-cache.enabled}. Defaults to {@code false}.
+     * <p>
+     * When {@code true}, a {@link de.cuioss.sheriff.token.client.discovery.CachingDiscoveryResolver}
+     * bean is available and {@link #DISCOVERY_CACHE_TTL} is required. When it is not {@code true}, every
+     * other {@code sheriff.client.discovery-cache.*} property is an orphan and fails application startup
+     * rather than being silently ignored. The plain
+     * {@link de.cuioss.sheriff.token.client.discovery.DiscoveryResolver} bean is unchanged either way.
+     */
+    public static final String DISCOVERY_CACHE_ENABLED = DISCOVERY_CACHE_PREFIX + ".enabled";
+
+    /**
+     * How long a resolved discovery document is served without a refresh, as a {@code Duration}.
+     * Property: {@code sheriff.client.discovery-cache.ttl}. No default: required when
+     * {@link #DISCOVERY_CACHE_ENABLED} is {@code true}, and an orphan that fails startup when it is
+     * not. Must be positive.
+     */
+    public static final String DISCOVERY_CACHE_TTL = DISCOVERY_CACHE_PREFIX + ".ttl";
+
+    /**
+     * How long past its time to live the last resolved document is still served while refreshes fail,
+     * as a {@code Duration}. Property: {@code sheriff.client.discovery-cache.grace-period}. Defaults to
+     * {@code PT0S} (fail closed at TTL expiry). An orphan that fails startup unless
+     * {@link #DISCOVERY_CACHE_ENABLED} is {@code true}. Must not be negative.
+     */
+    public static final String DISCOVERY_CACHE_GRACE_PERIOD = DISCOVERY_CACHE_PREFIX + ".grace-period";
+
+    /**
+     * The minimum time between a failed refresh and the next refresh attempt, as a {@code Duration}.
+     * Property: {@code sheriff.client.discovery-cache.min-refresh-interval}. Defaults to {@code PT0S}
+     * (retry on the next call). An orphan that fails startup unless {@link #DISCOVERY_CACHE_ENABLED}
+     * is {@code true}. Must not be negative.
+     */
+    public static final String DISCOVERY_CACHE_MIN_REFRESH_INTERVAL = DISCOVERY_CACHE_PREFIX + ".min-refresh-interval";
+
+    /**
+     * The upper bound of the random amount by which each freshness window is shortened, as a
+     * {@code Duration}. Property: {@code sheriff.client.discovery-cache.jitter}. Defaults to
+     * {@code PT0S} (no jitter). An orphan that fails startup unless {@link #DISCOVERY_CACHE_ENABLED} is
+     * {@code true}. Must not be negative and must be smaller than {@link #DISCOVERY_CACHE_TTL}.
+     */
+    public static final String DISCOVERY_CACHE_JITTER = DISCOVERY_CACHE_PREFIX + ".jitter";
 }

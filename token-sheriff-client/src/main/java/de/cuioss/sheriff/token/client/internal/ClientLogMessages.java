@@ -74,6 +74,17 @@ public final class ClientLogMessages {
                 .identifier(3)
                 .template("Refused refresh for session '%s' left the store untouched: a newer grant was stored while the exchange was in flight, so it and its rotation family are kept")
                 .build();
+
+        /**
+         * A caching discovery resolver refreshed its document successfully after one or more failed
+         * refresh attempts, ending a failure episode. Fires once per episode, on the first successful
+         * refresh after a failure; an ordinary successful refresh logs at {@code DEBUG} only.
+         */
+        public static final LogRecord DISCOVERY_CACHE_RECOVERED = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(4)
+                .template("Discovery cache for issuer '%s' recovered: the provider metadata was refreshed successfully after a failed refresh")
+                .build();
     }
 
     /**
@@ -222,6 +233,30 @@ public final class ClientLogMessages {
                 .prefix(PREFIX)
                 .identifier(114)
                 .template("Authorization server rejected the refresh token for session '%s' as invalid; nothing was redeemed, so the store and rotation family are cleared without revocation")
+                .build();
+
+        /**
+         * A caching discovery resolver failed to refresh a stale document and keeps serving the last
+         * successfully resolved one until the grace period ends. Fires once on entering a failure
+         * episode, i.e. on the first failed refresh after a success; further failures within the same
+         * episode log at {@code DEBUG} only. The cause is rendered as its exception class name.
+         */
+        public static final LogRecord DISCOVERY_REFRESH_FAILED_SERVING_STALE = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(115)
+                .template("Discovery refresh for issuer '%s' failed (%s); serving the last resolved provider metadata until %s")
+                .build();
+
+        /**
+         * A caching discovery resolver's grace period ended while refreshes kept failing, so it no
+         * longer serves the last resolved document and fails closed. Fires once per failure episode,
+         * on the first resolution refused after the grace period ended. The cause is rendered as its
+         * exception class name.
+         */
+        public static final LogRecord DISCOVERY_CACHE_EXPIRED_FAILING_CLOSED = LogRecordModel.builder()
+                .prefix(PREFIX)
+                .identifier(116)
+                .template("Cached discovery metadata for issuer '%s' expired while refreshes kept failing (%s); failing closed")
                 .build();
     }
 
