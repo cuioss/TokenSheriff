@@ -110,7 +110,7 @@ String rendered = ErrorTextSanitizer.escapeNonPrintableAscii(untrusted, 128, "..
   each half of a surrogate pair — and the backslash itself.
 
 | Rendering
-| An upper-case backslash-`u` four-digit escape, for example `+\+u00E9` for `é` and `+\+u005C` for the
+| An upper-case backslash-`u` four-digit escape, for example `{backslash}u00E9` for `é` and `{backslash}u005C` for the
   backslash, so a backslash in the result always starts an escape.
 
 | Length bound
