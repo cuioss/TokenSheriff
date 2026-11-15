@@ -43,6 +43,9 @@ import java.util.Optional;
  * {@link HttpWellKnownResolver} can reject it as a distinct, terminal
  * {@link HttpWellKnownResolver.FailureReason#ISSUER_ABSENT} failure; it never exposes such a document's
  * {@code jwks_uri} to a caller. A document lacking both is the missing-{@code jwks_uri} case.
+ * <p>
+ * The byte ceiling is enforced on the document while it streams (see {@link BoundedBodyHandler}), so an
+ * oversized discovery document is rejected before it is fully buffered.
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -171,7 +174,7 @@ class WellKnownConfigurationConverter implements HttpResponseConverter<WellKnown
         // Enforce the byte ceiling while the body streams — an over-limit discovery document is
         // rejected before it is fully buffered, closing the unbounded-buffering DoS vector (H2).
         // The post-materialization check in convert(...) remains as defense in depth.
-        return BoundedBodyHandlers.ofBoundedString(StandardCharsets.UTF_8, maxContentSize, BOUND_ORIGIN);
+        return BoundedBodyHandler.ofString(StandardCharsets.UTF_8, maxContentSize, BOUND_ORIGIN);
     }
 
     @Override

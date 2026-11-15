@@ -260,6 +260,14 @@ class UncheckedThrowBoundaryTest {
                     "outside the validation call: refuses a negative maxLength, a caller-chosen constant;"
                             + " no create*Token call stack invokes this form"),
 
+            // --- commons bounded body handler, argument contract on a configured ceiling ---
+            Map.entry("de.cuioss.sheriff.token.commons.transport.BoundedBodyHandler#requireCeilingInRange",
+                    "outside the validation call: refuses a ceiling outside 0 to MAX_CEILING when a handler"
+                            + " is created; the validation converters pass ParserConfig.maxHttpResponseSize,"
+                            + " which ParserConfigBuilder.build already refuses when not positive, and"
+                            + " create the handler on the JWKS loader / discovery fetch thread, never inside"
+                            + " a create*Token call stack"),
+
             // --- dual-use utility, unreachable from the request path ---
             Map.entry("de.cuioss.sheriff.token.validation.util.JwkThumbprintUtil#canonicalJson",
                     "dual-use and unreachable from the request path: construction-time for the client's"

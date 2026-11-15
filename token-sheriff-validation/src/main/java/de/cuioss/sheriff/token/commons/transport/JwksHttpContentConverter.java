@@ -39,7 +39,7 @@ import java.util.Optional;
  * and provides proper empty value semantics for error cases.
  * <p>
  * A byte ceiling ({@link ParserConfig#getMaxHttpResponseSize()}) is enforced on the JWKS body while it
- * streams (see {@link BoundedBodyHandlers}), so an oversized key set is rejected before it is fully
+ * streams (see {@link BoundedBodyHandler}), so an oversized key set is rejected before it is fully
  * buffered rather than being read unbounded into memory (H2). Both the streaming rejection and the
  * post-materialization rejection report the enforced bound together with its origin — the
  * {@code ParserConfig.maxHttpResponseSize} knob and how to set it — so a reader of the failure knows
@@ -78,7 +78,7 @@ public class JwksHttpContentConverter extends StringContentConverter<Jwks> {
     public HttpResponse.BodyHandler<?> getBodyHandler() {
         // Bound the JWKS body during streaming so an oversized response fails closed before it is
         // fully materialized. The size check in convertString(...) remains as defense in depth.
-        return BoundedBodyHandlers.ofBoundedString(StandardCharsets.UTF_8, maxContentSize, BOUND_ORIGIN);
+        return BoundedBodyHandler.ofString(StandardCharsets.UTF_8, maxContentSize, BOUND_ORIGIN);
     }
 
     @Override
