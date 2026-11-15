@@ -130,8 +130,8 @@ exhaust memory or block a caller indefinitely.
 The response-size limit of xref:#COMMONS-4[COMMONS-4] MUST be enforced by one public handler,
 `commons.transport.BoundedBodyHandler`, for the validation-side discovery and JWKS reads and for the
 client's back-channel reads alike. It counts bytes while the body streams, never buffers more than the
-ceiling plus the one chunk in flight while it streams (the delivered body is one copy of the held bytes, so
-a body within the ceiling is briefly held twice at completion), and offers two policies:
+ceiling plus the one chunk in flight while it streams (assembling and, for the string variant, decoding the
+result at completion peaks at a small constant multiple of the ceiling), and offers two policies:
 
 * *Fail* — a response advertising a `Content-Length` above the ceiling is refused before a byte of its
   body is read; a body crossing the ceiling while streaming is refused at the crossing. Both fail the
