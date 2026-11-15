@@ -86,9 +86,11 @@ public final class BearerCredentials {
     /** U+009F APPLICATION PROGRAM COMMAND, the last C1 control character. */
     private static final char LAST_C1_CONTROL = 0x009F;
 
-    private static final Result ABSENT_RESULT = new Result(State.ABSENT, null);
+    private static final Result ABSENT_RESULT = new Result(State.ABSENT, false, null);
 
-    private static final Result MALFORMED_RESULT = new Result(State.MALFORMED, null);
+    private static final Result MALFORMED_EMPTY_RESULT = new Result(State.MALFORMED, true, null);
+
+    private static final Result MALFORMED_CHARACTER_RESULT = new Result(State.MALFORMED, false, null);
 
     private BearerCredentials() {
         // utility class - never instantiated
@@ -121,10 +123,13 @@ public final class BearerCredentials {
 
         private final State state;
 
+        private final boolean tokenEmpty;
+
         private final @Nullable String token;
 
-        private Result(State state, @Nullable String token) {
+        private Result(State state, boolean tokenEmpty, @Nullable String token) {
             this.state = state;
+            this.tokenEmpty = tokenEmpty;
             this.token = token;
         }
 
@@ -133,6 +138,16 @@ public final class BearerCredentials {
          */
         public State state() {
             return state;
+        }
+
+        /**
+         * Tells the two {@link State#MALFORMED} causes apart without retaining the refused value.
+         *
+         * @return {@code true} when the state is {@link State#MALFORMED} because the token is empty or
+         *         whitespace-only; {@code false} when it holds a refused character, and for every other state
+         */
+        public boolean isTokenEmpty() {
+            return tokenEmpty;
         }
 
         /**
@@ -185,14 +200,14 @@ public final class BearerCredentials {
             tokenEnd--;
         }
         if (tokenStart == tokenEnd) {
-            return MALFORMED_RESULT;
+            return MALFORMED_EMPTY_RESULT;
         }
         for (int i = tokenStart; i < tokenEnd; i++) {
             if (isRefusedInToken(authorizationValue.charAt(i))) {
-                return MALFORMED_RESULT;
+                return MALFORMED_CHARACTER_RESULT;
             }
         }
-        return new Result(State.PRESENT, authorizationValue.substring(tokenStart, tokenEnd));
+        return new Result(State.PRESENT, false, authorizationValue.substring(tokenStart, tokenEnd));
     }
 
     /**

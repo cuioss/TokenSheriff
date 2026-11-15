@@ -264,23 +264,70 @@ class BearerTokenResponseFactoryTest {
     class QuoteEscaping {
 
         @Test
-        @DisplayName("should escape quotes in scope names")
+        @DisplayName("should refuse a scope name holding a double quote (OD-3)")
         void shouldEscapeQuotesInScopeNames() {
-            var requiredScopes = Set.of("read:\"special\"", "write");
+            var result = scopeViolation(Set.of("read:\"special\"", "write"));
+
+            assertThrows(IllegalArgumentException.class, () -> BearerTokenResponseFactory.createResponse(result),
+                    "OD-3: a scope name outside the RFC 6749 scope-token grammar is refused instead of escaped");
+            assertEquals(401, BearerTokenResponseFactory.createResponse(scopeViolation(Set.of("read:special", "write")))
+                    .getStatus(), "control: the same scopes inside the grammar are answered with the 401 challenge");
+        }
+
+        @Test
+        @DisplayName("should refuse scope names outside the scope-token grammar (OD-3)")
+        void shouldRefuseScopeOutsideGrammar() {
+            for (String scope : Set.of("back\\slash", "two words", "café")) {
+                var result = scopeViolation(Set.of(scope));
+
+                assertThrows(IllegalArgumentException.class, () -> BearerTokenResponseFactory.createResponse(result),
+                        "OD-3: scope '" + scope + "' is outside RFC 6749 section 3.3 and is refused");
+            }
+        }
+
+        @Test
+        @DisplayName("should write the challenge's scopes in sorted order")
+        void shouldSortScopesInChallenge() {
+            String wwwAuthenticate = BearerTokenResponseFactory
+                    .createResponse(scopeViolation(Set.of("write", "admin", "read")))
+                    .getHeaderString("WWW-Authenticate");
+
+            assertEquals("Bearer realm=\"protected-resource\", error=\"insufficient_scope\", "
+                    + "error_description=\"The request requires higher privileges than provided by the access token\", "
+                    + "scope=\"admin read write\"", wwwAuthenticate,
+                    "the scope order is now sorted, independent of the Set's iteration order");
+        }
+
+        @Test
+        @DisplayName("should escape a backslash in role and group names (OD-3)")
+        void shouldEscapeBackslashInRoleAndGroupNames() {
+            var requiredRoles = Set.of("dom\\admin");
+            var requiredGroups = Set.of("dom\\ops");
             var result = BearerTokenResult.builder()
+                    .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
+                    .requiredScopes(Set.of())
+                    .requiredRoles(requiredRoles)
+                    .missingRoles(requiredRoles)
+                    .requiredGroups(requiredGroups)
+                    .missingGroups(requiredGroups)
+                    .build();
+
+            String wwwAuthenticate = BearerTokenResponseFactory.createResponse(result).getHeaderString("WWW-Authenticate");
+
+            assertTrue(wwwAuthenticate.contains("required_roles=\"dom\\\\admin\""),
+                    "OD-3: a backslash in a role is written as a double backslash: " + wwwAuthenticate);
+            assertTrue(wwwAuthenticate.contains("required_groups=\"dom\\\\ops\""),
+                    "OD-3: a backslash in a group is written as a double backslash: " + wwwAuthenticate);
+        }
+
+        private static BearerTokenResult scopeViolation(Set<String> requiredScopes) {
+            return BearerTokenResult.builder()
                     .status(BearerTokenStatus.CONSTRAINT_VIOLATION)
                     .requiredScopes(requiredScopes)
                     .missingScopes(requiredScopes)
                     .requiredRoles(Set.of())
                     .requiredGroups(Set.of())
                     .build();
-
-            String wwwAuthenticate = BearerTokenResponseFactory.createResponse(result).getHeaderString("WWW-Authenticate");
-
-            // Check both possible orders since Set doesn't guarantee ordering
-            boolean hasCorrectScope = wwwAuthenticate.contains("scope=\"read:\\\"special\\\" write\"") ||
-                    wwwAuthenticate.contains("scope=\"write read:\\\"special\\\"\"");
-            assertTrue(hasCorrectScope, "WWW-Authenticate header should contain correctly escaped scopes: " + wwwAuthenticate);
         }
 
         @Test

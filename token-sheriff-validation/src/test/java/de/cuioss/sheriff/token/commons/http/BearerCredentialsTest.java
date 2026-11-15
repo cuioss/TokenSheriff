@@ -274,6 +274,20 @@ class BearerCredentialsTest {
     class ResultContract {
 
         @Test
+        @DisplayName("isTokenEmpty tells an empty token from a refused character")
+        void shouldDiscriminateMalformedCauses() {
+            assertAll("isTokenEmpty",
+                    () -> assertTrue(BearerCredentials.extract("Bearer  ").isTokenEmpty(),
+                            "a space-only remainder is an empty token"),
+                    () -> assertFalse(BearerCredentials.extract("Bearer a b").isTokenEmpty(),
+                            "an internal space is a refused character, not an empty token"),
+                    () -> assertFalse(BearerCredentials.extract("Bearer abc").isTokenEmpty(),
+                            "a present token is not empty"),
+                    () -> assertFalse(BearerCredentials.extract("Basic abc").isTokenEmpty(),
+                            "absent credentials carry no token to be empty"));
+        }
+
+        @Test
         @DisplayName("toString names the state and never the token or a refused value")
         void shouldNotPrintValueInToString() {
             String present = BearerCredentials.extract("Bearer " + TOKEN).toString();

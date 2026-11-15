@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.quarkus.producer;
 
+import de.cuioss.sheriff.token.commons.http.BearerChallenge;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -56,19 +57,18 @@ public class BearerTokenResponseFactory {
     private static final String PRAGMA_VALUE = "no-cache";
 
     // OAuth Constants
-    private static final String BEARER_REALM = "Bearer realm=\"protected-resource\"";
+    private static final String PROTECTED_RESOURCE_REALM = "protected-resource";
+    private static final String BEARER_REALM = "Bearer realm=\"" + PROTECTED_RESOURCE_REALM + "\"";
     private static final String BEARER_SCHEME = "Bearer";
-    private static final String REALM_PARAMETER = "realm=\"protected-resource\"";
+    private static final String REALM_PARAMETER = "realm=\"" + PROTECTED_RESOURCE_REALM + "\"";
 
     // OAuth Error Codes
     private static final String ERROR_INVALID_TOKEN = "invalid_token";
-    private static final String ERROR_INSUFFICIENT_SCOPE = "insufficient_scope";
     private static final String ERROR_INSUFFICIENT_PRIVILEGES = "insufficient_privileges";
 
     // OAuth Parameters
     private static final String PARAM_ERROR = "error";
     private static final String PARAM_ERROR_DESCRIPTION = "error_description";
-    private static final String PARAM_SCOPE = "scope";
     private static final String PARAM_REQUIRED_ROLES = "required_roles";
     private static final String PARAM_REQUIRED_GROUPS = "required_groups";
 
@@ -158,7 +158,13 @@ public class BearerTokenResponseFactory {
         if (hasScopeViolation) {
             // OAuth Step-Up Authentication Challenge for insufficient scope (RFC 9470)
             // RFC 6750 Section 3.1: scope parameter contains the full scope necessary for access
-            String wwwAuthenticate = buildInsufficientScopeHeader(result.getRequiredScopes());
+            // Scope names outside the RFC 6749 §3.3 scope-token grammar are refused by BearerChallenge
+            // (IllegalArgumentException) rather than escaped into the header
+            String wwwAuthenticate = BearerChallenge.insufficientScope()
+                    .realm(PROTECTED_RESOURCE_REALM)
+                    .errorDescription(ERROR_MSG_HIGHER_PRIVILEGES)
+                    .scopes(result.getRequiredScopes())
+                    .build();
             return Response.status(Response.Status.UNAUTHORIZED)
                     .type(MediaType.APPLICATION_JSON)
                     .header(HEADER_WWW_AUTHENTICATE, wwwAuthenticate)
@@ -204,24 +210,6 @@ public class BearerTokenResponseFactory {
     }
 
     /**
-     * Builds a WWW-Authenticate header for insufficient scope errors.
-     * Follows OAuth Step-Up Authentication Challenge specification.
-     *
-     * @param requiredScopes The collection of required scopes
-     * @return Formatted WWW-Authenticate header value for insufficient scope
-     */
-    private static String buildInsufficientScopeHeader(Collection<String> requiredScopes) {
-        StringBuilder sb = buildBaseAuthenticateHeader(ERROR_INSUFFICIENT_SCOPE);
-
-        if (!requiredScopes.isEmpty()) {
-            String scopeValue = joinAndEscape(requiredScopes);
-            sb.append(", ").append(PARAM_SCOPE).append("=\"").append(scopeValue).append("\"");
-        }
-
-        return sb.toString();
-    }
-
-    /**
      * Builds a WWW-Authenticate header for insufficient privileges errors.
      * Uses OAuth-style error structure adapted for role/group privileges.
      *
@@ -261,10 +249,10 @@ public class BearerTokenResponseFactory {
     }
 
     /**
-     * Joins a collection of strings with spaces after escaping quotes.
+     * Joins a collection of strings with spaces after escaping them for a quoted-string.
      *
      * @param values The collection of strings to join
-     * @return Space-separated string with escaped quotes
+     * @return Space-separated string with escaped backslashes and quotes
      */
     private static String joinAndEscape(Collection<String> values) {
         return values.stream()
@@ -273,13 +261,14 @@ public class BearerTokenResponseFactory {
     }
 
     /**
-     * Escapes double quotes in strings for use in HTTP header values.
+     * Escapes a value for an RFC 9110 §5.6.4 quoted-string: the backslash first, then the double quote,
+     * so an escape the value itself carries cannot end the quoted-string early.
      *
      * @param input The input string
-     * @return String with escaped quotes
+     * @return String with each backslash and double quote preceded by a backslash
      */
     private static String escapeQuotes(String input) {
-        return input == null ? "" : input.replace("\"", "\\\"");
+        return input == null ? "" : input.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     /**

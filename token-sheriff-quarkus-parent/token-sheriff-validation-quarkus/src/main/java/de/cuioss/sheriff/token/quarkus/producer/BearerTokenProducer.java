@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.quarkus.producer;
 
 import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
+import de.cuioss.sheriff.token.commons.http.BearerCredentials;
 import de.cuioss.sheriff.token.commons.metrics.MetricIdentifier;
 import de.cuioss.sheriff.token.quarkus.annotation.BearerToken;
 import de.cuioss.sheriff.token.quarkus.annotation.ServletObjectsResolver;
@@ -53,19 +54,22 @@ import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.WAR
  * {@link JwtPropertyKeys.TOKEN#HEADER} ({@code sheriff.token.token.header}):
  * <ul>
  *   <li>{@code Authorization} (default) - the token is read from the HTTP {@code Authorization}
- *       header with the {@code Bearer} prefix</li>
+ *       header's {@code Bearer} credentials</li>
  *   <li>{@code Cookie} - the {@code Authorization} header stays the primary source and is tried first;
  *       the HTTP cookie named by {@link JwtPropertyKeys.TOKEN#COOKIE_NAME}
  *       ({@code sheriff.token.token.cookie-name}, default {@code Bearer}) is the fallback, read only
- *       when the {@code Authorization} header carries no {@code "Bearer "}-prefixed value</li>
+ *       when the {@code Authorization} header carries no {@code Bearer} credentials</li>
  * </ul>
  * <p>
- * An {@code Authorization} value that starts with {@code "Bearer "} (including the space) counts as a
- * presented token. When the token after the prefix is empty or blank, the result is
- * {@link BearerTokenStatus#INVALID_REQUEST} and the cookie is not consulted. A server or proxy may strip
- * the trailing space of a bare {@code "Bearer "}; the remaining {@code "Bearer"} carries no prefixed
- * token, so it is treated as no token at all (with {@code Cookie} configured, the cookie fallback
- * applies).
+ * The {@code Authorization} value is read by {@link BearerCredentials}, which applies the RFC rules: the
+ * scheme name matches case-insensitively ({@code Bearer}, {@code bearer} and {@code BEARER} all name it),
+ * leading and trailing whitespace of the field value is ignored, and the scheme must be followed by one
+ * or more spaces. A value naming another scheme, the bare scheme {@code "Bearer"} (a server or proxy may
+ * strip the trailing space of {@code "Bearer "}), or the scheme followed by a tab carries no
+ * {@code Bearer} credentials and is treated as no token at all (with {@code Cookie} configured, the cookie
+ * fallback applies). When the scheme is presented but the token is empty, whitespace-only, or holds a
+ * space, a tab or a control character, the result is {@link BearerTokenStatus#INVALID_REQUEST} (HTTP 400)
+ * and the cookie is not consulted.
  * <p>
  * The producer provides both service methods that return {@link BearerTokenResult} with comprehensive
  * validation information and a CDI producer method that returns {@link BearerTokenResult} directly for injection.
@@ -132,9 +136,10 @@ import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.WAR
 public class BearerTokenProducer {
 
     private static final CuiLogger LOGGER = new CuiLogger(BearerTokenProducer.class);
-    static final String BEARER_PREFIX = "Bearer ";
     static final String AUTHORIZATION_HEADER_VALUE = "Authorization";
     static final String COOKIE_HEADER_VALUE = "Cookie";
+    static final String EMPTY_TOKEN_MESSAGE = "Bearer token is empty";
+    static final String MALFORMED_TOKEN_MESSAGE = "Bearer token holds a space or control character";
 
     private final TokenValidator tokenValidator;
     private final HttpRequestResolver servletObjectsResolver;
@@ -193,7 +198,16 @@ public class BearerTokenProducer {
         // Resolve headers once and reuse for both extraction and validation request
         Map<String, List<String>> headerMap = servletObjectsResolver.resolveHeaderMap();
 
-        Optional<String> tokenResult = extractBearerTokenFromHeaderMap(headerMap);
+        BearerCredentials.Result credentials = BearerCredentials.extract(headerMap);
+        if (credentials.state() == BearerCredentials.State.MALFORMED) {
+            // RFC 6750 §3.1: presented but unusable credentials are a malformed request (400); the
+            // cookie is not consulted, because the client did present Authorization credentials
+            String reason = credentials.isTokenEmpty() ? EMPTY_TOKEN_MESSAGE : MALFORMED_TOKEN_MESSAGE;
+            LOGGER.debug("%s - invalid request per RFC 6750", reason);
+            return BearerTokenResult.invalidRequest(reason, requiredScopes, requiredRoles, requiredGroups);
+        }
+
+        Optional<String> tokenResult = credentials.token();
 
         // When token.header=Cookie, fall back to cookie extraction if no Authorization token
         if (tokenResult.isEmpty() && COOKIE_HEADER_VALUE.equalsIgnoreCase(tokenHeader)) {
@@ -209,14 +223,9 @@ public class BearerTokenProducer {
             return BearerTokenResult.noTokenGiven(requiredScopes, requiredRoles, requiredGroups);
         }
 
+        // Both sources yield a non-blank token: BearerCredentials refuses an empty one as MALFORMED
+        // and the cookie lookup treats an empty value as no cookie
         String bearerToken = tokenResult.get();
-
-        // Check for empty bearer token (RFC 6750 violation - should return 400 Bad Request)
-        if (bearerToken.trim().isEmpty()) {
-            LOGGER.debug("Bearer token is empty - invalid request per RFC 6750");
-            return BearerTokenResult.invalidRequest(
-                    "Bearer token is empty", requiredScopes, requiredRoles, requiredGroups);
-        }
 
         try {
             // Pass HTTP headers and request context through for DPoP htu/htm validation (RFC 9449)
@@ -281,38 +290,6 @@ public class BearerTokenProducer {
             LOGGER.debug("Could not resolve request URI/method for DPoP htu/htm validation: %s", e.getMessage());
             return new RequestContext(null, null);
         }
-    }
-
-    /**
-     * Extracts the bearer token from the provided HTTP header map.
-     * <p>
-     * Two-state return model:
-     * <ul>
-     *   <li>Optional.empty() - No token found, missing token, or infrastructure error</li>
-     *   <li>Optional.of(token) - Token found (may be empty string for "Bearer ")</li>
-     * </ul>
-     *
-     * @param headerMap the resolved HTTP header map
-     * @return Optional containing the bearer token, or empty Optional if no token found
-     */
-    private Optional<String> extractBearerTokenFromHeaderMap(Map<String, List<String>> headerMap) {
-        // Header names are normalized to lowercase by HttpRequestResolver per RFC 9113 (HTTP/2)
-        // and RFC 7230 (HTTP/1.1). Direct lookup with lowercase key is sufficient.
-        List<String> authHeaders = headerMap.get("authorization");
-
-        if (authHeaders == null || authHeaders.isEmpty()) {
-            LOGGER.debug("Authorization header not found in headerMap");
-            return Optional.empty(); // No Authorization header - missing token
-        }
-
-        String authHeader = authHeaders.getFirst();
-        if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX)) {
-            return Optional.empty(); // Not a Bearer token - missing token
-        }
-
-        // Bearer token found - extract the token part (may be empty string for "Bearer ")
-        String token = authHeader.substring(BEARER_PREFIX.length());
-        return Optional.of(token);
     }
 
     /**
