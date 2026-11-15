@@ -184,6 +184,73 @@ it fetches:
 Re-discovery does not replace the staleness bound: if the identity provider stays unreachable, the
 status degrades as described above when `maxStaleness` is configured.
 
+[#unknown-kid-refresh-and-initial-load-retry]
+== Unknown key ID refresh and initial load retry
+
+Two further opt-in settings shorten the time until keys become usable. Both default to off, apply to a
+direct JWKS configuration and to well-known discovery alike, and run on the loader's background refresh
+executor, so `build()` rejects an unknown key ID refresh window, and `initialLoadRetry(true)`, combined with
+`refreshIntervalSeconds(0)`; `initialLoadRetry(false)` is accepted with it. The design and
+its bounds are recorded in
+xref:../../../doc/adr/0030-An_opt-in_unknown-kid_refresh_claims_one_window_per_loader_and_installs_only_a_key_set_holding_the_kid.adoc[ADR-0030].
+
+[source,java]
+----
+HttpJwksLoaderConfig jwksConfig = HttpJwksLoaderConfig.builder()
+    .wellKnownUrl("https://your-issuer.com/.well-known/openid-configuration")
+    .issuerIdentifier("https://your-issuer.com")
+    .refreshIntervalSeconds(300)
+    .unknownKidRefreshWindow(Duration.ofSeconds(60))    // Opt-in; 5 s to 3600 s; default: off
+    .initialLoadRetry(true)                             // Opt-in; default: false
+    .build();
+----
+
+=== Unknown key ID refresh
+
+Without the setting, a token naming a key ID (`kid`) that is in neither the installed nor a retired key
+set is rejected, and a key the identity provider has just rotated in is accepted only after the next
+periodic refresh. With `unknownKidRefreshWindow(Duration)` set:
+
+* once a key set is installed, such a miss claims the window and schedules one background JWKS fetch from
+  the current endpoint, and `TokenSheriff-010` (`UNKNOWN_KID_REFRESH_SCHEDULED`) is logged with the
+  sanitised key ID;
+* the lookup performs no I/O and does not wait, so the token that triggered the fetch is still rejected;
+  once the fetch has installed the new key set, the next token naming that key ID is accepted;
+* the fetched key set is installed only if it holds the requested key ID, through the same commit step as
+  a periodic refresh, so the grace period and `maxRetiredKeySets` apply;
+* a fetch that fails, returns unchanged content, yields no usable key or lacks the requested key ID is
+  discarded and logged as `TokenSheriff-173` (`UNKNOWN_KID_REFRESH_DISCARDED`): keys, retired key sets,
+  status, endpoint and the time of the last successful load stay unchanged, and the outcome is not
+  counted as a failed refresh cycle, so it neither triggers re-discovery nor contributes to the
+  `maxStaleness` degradation;
+* at most one such fetch runs per window and per loader, whatever the request rate and the number of
+  distinct key IDs presented; further misses inside the window log at DEBUG only.
+
+The lookup is reachable before any signature check, so an attacker presenting an invented key ID consumes
+the window. An attacker who does so in every window defers the on-demand pickup of a legitimate rotation
+entirely, because the fetched key set is installed only if it holds the attacker's invented key ID; such a
+rotation is then picked up by the periodic refresh only. The window is a refresh rate limit, not a pickup
+deadline: it bounds how often a fetch is claimed, not when a rotation is accepted. Choose the refresh
+interval as the longest delay
+you accept for picking up a rotated key under attack; the setter rejects a `null`, zero, negative or
+out-of-range value.
+
+=== Initial load retry
+
+Without the setting, an initial load that ends without installed keys — for example because the identity
+provider is not reachable at startup — is retried only by the periodic refresh, one refresh interval
+later. With `initialLoadRetry(true)`:
+
+* the first retry runs 1 second after the failed load, and the delay doubles up to 30 seconds, never
+  above the refresh interval;
+* each attempt runs a regular refresh cycle, so a failed discovery is resolved again and a terminal
+  rejection (for example an issuer mismatch) stays terminal;
+* attempts are strictly sequential and never overlap the periodic refresh or an unknown key ID fetch;
+* retries stop at the first installed key set, at the terminal `ERROR` status and at `close()`;
+* the status stays `UNDEFINED` (never `LOADING`) until keys are installed, and becomes `OK` only then.
+
+The delays are fixed and not configurable; the periodic refresh keeps its cadence alongside the retries.
+
 == Complete Integration Example
 
 [source,java]

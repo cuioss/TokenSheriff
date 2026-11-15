@@ -1,0 +1,209 @@
+= ADR-0030: An opt-in unknown-kid refresh claims one window per loader and installs only a key set holding the kid
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
+:sectnums:
+:source-highlighter: highlight.js
+
+// adr-metadata
+// summary: HttpJwksLoader may, when opted in, refresh its JWKS on an unknown kid through one compare-and-set window per loader and one shared in-flight guard, without I/O on the caller, installing only a key set that holds the kid and never counting a failed attempt; a separate opt-in retries a failed initial load sequentially with a fixed 1 s to 30 s backoff
+// tags: jwks, key-rotation, denial-of-service, concurrency, configuration
+// affects: token-sheriff-validation, token-sheriff-validation-quarkus
+// supersedes:
+// end-adr-metadata
+
+== Status
+
+Accepted
+
+== Context
+
+An `HttpJwksLoader` learns about keys the identity provider has rotated in only through its periodic
+refresh. A token signed with a new key that arrives before the next refresh names a key ID (`kid`) the
+loader does not hold, and it is rejected until the refresh catches up — up to one refresh interval later.
+Gateways and resource servers that sit in front of a frequently rotating identity provider want that gap
+shortened. The same holds at startup: an initial load that fails because the identity provider is not yet
+reachable leaves the issuer unusable for a full refresh interval.
+
+Refreshing on an unknown `kid` closes the gap, but it moves the trigger of an outbound fetch onto the request
+path. The `kid` lookup runs before any signature check, so it is reachable by every unauthenticated caller
+who can present a token header, and the caller chooses the `kid`. The failure modes the design has to handle
+are therefore:
+
+* **Amplification.** Each request with an invented `kid` turning into one fetch makes the loader a request
+  multiplier against the identity provider and an outbound flood source.
+* **Blocking.** A lookup that waits for a fetch ties request threads to the latency and availability of the
+  identity provider.
+* **Displacement.** A fetched key set that is installed whatever it holds lets an attacker force rotations
+  that push legitimate keys out of the bounded set of retired key sets.
+* **State poisoning.** A failed attempt counted like a failed periodic cycle feeds re-discovery and the
+  maximum-staleness degradation (ADR-0017), so an attacker could degrade an issuer by presenting invented
+  `kid` values while the identity provider is briefly unreachable.
+* **Lifecycle leakage.** A fetch started for a generation that has since been closed must not install keys
+  in a later one (ADR-0018).
+* **Overlap.** The periodic refresh, an on-demand fetch and a startup retry are three fetch paths into the
+  same state; a caller-supplied executor may be multi-threaded, so the executor alone does not serialise them.
+
+The structural choice point is where the bound on request-triggered fetches lives, what a fetched key set
+must prove before it is installed, and how the new fetch paths share the one install path the periodic
+refresh already has.
+
+== Decision
+
+The unknown-`kid` refresh is opt-in, bounded per loader by one atomic window claim, never blocks and never
+counts; it installs a key set only if that set holds the requested `kid`, through the same commit step and
+the same in-flight guard as every other fetch.
+
+* **Off by default.** `HttpJwksLoaderConfig.unknownKidRefreshWindow(Duration)` enables the behaviour. Unset,
+  an unknown `kid` never causes a fetch and the loader behaves as before. The window has no default value;
+  it is accepted from 5 to 3600 seconds inclusive.
+* **One window per loader.** A lookup that misses the installed and the retired key sets, while a key set is
+  installed, claims the window with one compare-and-set on a monotonic clock, compared overflow-safely. A
+  lost claim means another caller owns the window; nothing else happens. At most one fetch per window and per
+  loader — that is per issuer — whatever the request rate and the number of distinct `kid` values.
+* **Schedule only.** The winning lookup hands one fetch to the loader's background refresh executor and
+  returns empty at once. It performs no I/O and never waits, so the triggering token is rejected; the next
+  token naming the new `kid` succeeds once the fetch has installed it. An executor that rejects the fetch
+  releases the guard and never throws on the caller.
+* **Install only a key set holding the `kid`.** The fetch re-runs the egress check on the current endpoint,
+  fetches with that endpoint's adapter, and builds a candidate key set without touching shared state. The
+  candidate is committed only if it holds the requested `kid` and its generation is still live; otherwise it
+  is discarded.
+* **A discarded fetch changes nothing and counts nothing.** A failed, unchanged, unusable or non-matching
+  fetch leaves keys, retired key sets, the installed JWKS content, status, endpoint and the time of the last
+  successful load untouched, and it is never recorded as a failed refresh cycle, so it drives neither
+  re-discovery nor the staleness bound.
+* **One commit step, one in-flight guard.** Installation is split into building a usable candidate and
+  committing it. The commit — content swap, retirement within the grace period and the retired-set bound,
+  `OK` publication — runs under the lifecycle lock after the epoch check, and is shared by the initial load,
+  the periodic refresh and the unknown-`kid` fetch. One atomic in-flight guard serialises every fetch that
+  runs on the refresh executor; a periodic cycle that finds it held skips its fetch without counting it.
+* **A separate opt-in for the initial load.** `initialLoadRetry(boolean)` retries an initial load that ends
+  without installed keys. Each attempt runs the regular refresh cycle under the in-flight guard and schedules
+  its successor only after it ended, with a fixed delay of 1 second doubling to 30 seconds and never above
+  the refresh interval. Retries stop at the first installed key set, at the terminal `ERROR` and at `close()`;
+  the status never reports `LOADING`.
+* **Both require background refresh.** Both opt-ins run on the refresh executor, so `build()` rejects a
+  configured window, and `initialLoadRetry(true)`, combined with a refresh interval of 0, instead of accepting
+  a setting that could never act; `initialLoadRetry(false)` is accepted with it.
+* **Per-issuer configuration in Quarkus.** Both settings are exposed as
+  `sheriff.token.issuers.<name>.jwks.http.unknown-kid-refresh-window-seconds` and
+  `sheriff.token.issuers.<name>.jwks.http.initial-load-retry`. Either property on an issuer that does not load
+  its keys over HTTP fails startup naming the property (ADR-0026).
+
+=== Operator decisions
+
+The open design questions were settled as follows:
+
+[cols="1,3",options="header"]
+|===
+|Question |Decision
+
+|OD-1: Does the lookup wait for the fetch?
+|No. The lookup only schedules the fetch; the triggering token is refused, and the next token naming the
+new `kid` succeeds once the swap happened.
+
+|OD-2: How is the initial-load retry configured?
+|One on/off flag, `initialLoadRetry(boolean)`, with fixed documented delays: 1 second doubling to a 30-second
+cap, never above `refreshIntervalSeconds`.
+
+|OD-3: What range and default does the window have?
+|5 to 3600 seconds inclusive, with no default: unset means off.
+
+|OD-4: Are the settings exposed in Quarkus?
+|Yes, as per-issuer properties following the `max-staleness-seconds` precedent, including the
+orphaned-configuration rule of ADR-0026.
+
+|OD-5: Does a fetch that succeeds but lacks the `kid` count as a successful load?
+|No. It leaves the time of the last successful load untouched, like any other discarded fetch.
+|===
+
+== Consequences
+
+=== Positive
+
+* For loaders that opt in, a rotated key can be accepted after one on-demand fetch instead of waiting for the
+  next refresh interval; the window bounds how often such a fetch is claimed.
+* Request-triggered fetches are bounded by configuration, not by the request rate: an invented-`kid` flood
+  reaches the identity provider at most once per window per issuer.
+* The request path never waits on the network; a lookup costs at most one clock read and two compare-and-set
+  operations.
+* An attacker cannot rotate keys out of the retired sets, because a key set is installed only if it holds the
+  `kid` the identity provider actually published.
+* A failing identity provider combined with invented `kid` values cannot degrade an issuer: discarded fetches
+  are invisible to re-discovery, to the staleness bound and to the status.
+* All installations go through one commit step and one guard, so the grace period, the retired-set bound, the
+  epoch fence and the `OK` contract hold for every path alike.
+* Without either setting, the loader's behaviour is unchanged.
+
+=== Negative
+
+* An attacker presenting an invented `kid` consumes the window. An attacker who does so in every window
+  defers the on-demand pickup of a legitimate rotation entirely, because the fetched key set is installed
+  only if it holds the attacker's invented `kid`; such a rotation is then picked up by the periodic refresh
+  only. An unknown-`kid` fetch that overlaps a periodic cycle also makes that cycle skip its fetch (see
+  below), so a rotation that depended on the skipped cycle is picked up one refresh interval later than with
+  the periodic refresh alone. Without a sustained attack, a legitimate rotation is typically picked up within
+  one window, but the window limits how often a fetch is claimed and is not a pickup deadline. The bound trades
+  latency for amplification resistance, and the window length sets that trade-off.
+* The token that triggers a refresh is always rejected, even when its key becomes available a moment later;
+  clients see one refusal per rotation.
+* While an unknown-`kid` fetch or a retry holds the guard, a periodic cycle skips its fetch, so the periodic
+  cadence can lose one cycle.
+* The retry delays are fixed; deployments cannot tune them.
+
+=== Risks
+
+* The window is per loader, not global: a deployment with many issuers allows one fetch per window for each.
+* The correctness of the bound depends on every fetch path taking the in-flight guard and every installation
+  going through the shared commit step; a new fetch path that bypasses either reopens overlap or displacement.
+* Known limitation: a periodic cycle that skips because the shared in-flight guard is held also skips its
+  staleness evaluation, since the skip returns before the failed cycle is recorded and the opt-in
+  `maxStaleness` bound is checked. The guard is taken on the request thread when a window is claimed, before
+  the fetch task runs, so even with the default single-thread, loader-owned executor a due periodic cycle that
+  falls into that gap skips once. Only a sustained deferral needs more: with a caller-supplied multi-thread
+  executor and a slow identity provider, a caller who claims a window in every window can keep the guard held
+  and so defer the `maxStaleness` degradation. No production caller supplies such an executor today.
+
+== Alternatives Considered
+
+**Fetch synchronously on the lookup.** The lookup would fetch and wait, so the triggering token could succeed.
+It would solve the one-refusal-per-rotation cost. It was rejected because it ties request threads to the
+identity provider's latency and availability and turns a slow identity provider into a request-path outage.
+
+**A global or per-`kid` rate limit instead of one window per loader.** A per-`kid` limit still lets an attacker
+spray distinct `kid` values, each earning a fetch. A global limit couples unrelated issuers, so a flood
+against one issuer delays rotation for all of them. One window per loader bounds the fetch rate by the number
+of configured issuers, which the operator controls.
+
+**Install whatever the fetch returns.** Any successful fetch would replace the key set, as a periodic refresh
+does. It was rejected because an attacker who can trigger fetches can then force rotations at will and push
+legitimate keys out of the bounded retired sets; requiring the requested `kid` ties every on-demand
+installation to a key the identity provider actually published.
+
+**Count a failed on-demand fetch as a failed refresh cycle.** This would reuse the existing failure counter. It
+was rejected because the counter drives re-discovery and the staleness degradation, so request-triggered
+failures would let an unauthenticated caller steer the loader's recovery and availability.
+
+**Configurable backoff for the initial-load retry.** Exposing the initial delay, the factor and the cap would
+let deployments tune startup. It was rejected because a single flag with fixed delays capped by the refresh
+interval covers the need, keeps the configuration surface small and cannot be mis-tuned into a tight loop.
+
+The rejected options share one flaw: each lets the request rate, the attacker's choice of `kid`, or a
+deployment's tuning decide how often the loader reaches out or what it installs. The decision taken keeps
+both under configuration-bounded, atomic control on the loader itself.
+
+== References
+
+* ADR-0017 — the status contract: `OK` only with usable keys; the staleness bound that discarded fetches must
+  not feed.
+* ADR-0018 — the lifecycle lock and generation epoch that the shared commit step re-checks.
+* ADR-0026 — the orphaned-configuration rule applied to both Quarkus properties.
+* xref:../validation/requirements.adoc#VALIDATION-4.6[VALIDATION-4.6] and
+  xref:../validation/requirements.adoc#VALIDATION-4.7[VALIDATION-4.7] — the requirements this decision
+  realises.
+* xref:../validation/threat-model.adoc[Threat Model] — rows D1 and E6.
+* `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoader.java` —
+  the window claim, the in-flight guard and the shared commit step.
+* `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/commons/transport/HttpJwksLoaderConfig.java`
+  — the two settings and their bounds.

@@ -35,7 +35,7 @@ The log messages can be used for troubleshooting issues with the JWT Token Valid
 
 For more details about security events related to these log messages, see the SecurityEventCounter implementation in xref:validation/architecture.adoc#securityeventcounter[Architecture].
 
-== INFO Level (001-009)
+== INFO Level (001-010)
 
 [cols="1,1,2,2", options="header"]
 |===
@@ -47,9 +47,10 @@ For more details about security events related to these log messages, see the Se
 |TokenSheriff-007 |JWKS |JWKS loaded successfully for issuer: %s |Logged when JWKS is successfully loaded for a specific issuer
 |TokenSheriff-008 |ISSUER |Issuer configuration loaded successfully: %s |Logged when an issuer configuration is successfully loaded
 |TokenSheriff-009 |JWE |JWE decryption enabled with %s decryption key(s) |Logged when JWE decryption is configured on TokenValidator with the number of available decryption keys
+|TokenSheriff-010 |JWKS |Key id '%s' is unknown for issuer %s, scheduled one background JWKS refresh |Logged when the opt-in `unknownKidRefreshWindow` is configured and a key lookup for a key id that is in neither the installed nor a retired key set claims the window: one background JWKS fetch is scheduled and the lookup itself still misses. At most one such fetch runs per window and per loader; lookups that find the window or the fetch already claimed log at DEBUG only. The key id comes from the token header and is sanitised before it is logged
 |===
 
-== WARN Level (100-172; identifier 156 is retired)
+== WARN Level (100-173; identifier 156 is retired)
 
 [cols="1,1,2,2", options="header"]
 |===
@@ -125,6 +126,7 @@ For more details about security events related to these log messages, see the Se
 |TokenSheriff-170 |JWKS |JWKS for issuer '%s' has not been refreshed successfully since %s, exceeding the configured maximum staleness of %s; the loader reports a non-OK status until a refresh succeeds |Logged once per degradation when a `maxStaleness` is configured and a failed background refresh finds the last successful JWKS load older than that bound. The loader leaves `OK` (tokens for the issuer are rejected until a refresh succeeds); no installed key is dropped
 |TokenSheriff-171 |JWKS |Duplicate kid '%s' in JWKS: a later key overwrote an earlier one — the JWKS should carry a unique kid per key |Logged when a JWKS document contains two keys with the same key ID; the later key replaces the earlier one
 |TokenSheriff-172 |JWKS |Advertised jwks_uri for issuer %s cannot be used, the loader stops retrying: %s |Logged once when the `jwks_uri` advertised by the well-known discovery document cannot be used (a malformed URI, or a cleartext `http` URI while insecure HTTP is not allowed) and no endpoint is published yet. The loader ends in the terminal `ERROR` status and makes no further retries: no refresh task is scheduled, or the running one is cancelled. The second parameter is a fixed reason text naming both causes; the advertised `jwks_uri` and the refusal message of the HTTP handler configuration, which echoes it, are not logged, so no document content is logged
+|TokenSheriff-173 |JWKS |Unknown-kid JWKS refresh for issuer %s discarded, the installed keys stay in place: %s |Logged when the background fetch scheduled for an unknown key id (`TokenSheriff-010`) is discarded: the fetch failed, its content is unchanged, it yields no usable key, it does not hold the requested key id, or the loader was closed meanwhile. Nothing is installed, keys, retired key sets, status and endpoint stay unchanged, and the outcome is not counted as a failed refresh cycle. The second parameter is a fixed reason text; no remote content is logged
 |===
 
 == ERROR Level (200-206)

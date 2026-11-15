@@ -30,7 +30,9 @@ import java.util.concurrent.CompletableFuture;
  * <p>
  * Implementations load keys from HTTP endpoints, files, or memory. The interface follows
  * an async initialization pattern where {@link #initJWKSLoader(SecurityEventCounter)} triggers
- * loading and returns a CompletableFuture, while {@link #getKeyInfo(String)} performs retrieval only.
+ * loading and returns a CompletableFuture, while {@link #getKeyInfo(String)} performs retrieval only:
+ * it never performs I/O or blocks the caller. The one exception is opt-in: an HTTP loader configured with
+ * an unknown-kid refresh window may schedule, on a miss, at most one background fetch per window.
  * <p>
  * Usage pattern:
  * <pre>
@@ -53,8 +55,11 @@ public interface JwksLoader extends LoadingStatusProvider {
     /**
      * Retrieves a key by its ID from loaded keys.
      * <p>
-     * This method performs retrieval only - no loading or initialization.
-     * Keys must be loaded via {@link #initJWKSLoader(SecurityEventCounter)} first.
+     * This method performs retrieval only - no loading or initialization, no I/O and no blocking on the
+     * caller. Keys must be loaded via {@link #initJWKSLoader(SecurityEventCounter)} first. The one
+     * exception is opt-in: an HTTP loader configured with an unknown-kid refresh window may, when the
+     * key id is not found, schedule at most one background fetch per window; this call still returns
+     * empty and does not wait for that fetch.
      *
      * @param kid the key ID
      * @return an Optional containing the key info if found, empty otherwise

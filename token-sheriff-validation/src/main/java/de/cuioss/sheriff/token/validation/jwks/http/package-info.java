@@ -46,7 +46,10 @@
  *       the configured issuer identifier; the {@code jwks_uri} it advertises must pass the egress guard.</li>
  *   <li><strong>Key retrieval:</strong>
  *       {@link de.cuioss.sheriff.token.validation.jwks.JwksLoader#getKeyInfo(String)} only reads the
- *       installed key set; it never triggers loading.</li>
+ *       installed and retired key sets; it never performs I/O or blocks the caller. The one exception
+ *       is opt-in: with an unknown-kid refresh window configured, a miss on an installed key set may
+ *       schedule at most one background fetch per window and per loader, which installs the fetched key
+ *       set only if it holds the requested key id. The lookup itself still misses.</li>
  *   <li><strong>Background refresh:</strong> when enabled, a scheduled task re-fetches the JWKS through
  *       the ETag-aware adapter, so when the server supports conditional requests an unchanged key set
  *       may return an HTTP 304 instead of a full download. The egress guard is re-checked on every

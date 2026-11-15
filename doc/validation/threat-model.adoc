@@ -212,8 +212,8 @@ _See Requirements xref:requirements.adoc#VALIDATION-8.1[VALIDATION-8.1: Token Si
 
 |D1
 |JWKS endpoint flooding
-|JWKS refresh interval controls (default 600s); caching in link:../../token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoader.java[HttpJwksLoader]; retry behavior via cui-http `ResilientHttpAdapter`
-|link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoaderGracePeriodTest.java[HttpJwksLoaderGracePeriodTest]
+|JWKS refresh interval controls (default 600s); caching in link:../../token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoader.java[HttpJwksLoader]; retry behavior via cui-http `ResilientHttpAdapter`. By default an unknown `kid` never causes a fetch. The opt-in unknown-`kid` refresh (`unknownKidRefreshWindow`, 5 to 3600 seconds) is reachable by unauthenticated callers before any signature check, so it is bounded per loader: one compare-and-set window claim on a monotonic clock and one shared in-flight guard allow at most one background fetch per window, whatever the request rate and the number of invented `kid` values; the lookup performs no I/O and never waits; a failed or non-matching fetch changes nothing and is not counted as a failed refresh cycle (xref:requirements.adoc#VALIDATION-4.6[VALIDATION-4.6], xref:../adr/0030-An_opt-in_unknown-kid_refresh_claims_one_window_per_loader_and_installs_only_a_key_set_holding_the_kid.adoc[ADR-0030]). The opt-in initial-load retry is sequential, backed off from 1 to 30 seconds and capped at the refresh interval
+|link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoaderGracePeriodTest.java[HttpJwksLoaderGracePeriodTest], link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoaderUnknownKidAttackTest.java[HttpJwksLoaderUnknownKidAttackTest] (flood, `kid` spray, concurrent triggers, failure injection, lifecycle), link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoaderDefaultBehaviourUnchangedTest.java[HttpJwksLoaderDefaultBehaviourUnchangedTest] (no request without the setting), link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoaderInitialRetryTest.java[HttpJwksLoaderInitialRetryTest], link:../../token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/src/test/java/de/cuioss/sheriff/token/integration/token/UnknownKidRefreshSpecIT.java[UnknownKidRefreshSpecIT] (native)
 
 |D2
 |Large token processing
@@ -283,8 +283,8 @@ _See Requirement xref:requirements.adoc#VALIDATION-8.4[VALIDATION-8.4: Claims Va
 
 |E6
 |Key confusion attacks
-|Key ID (`kid`) validation; pre-loaded keys only — no dynamic file/DB lookup
-|link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/security/KeyInjectionAttackTest.java[KeyInjectionAttackTest]
+|Key ID (`kid`) validation; keys come only from the configured key source (the configured JWKS endpoint, file or inline content) — no dynamic file/DB lookup, and the token header never names a key location. With the opt-in unknown-`kid` refresh, an unknown `kid` may trigger an on-demand fetch, but only from the same configured JWKS endpoint and under the same egress check; the fetched key set is installed only if it holds the requested `kid`, and the token that triggered the fetch is still rejected
+|link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/security/KeyInjectionAttackTest.java[KeyInjectionAttackTest], link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoaderUnknownKidRefreshTest.java[HttpJwksLoaderUnknownKidRefreshTest], link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoaderUnknownKidAttackTest.java[HttpJwksLoaderUnknownKidAttackTest] (egress block after a DNS rebind)
 
 |E7
 |Client confusion attacks
