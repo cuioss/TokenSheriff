@@ -178,7 +178,8 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      */
     static final int REDISCOVERY_FAILURE_THRESHOLD = 3;
 
-    // Fixed reasons of the UNKNOWN_KID_REFRESH_DISCARDED warning; no remote content is ever logged with it
+    // Fixed reasons of a discarded unknown-kid fetch, logged through the UNKNOWN_KID_REFRESH_DISCARDED
+    // warning except DISCARD_UNCHANGED, which is logged at DEBUG; no remote content is ever logged with them
     static final String DISCARD_CLOSED = "the loader was closed or re-initialized meanwhile";
     static final String DISCARD_NO_ENDPOINT = "no JWKS endpoint is published";
     static final String DISCARD_EGRESS_BLOCKED = "the egress check of the JWKS fetch URI failed";
@@ -841,37 +842,49 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * Claims the unknown-kid refresh window and, when won, hands one fetch for {@code kid} to the
      * refresh executor, without I/O or waiting on the caller's thread.
      * <p>
-     * Two claims are taken, each a single compare-and-set, so there is no check-then-act gap: the window
-     * claim on {@link #nextAllowedNanos} (compared overflow-safely with the monotonic clock and moved on
-     * by one window) and the in-flight guard {@link #fetchInFlight}. A lost claim means another caller
-     * owns the window or a fetch is already running; it is logged at DEBUG only. The fetch carries the
-     * {@link #epoch} read here, so it commits nothing once a {@link #close()} moved it on. An executor
-     * that rejects the fetch releases the guard and never throws on the caller.
+     * Two claims are taken, each a single compare-and-set, in a fixed order: first the in-flight guard
+     * {@link #fetchInFlight}, then the window claim on {@link #nextAllowedNanos} (compared overflow-safely
+     * with the monotonic clock and moved on by one window). Claiming the guard first means a miss while
+     * a fetch is already running leaves the window untouched, so a held guard never burns the window. A
+     * lost claim means a fetch is already running or another caller owns the window; it is logged at
+     * DEBUG only, and a lost window claim releases the guard it had taken. The fetch carries the
+     * {@link #epoch} read here, so it commits nothing once a {@link #close()} moved it on.
+     * <p>
+     * The guard is released in this method for every hand-off outcome other than an accepted task: an
+     * executor that rejects the fetch, or fails with any other {@link RuntimeException}, releases the
+     * guard, and the failure is logged at DEBUG and never thrown on the caller. An accepted task releases
+     * the guard when it ends, so a caller-supplied executor must run or reject every task it accepts.
      *
      * @param kid    the key id that was not found
      * @param window the configured unknown-kid refresh window
      */
     private void scheduleUnknownKidRefresh(String kid, Duration window) {
+        if (!fetchInFlight.compareAndSet(false, true)) {
+            LOGGER.debug("A JWKS fetch is already in flight, no unknown-kid fetch scheduled");
+            return;
+        }
         long now = monotonicClock.getAsLong();
         long allowedFrom = nextAllowedNanos.get();
         if (now - allowedFrom < 0) {
+            fetchInFlight.set(false);
             LOGGER.debug("Unknown-kid refresh window still claimed, no fetch scheduled");
             return;
         }
         if (!nextAllowedNanos.compareAndSet(allowedFrom, now + window.toNanos())) {
+            fetchInFlight.set(false);
             LOGGER.debug("Unknown-kid refresh window claimed concurrently, no fetch scheduled");
-            return;
-        }
-        if (!fetchInFlight.compareAndSet(false, true)) {
-            LOGGER.debug("A JWKS fetch is already in flight, no unknown-kid fetch scheduled");
             return;
         }
         long claimEpoch = epoch.get();
         try {
             config.getScheduledExecutorService().execute(() -> fetchForUnknownKid(kid, claimEpoch));
-        } catch (RejectedExecutionException e) {
+        }
+        // Boundary catch around a caller-supplied executor: a rejection or any other failure of the
+        // hand-off releases the guard and is never thrown on the caller of getKeyInfo, which only missed.
+        // cui-rewrite:disable InvalidExceptionUsageRecipe
+        catch (RuntimeException e) {
             fetchInFlight.set(false);
-            LOGGER.debug("Refresh executor rejected the unknown-kid fetch (%s)", e.getClass().getName());
+            LOGGER.debug("Refresh executor did not accept the unknown-kid fetch (%s)", e.getClass().getName());
             return;
         }
         LOGGER.info(INFO.UNKNOWN_KID_REFRESH_SCHEDULED, ErrorTextSanitizer.sanitize(kid), loggableIssuerIdentifier());
@@ -884,7 +897,8 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * It re-runs the egress check on the current endpoint's fetch URI, fetches with that endpoint's
      * adapter and builds a candidate key set. The candidate is committed through the shared commit step,
      * under {@link #lifecycleLock}, only when it holds {@code kid} and the generation {@code claimEpoch}
-     * is still live. Every other outcome is discarded with {@code UNKNOWN_KID_REFRESH_DISCARDED}: keys,
+     * is still live. Every other outcome is discarded: an unchanged key set is logged at DEBUG, every
+     * other discard with {@code UNKNOWN_KID_REFRESH_DISCARDED}. In every case keys,
      * retired key sets, the installed JWKS content, the time of the last successful load, status and
      * endpoint stay unchanged, and {@link #recordFailedCycle(long)} is never called, so the outcome
      * counts towards neither re-discovery nor the staleness bound. A parse or state failure is discarded
@@ -922,7 +936,9 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
                 return;
             }
             if (fetched.equals(currentJwksContent.get())) {
-                discardUnknownKidFetch(DISCARD_UNCHANGED);
+                // An unchanged key set is the expected answer to a token with a stale or forged key id,
+                // not an operator concern: it is logged at DEBUG instead of through the warning.
+                LOGGER.debug("Unknown-kid fetch discarded: %s", DISCARD_UNCHANGED);
                 return;
             }
             JWKSKeyLoader candidate = buildUsableKeySet(fetched);
@@ -941,10 +957,10 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             discardUnknownKidFetch(DISCARD_PARSE_FAILED);
             LOGGER.debug("Unknown-kid fetch failed (%s)", e.getClass().getName());
         }
-        // cui-rewrite:disable InvalidExceptionUsageRecipe
         // Intentional catch-all safety net: any other failure of the adapter or the key-set build would
         // escape onto the refresh executor worker, where the default handler prints it unsanitised
         // (CWE-117). It is a per-fetch outcome: discarded, never counted as a failed refresh cycle.
+        // cui-rewrite:disable InvalidExceptionUsageRecipe
         catch (RuntimeException e) {
             discardUnknownKidFetch(DISCARD_FETCH_FAILED);
             LOGGER.debug("Unknown-kid fetch failed unexpectedly (%s)", e.getClass().getName());

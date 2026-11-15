@@ -52,7 +52,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * runs on a caller-supplied single-thread executor, so draining that executor waits for it
  * deterministically.
  */
-@EnableTestLogger
+@EnableTestLogger(debug = HttpJwksLoader.class)
 @EnableMockWebServer
 @DisplayName("HttpJwksLoader unknown-kid refresh")
 class HttpJwksLoaderUnknownKidRefreshTest {
@@ -144,7 +144,7 @@ class HttpJwksLoaderUnknownKidRefreshTest {
     }
 
     @Test
-    @DisplayName("An unchanged key set is discarded without a swap")
+    @DisplayName("An unchanged key set is discarded without a swap and logged at DEBUG, not as a warning")
     void shouldDiscardUnchangedKeySet(URIBuilder uriBuilder) throws Exception {
         HttpJwksLoader loader = initializedLoader(configBuilder(uriBuilder).build());
 
@@ -155,7 +155,9 @@ class HttpJwksLoaderUnknownKidRefreshTest {
                 () -> assertEquals(2, moduleDispatcher.getRequestCount()),
                 () -> assertEquals(Set.of(DEFAULT_KID), loader.getKeyIds()),
                 () -> assertEquals(LoaderStatus.OK, loader.getLoaderStatus()));
-        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, HttpJwksLoader.DISCARD_UNCHANGED);
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.DEBUG, HttpJwksLoader.DISCARD_UNCHANGED);
+        LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN,
+                JWTValidationLogMessages.WARN.UNKNOWN_KID_REFRESH_DISCARDED.resolveIdentifierString());
         loader.close();
     }
 

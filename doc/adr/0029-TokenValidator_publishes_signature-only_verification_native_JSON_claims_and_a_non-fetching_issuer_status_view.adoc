@@ -211,6 +211,20 @@ the change that introduced the package:
   `iat` plus window edge and admit a replay. The decision is changed again: the guard holds no clock, and the
   validator passes the single instant it judged freshness on into every admission.
 
+==== Revision: bounded `iat` / `exp` reading and a bounded freshness window
+
+Review after release found two inputs the validator did not bound; both are closed without changing a check
+or its order:
+
+* `iat` and `exp` were expanded to an instant whatever their exponent, so a NumericDate such as `1e99999999`
+  held the validator's critical section for as long as the expansion took. The magnitude is now bounded
+  before any scaling, for both exponent signs: a value outside the `Instant` second range is refused by the
+  check that owns the claim, and a value below one nanosecond is read without expansion.
+* The freshness window was only required to be positive, so a window too long for the `Instant` arithmetic
+  made `validate` throw. The builder now refuses a window longer than
+  `LogoutTokenValidator.MAX_FRESHNESS_WINDOW` (100 years), and the instants derived from the window saturate
+  at the ends of the `Instant` range.
+
 The HTTP receiver endpoint for back-channel logout and the termination of the affected sessions stay with
 the consuming application. The library validates the token; it does not receive it or act on it.
 
@@ -249,6 +263,11 @@ the consuming application. The library validates the token; it does not receive 
 * A full replay guard refuses every new logout token until entries expire. This is fail-closed by design;
   the distinct `REPLAY_GUARD_FULL` value lets the caller alert on it, and capacity has to be sized against
   the expected logout rate within the freshness window.
+* The single-instant rule assumes a clock that does not move backward. When the wall clock steps back after
+  the guard has purged an entry, a token whose `iat` is fresh again at the earlier instant is admitted a
+  second time, because its `jti` is no longer held. The limit is stated in the validator's Javadoc and the
+  security reference; a deployment needs a clock that never steps back, because a step smaller than the
+  freshness window can already re-admit a purged token.
 * Opting into external-validator reporting can turn readiness `DOWN` when a foreign validator's loader is
   not `OK`, which is why the key is opt-in.
 

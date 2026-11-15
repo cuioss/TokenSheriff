@@ -72,8 +72,10 @@ public final class SignatureVerifiedToken {
     private final Set<String> nullClaimNames;
 
     /**
-     * The protected-header {@code typ} value verbatim, or {@code null} when the header carries none.
+     * The protected-header {@code typ} value verbatim, or {@code null} when the header carries none. It is
+     * untrusted token text, so it is kept out of {@code toString} like every other token-sourced field.
      */
+    @ToString.Exclude
     private final @Nullable String typHeader;
 
     /**

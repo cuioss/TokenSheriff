@@ -11,7 +11,7 @@ _See xref:requirements.adoc[Commons Requirements], xref:threat-model.adoc[Threat
 the xref:../adr/0001-Validation_and_Client_Module_Split_with_a_Commons_Base_Layer.adoc[module-architecture decision]._
 
 `commons` is the *shared base layer* every capability sits on. It is the package root
-`de.cuioss.sheriff.token.commons` — with sub-packages `transport`, `error`, `events` and
+`de.cuioss.sheriff.token.commons` — with sub-packages `transport`, `error`, `http`, `events` and
 `metrics` — *shipped inside the `token-sheriff-validation` artifact*. It is **not a
 separate module**: no consumer wants the base without validation (the client validates the
 tokens it retrieves, so it pulls `validation` and gets the base transitively;
@@ -26,7 +26,7 @@ image::../resources/diagrams/module-architecture.svg["Token-Sheriff module archi
 The seam is sharp: *commons moves bytes, raises typed errors, counts events and exposes
 metrics; it never interprets a token's trust.*
 
-=== The four concerns
+=== The sub-packages
 
 [cols="1,3", options="header"]
 |===
@@ -35,7 +35,8 @@ metrics; it never interprets a token's trust.*
 | `commons.transport`
 | The validation-side outbound IdP HTTP — discovery (`.well-known`, RFC 8414) and JWKS
   (RFC 7517) — plus the shared transport primitives: TLS enforcement, egress policy
-  (`EgressPolicy`), timeouts, response-size limits (`BoundedBodyHandlers`), retry/backoff,
+  (`EgressPolicy`), timeouts, response-size limits (the public `BoundedBodyHandler`, also used
+  by the client's back-channel reads), retry/backoff,
   the `cui-http` client, and discovery / JWKS caching. The client engine builds its *own*
   back-channel HTTP (token / userinfo / revocation / PAR) on these primitives
   (xref:../client/architecture.adoc#_owned_back_channel_http[owned back-channel HTTP]).
@@ -45,6 +46,13 @@ metrics; it never interprets a token's trust.*
 | The typed exception hierarchy that library code throws, plus the inbound normalization of
   OAuth `error` / `error_description` (RFC 6749 §5.2). The RFC 9457 rendering lives at each
   HTTP edge, not here. See xref:specification/error-model.adoc[error-model spec].
+
+| `commons.http`
+| The framework-neutral RFC 6750 helpers of an HTTP edge: `BearerCredentials` reads the
+  `Bearer` credentials of an `Authorization` value, and `BearerChallenge` builds the
+  `insufficient_scope` challenge. They depend on `java.util` and JSpecify only and never decide
+  an HTTP status. See
+  xref:../adr/0031-Bearer_extraction_scope_challenge_sanitiser_escape_and_bounded_body_reads_are_public_commons_helpers.adoc[ADR-0031].
 
 | `commons.events`
 | `SecurityEventCounter` and the security-event types, so validation and the client
@@ -75,7 +83,8 @@ dependencies to `cui-http` / `cui-tooling` plus commons-internal types.
 == Who depends on what
 
 * `validation` → `commons` (uses transport, events, metrics, error).
-* `token-sheriff-validation-quarkus` → renders `commons.error` exceptions as RFC 9457.
+* `token-sheriff-validation-quarkus` → renders `commons.error` exceptions as RFC 9457, and reads
+  Bearer credentials and builds its scope challenge through `commons.http`.
 * `token-sheriff-client` (separate module) → `validation`, and thus `commons`
   transitively.
 * `nifi-extensions` (external consumer) → `validation`; any commons-visible package move must

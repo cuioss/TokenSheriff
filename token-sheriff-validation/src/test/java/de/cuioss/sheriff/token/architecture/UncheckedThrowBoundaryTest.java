@@ -109,6 +109,14 @@ class UncheckedThrowBoundaryTest {
             "post-validation accessor on returned token content — outside the create*Token call";
 
     /**
+     * Reason category: a commons-layer helper an integration calls to build its own response, after (or
+     * instead of) a validation call; a refusal is the integration's programming error.
+     */
+    private static final String CALLER_INPUT_CONTRACT =
+            "outside the validation call: argument contract of a commons HTTP helper the integration calls"
+                    + " to build its response header — never inside a create*Token call stack";
+
+    /**
      * Every production code unit that still constructs one of {@link #UNCHECKED_TYPES}, with the reason
      * it is not a request-path failure. Derived from the PLAN-17 partition; see PR #747 for the
      * per-site evidence. An entry that stops binding to a live site is a failure, not a leftover.
@@ -235,6 +243,30 @@ class UncheckedThrowBoundaryTest {
             Map.entry("de.cuioss.sheriff.token.validation.domain.token.IdTokenContent#getAudience",
                     POST_VALIDATION_ACCESSOR + " — getAudience has no main-source caller; the audience"
                             + " claim is validated through getClaimOption, not this accessor"),
+
+            // --- commons HTTP helper, called by an integration to answer a request ---
+            Map.entry("de.cuioss.sheriff.token.commons.http.BearerChallenge$Builder#checkQuotable",
+                    CALLER_INPUT_CONTRACT + " — refuses a realm or error_description that would split the"
+                            + " WWW-Authenticate header"),
+            Map.entry("de.cuioss.sheriff.token.commons.http.BearerChallenge$Builder#scope",
+                    CALLER_INPUT_CONTRACT + " — refuses a scope name outside the RFC 6749 section 3.3"
+                            + " scope-token grammar"),
+            Map.entry("de.cuioss.sheriff.token.commons.http.BearerChallenge$Builder#build",
+                    CALLER_INPUT_CONTRACT + " — refuses a challenge beyond the client parser's scope-count"
+                            + " and length bounds"),
+
+            // --- commons sanitiser, argument contract on a caller constant ---
+            Map.entry("de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer#escapeNonPrintableAscii",
+                    "outside the validation call: refuses a negative maxLength, a caller-chosen constant;"
+                            + " no create*Token call stack invokes this form"),
+
+            // --- commons bounded body handler, argument contract on a configured ceiling ---
+            Map.entry("de.cuioss.sheriff.token.commons.transport.BoundedBodyHandler#requireCeilingInRange",
+                    "outside the validation call: refuses a ceiling outside 0 to MAX_CEILING when a handler"
+                            + " is created; the validation converters pass ParserConfig.maxHttpResponseSize,"
+                            + " which ParserConfigBuilder.build already refuses when not positive, and"
+                            + " create the handler on the JWKS loader / discovery fetch thread, never inside"
+                            + " a create*Token call stack"),
 
             // --- dual-use utility, unreachable from the request path ---
             Map.entry("de.cuioss.sheriff.token.validation.util.JwkThumbprintUtil#canonicalJson",

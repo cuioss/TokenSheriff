@@ -74,6 +74,18 @@ import java.util.*;
  * could straddle the {@code iat} plus window edge and admit a replay; one reading cannot. The validator builds
  * its replay guard itself, from the capacity it is given; a guard is never shared between validators.
  * <p>
+ * <strong>Limit: a backward wall-clock step.</strong> The one-instant guarantee assumes the clock does not
+ * move backward. When it steps back after the replay guard has purged an entry, a token whose {@code iat}
+ * is fresh again at the earlier instant is admitted a second time, because its {@code jti} is no longer
+ * held. A step smaller than the freshness window is enough: with a 300 second window, a token admitted at
+ * {@code t} is purged by an admission at {@code t + 301}, and after a step back to {@code t + 299} it is
+ * admitted again. Use a clock that never steps backward, or accept this window of re-admission.
+ * <p>
+ * {@code iat} and {@code exp} are bounded before they are read: a value outside the {@link Instant} range,
+ * of either exponent sign, is refused by its own check rather than expanded, and the freshness window is
+ * at most {@link #MAX_FRESHNESS_WINDOW}, so a validation always returns a result and never throws on the
+ * instant arithmetic.
+ * <p>
  * The validator does not log and returns no text taken from the token, so the caller decides how a refusal
  * is logged or metered. Receiving the logout request over HTTP and ending the named session stay with the
  * consuming application.
@@ -90,6 +102,20 @@ public final class LogoutTokenValidator {
      * The member of the {@code events} claim that declares a JWT to be a logout token.
      */
     public static final String BACKCHANNEL_LOGOUT_EVENT = "http://schemas.openid.net/event/backchannel-logout";
+
+    /**
+     * The largest accepted freshness window, 100 years of 365.25 days. The bound keeps every instant the
+     * validation computes from the window ({@code now} minus and plus the window, {@code iat} plus the
+     * window) inside the {@link Instant} range, so {@link #validate(String)} never throws on that
+     * arithmetic; a result beyond the range saturates at {@link Instant#MIN} or {@link Instant#MAX}.
+     */
+    public static final Duration MAX_FRESHNESS_WINDOW = Duration.ofDays(36_525);
+
+    /** Digits of the largest {@link Instant} epoch second, 31556889864403199; more integer digits are out of range. */
+    private static final int MAX_EPOCH_SECOND_DIGITS = 17;
+
+    /** Fraction digits of one nanosecond; a value with fewer integer digits than minus this is below 1 ns. */
+    private static final int NANO_DIGITS = 9;
 
     private static final String LOGOUT_TYPE = "logout+jwt";
     private static final String LOGOUT_MEDIA_TYPE = "application/" + LOGOUT_TYPE;
@@ -116,13 +142,15 @@ public final class LogoutTokenValidator {
      * @param tokenValidator   the validator whose signature-only entry verifies the token
      * @param expectedIssuer   the issuer the {@code iss} claim must equal
      * @param expectedAudience the audience the {@code aud} claim must contain
-     * @param freshnessWindow     how far {@code iat} may lie before or after now, positive
+     * @param freshnessWindow     how far {@code iat} may lie before or after now, positive and at most
+     *                            {@link #MAX_FRESHNESS_WINDOW}
      * @param replayGuardCapacity the maximum number of live {@code jti} entries of the replay guard this validator
      *                            builds, greater than zero; size it above the number of logout tokens the issuer
      *                            can send within twice the freshness window
      * @param clock               the clock read once per validation; that one instant decides {@code iat}
      *                            freshness, {@code exp}, and the purge of the replay guard
-     * @throws IllegalArgumentException if {@code freshnessWindow} is zero or negative, {@code replayGuardCapacity}
+     * @throws IllegalArgumentException if {@code freshnessWindow} is zero, negative or longer than
+     *                                  {@link #MAX_FRESHNESS_WINDOW}, {@code replayGuardCapacity}
      *                                  is not greater than zero, or an identifier is blank
      */
     @Builder
@@ -137,6 +165,10 @@ public final class LogoutTokenValidator {
         this.freshnessWindow = Objects.requireNonNull(freshnessWindow, "freshnessWindow must not be null");
         if (freshnessWindow.isZero() || freshnessWindow.isNegative()) {
             throw new IllegalArgumentException("freshnessWindow must be positive, but was: " + freshnessWindow);
+        }
+        if (freshnessWindow.compareTo(MAX_FRESHNESS_WINDOW) > 0) {
+            throw new IllegalArgumentException("freshnessWindow must not exceed " + MAX_FRESHNESS_WINDOW
+                    + ", but was: " + freshnessWindow);
         }
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.replayGuard = new LogoutTokenReplayGuard(replayGuardCapacity);
@@ -154,7 +186,7 @@ public final class LogoutTokenValidator {
         try {
             // A null token is handed on as the empty string, which the signature-only entry refuses and
             // counts exactly as it counts a null one
-            verified = tokenValidator.verifySignature(Objects.requireNonNullElse(rawToken, ""));
+            verified = tokenValidator.verifySignature(rawToken == null ? "" : rawToken);
         } catch (ClaimMappingException e) {
             return LogoutTokenValidationResult.refused(checkOfUnmappableClaim(e.getClaimName()));
         } catch (TokenValidationException e) {
@@ -175,7 +207,7 @@ public final class LogoutTokenValidator {
             }
             // Every claim read below passed its check above: iat is a number, jti a non-blank string, and
             // sub and sid are each absent or a non-blank string
-            Instant retainUntil = numericDate(claims.get("iat")).orElseThrow().plus(freshnessWindow);
+            Instant retainUntil = plusSaturating(numericDate(claims.get("iat")).orElseThrow(), freshnessWindow);
             String jwtId = (String) claims.get("jti");
             return switch (replayGuard.admit(jwtId, retainUntil, now)) {
                 case ADMITTED -> LogoutTokenValidationResult.accepted(expectedIssuer,
@@ -244,9 +276,24 @@ public final class LogoutTokenValidator {
 
     private boolean isFresh(@Nullable Object issuedAtClaim, Instant now) {
         return numericDate(issuedAtClaim)
-                .filter(issuedAt -> !issuedAt.isBefore(now.minus(freshnessWindow))
-                        && !issuedAt.isAfter(now.plus(freshnessWindow)))
+                .filter(issuedAt -> !issuedAt.isBefore(minusSaturating(now, freshnessWindow))
+                        && !issuedAt.isAfter(plusSaturating(now, freshnessWindow)))
                 .isPresent();
+    }
+
+    /**
+     * @return {@code instant} plus {@code amount}, or {@link Instant#MAX} when the sum lies beyond it; the
+     *         comparison cannot overflow because {@code amount} is at most {@link #MAX_FRESHNESS_WINDOW}
+     */
+    private static Instant plusSaturating(Instant instant, Duration amount) {
+        return instant.isAfter(Instant.MAX.minus(amount)) ? Instant.MAX : instant.plus(amount);
+    }
+
+    /**
+     * @return {@code instant} minus {@code amount}, or {@link Instant#MIN} when the difference lies before it
+     */
+    private static Instant minusSaturating(Instant instant, Duration amount) {
+        return instant.isBefore(Instant.MIN.plus(amount)) ? Instant.MIN : instant.minus(amount);
     }
 
     private static boolean isUnexpired(@Nullable Object expirationClaim, Instant now) {
@@ -299,6 +346,11 @@ public final class LogoutTokenValidator {
      * permits a non-integer NumericDate, so {@code iat} and {@code exp} are judged, and the replay retention
      * instant is computed, on the exact claim value. Only a fraction below one nanosecond is truncated, toward
      * the earlier instant, as {@link Instant} cannot carry it.
+     * <p>
+     * The magnitude is bounded before any scaling, for both exponent signs, so the work is bounded by the
+     * digits the token actually carries: a value whose integer part has more digits than the {@link Instant}
+     * second range is not a representable instant, and a value whose magnitude is below one nanosecond is
+     * read as the epoch (or one nanosecond before it, when negative) without being expanded.
      *
      * @param value the claim value
      * @return the instant, empty when the value is not a number or not a representable instant
@@ -309,6 +361,22 @@ public final class LogoutTokenValidator {
         }
         try {
             BigDecimal exact = new BigDecimal(number.toString());
+            if (exact.signum() == 0) {
+                return Optional.of(Instant.EPOCH);
+            }
+            // Bound the magnitude before any scaling: setScale on an exponent such as 1e99999999 or
+            // 1e-99999999 would expand the value to a hundred million digits, inside decisionLock. The
+            // count of integer digits is precision - scale, computed in long so an extreme scale cannot
+            // overflow it
+            long integerDigits = (long) exact.precision() - exact.scale();
+            if (integerDigits > MAX_EPOCH_SECOND_DIGITS) {
+                // Beyond the Instant second range in either direction; the owning check refuses it
+                return Optional.empty();
+            }
+            if (integerDigits < -NANO_DIGITS) {
+                // Magnitude below one nanosecond: read without scaling, truncated toward the earlier instant
+                return Optional.of(exact.signum() > 0 ? Instant.EPOCH : Instant.EPOCH.minusNanos(1));
+            }
             BigDecimal wholeSeconds = exact.setScale(0, RoundingMode.FLOOR);
             // exact - floor(exact) lies in [0, 1), so the nanosecond part lies in [0, 999_999_999]
             long nanos = exact.subtract(wholeSeconds).movePointRight(9).setScale(0, RoundingMode.FLOOR)

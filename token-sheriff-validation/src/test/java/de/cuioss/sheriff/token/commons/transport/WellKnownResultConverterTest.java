@@ -384,7 +384,7 @@ class WellKnownResultConverterTest {
 
         assertNotNull(bodyHandler, "getBodyHandler must return a non-null body handler");
 
-        // H2 (a0e4f81e) wraps the discovery body in a BoundedBodyHandlers streaming size ceiling, so
+        // H2 (a0e4f81e) wraps the discovery body in a BoundedBodyHandler streaming size ceiling, so
         // the handler is deliberately no longer the plain HttpResponse.BodyHandlers.ofString. Assert
         // it still functions as a String body handler (produces a subscriber for a 200 response)
         // rather than pinning its now-bounded implementation class.

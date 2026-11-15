@@ -22,43 +22,36 @@ import de.cuioss.sheriff.token.validation.IssuerConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Tests the opt-in per-issuer {@code jwks.http.unknown-kid-refresh-window-seconds} and
  * {@code jwks.http.initial-load-retry} keys of {@link IssuerConfigResolver}: absent they leave both loader
- * behaviours off, set they reach the loader configuration, and an invalid, out-of-range, conflicting or
- * orphaned value fails startup (ADR-0026, ADR-0030).
+ * behaviours off, set they reach the loader configuration, and an invalid, out-of-range or conflicting
+ * value fails startup naming the Quarkus key (ADR-0026, ADR-0030). The orphaned-property cases live in
+ * {@link IssuerConfigResolverJwksLoaderOrphanedTest}.
  */
 @DisplayName("IssuerConfigResolver unknown-kid refresh window and initial-load retry")
 class IssuerConfigResolverJwksLoaderOptInTest {
 
-    private static final String ISSUER = "optin";
+    static final String ISSUER = "optin";
     private static final String ISSUER_IDENTIFIER = "https://optin.example.com";
-    private static final String WINDOW_PROPERTY =
+    static final String WINDOW_PROPERTY =
             JwtPropertyKeys.ISSUERS.UNKNOWN_KID_REFRESH_WINDOW_SECONDS.formatted(ISSUER);
-    private static final String RETRY_PROPERTY = JwtPropertyKeys.ISSUERS.INITIAL_LOAD_RETRY.formatted(ISSUER);
+    static final String RETRY_PROPERTY = JwtPropertyKeys.ISSUERS.INITIAL_LOAD_RETRY.formatted(ISSUER);
     private static final String REFRESH_INTERVAL_PROPERTY =
             JwtPropertyKeys.ISSUERS.REFRESH_INTERVAL_SECONDS.formatted(ISSUER);
-    private static final String EMPTY_JWKS = "{\"keys\":[]}";
 
-    private static Map<String, String> issuerWithJwksUrl() {
+    static Map<String, String> issuerWithJwksUrl() {
         Map<String, String> properties = new HashMap<>();
         properties.put(JwtPropertyKeys.ISSUERS.ENABLED.formatted(ISSUER), "true");
         properties.put(JwtPropertyKeys.ISSUERS.ISSUER_IDENTIFIER.formatted(ISSUER), ISSUER_IDENTIFIER);
@@ -75,21 +68,7 @@ class IssuerConfigResolverJwksLoaderOptInTest {
         return properties;
     }
 
-    private static Map<String, String> issuerWithFilePath(Path jwksFile) {
-        Map<String, String> properties = issuerWithJwksUrl();
-        properties.remove(JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(ISSUER));
-        properties.put(JwtPropertyKeys.ISSUERS.JWKS_FILE_PATH.formatted(ISSUER), jwksFile.toString());
-        return properties;
-    }
-
-    private static Map<String, String> issuerWithInlineContent() {
-        Map<String, String> properties = issuerWithJwksUrl();
-        properties.remove(JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(ISSUER));
-        properties.put(JwtPropertyKeys.ISSUERS.JWKS_CONTENT.formatted(ISSUER), EMPTY_JWKS);
-        return properties;
-    }
-
-    private static IssuerConfigResolver resolverFor(Map<String, String> properties) {
+    static IssuerConfigResolver resolverFor(Map<String, String> properties) {
         return new IssuerConfigResolver(new TestConfig(properties), RetryConfig.defaults(), null, null);
     }
 
@@ -98,15 +77,6 @@ class IssuerConfigResolverJwksLoaderOptInTest {
                 properties.get(JwtPropertyKeys.ISSUERS.JWKS_URL.formatted(ISSUER)),
                 properties.get(JwtPropertyKeys.ISSUERS.WELL_KNOWN_URL.formatted(ISSUER)),
                 Optional.of(ISSUER_IDENTIFIER));
-    }
-
-    /**
-     * Each HTTP-only property with a value that is valid on an HTTP issuer.
-     */
-    static Stream<Arguments> httpOnlyProperties() {
-        return Stream.of(
-                Arguments.of(WINDOW_PROPERTY, "60"),
-                Arguments.of(RETRY_PROPERTY, "true"));
     }
 
     @Nested
@@ -245,22 +215,27 @@ class IssuerConfigResolverJwksLoaderOptInTest {
     }
 
     @Nested
-    @DisplayName("Builder validation")
-    class BuilderValidation {
+    @DisplayName("Range and refresh-interval validation")
+    class RangeAndRefreshIntervalValidation {
 
         @ParameterizedTest(name = "{0} seconds")
         @ValueSource(strings = {"4", "3601"})
-        @DisplayName("should fail startup for a window outside 5 to 3600 seconds")
+        @DisplayName("should fail startup naming the property for a window outside 5 to 3600 seconds")
         void shouldFailForWindowOutOfRange(String value) {
             Map<String, String> properties = issuerWithJwksUrl();
             properties.put(WINDOW_PROPERTY, value);
             IssuerConfigResolver resolver = resolverFor(properties);
 
-            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+            IllegalStateException exception = assertThrows(IllegalStateException.class,
                     resolver::resolveIssuerConfigs);
 
-            assertTrue(exception.getMessage().contains("unknownKidRefreshWindow"),
-                    "The builder must refuse the out-of-range window: " + exception.getMessage());
+            assertAll("Out-of-range message",
+                    () -> assertTrue(exception.getMessage().contains("Property '" + WINDOW_PROPERTY + "'"),
+                            "The failure must name the Quarkus key: " + exception.getMessage()),
+                    () -> assertTrue(exception.getMessage().contains("between 5 and 3600 seconds inclusive"),
+                            "The failure must state the accepted range: " + exception.getMessage()),
+                    () -> assertTrue(exception.getMessage().endsWith("but was " + value),
+                            "The failure must echo the configured value: " + exception.getMessage()));
         }
 
         @ParameterizedTest(name = "{0} seconds")
@@ -277,21 +252,34 @@ class IssuerConfigResolverJwksLoaderOptInTest {
         }
 
         @Test
-        @DisplayName("should fail startup for a window combined with a refresh interval of 0")
+        @DisplayName("should fail startup naming both properties for a window combined with a refresh interval of 0")
         void shouldFailForWindowWithZeroRefreshInterval() {
             Map<String, String> properties = issuerWithJwksUrl();
             properties.put(WINDOW_PROPERTY, "60");
             properties.put(REFRESH_INTERVAL_PROPERTY, "0");
             IssuerConfigResolver resolver = resolverFor(properties);
 
-            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+            IllegalStateException exception = assertThrows(IllegalStateException.class,
                     resolver::resolveIssuerConfigs);
 
             assertAll("Conflict message",
-                    () -> assertTrue(exception.getMessage().contains("unknownKidRefreshWindow(...)"),
-                            "The failure must name the window: " + exception.getMessage()),
-                    () -> assertTrue(exception.getMessage().contains("refreshIntervalSeconds(0)"),
-                            "The failure must name the conflicting refresh interval: " + exception.getMessage()));
+                    () -> assertTrue(exception.getMessage().contains("Property '" + WINDOW_PROPERTY + "'"),
+                            "The failure must name the window key: " + exception.getMessage()),
+                    () -> assertTrue(exception.getMessage().contains("'" + REFRESH_INTERVAL_PROPERTY + "' is 0"),
+                            "The failure must name the conflicting refresh-interval key: " + exception.getMessage()));
+        }
+
+        @Test
+        @DisplayName("should pass the window when combined with a positive refresh interval")
+        void shouldPassWindowWithPositiveRefreshInterval() {
+            Map<String, String> properties = issuerWithJwksUrl();
+            properties.put(WINDOW_PROPERTY, "60");
+            properties.put(REFRESH_INTERVAL_PROPERTY, "1");
+
+            HttpJwksLoaderConfig loaderConfig = loaderConfigFor(properties);
+
+            assertEquals(Optional.of(Duration.ofSeconds(60)), loaderConfig.getUnknownKidRefreshWindow(),
+                    "Only a refresh interval of exactly 0 conflicts with the window");
         }
 
         @Test
@@ -323,76 +311,6 @@ class IssuerConfigResolverJwksLoaderOptInTest {
 
             assertEquals(1, result.size(),
                     "Only an enabled opt-in conflicts with a refresh interval of 0, an explicit false does not");
-        }
-    }
-
-    @Nested
-    @DisplayName("Orphaned on an issuer without HTTP JWKS loading")
-    class Orphaned {
-
-        @TempDir
-        Path tempDir;
-
-        private Path jwksFile() throws IOException {
-            return Files.writeString(tempDir.resolve("jwks.json"), EMPTY_JWKS);
-        }
-
-        @ParameterizedTest(name = "{0}")
-        @MethodSource("de.cuioss.sheriff.token.quarkus.config.IssuerConfigResolverJwksLoaderOptInTest#httpOnlyProperties")
-        @DisplayName("should fail startup for the property on an issuer with a JWKS file path")
-        void shouldFailWhenOrphanedOnFilePathIssuer(String property, String value) throws Exception {
-            Map<String, String> properties = issuerWithFilePath(jwksFile());
-            properties.put(property, value);
-            IssuerConfigResolver resolver = resolverFor(properties);
-
-            IllegalStateException exception = assertThrows(IllegalStateException.class,
-                    resolver::resolveIssuerConfigs);
-
-            assertTrue(exception.getMessage().contains(property),
-                    "The failure must name the orphaned property: " + exception.getMessage());
-        }
-
-        @Test
-        @DisplayName("should resolve the issuer with a JWKS file path when neither property is set")
-        void shouldResolveFilePathIssuerWithoutProperties() throws Exception {
-            List<IssuerConfig> result = resolverFor(issuerWithFilePath(jwksFile())).resolveIssuerConfigs();
-
-            assertEquals(1, result.size(), "A file-path issuer without the HTTP-only properties must resolve");
-        }
-
-        @ParameterizedTest(name = "{0}")
-        @MethodSource("de.cuioss.sheriff.token.quarkus.config.IssuerConfigResolverJwksLoaderOptInTest#httpOnlyProperties")
-        @DisplayName("should fail startup for the property on an issuer with inline JWKS content")
-        void shouldFailWhenOrphanedOnContentIssuer(String property, String value) {
-            Map<String, String> properties = issuerWithInlineContent();
-            properties.put(property, value);
-            IssuerConfigResolver resolver = resolverFor(properties);
-
-            IllegalStateException exception = assertThrows(IllegalStateException.class,
-                    resolver::resolveIssuerConfigs);
-
-            assertTrue(exception.getMessage().contains(property),
-                    "The failure must name the orphaned property: " + exception.getMessage());
-        }
-
-        @Test
-        @DisplayName("should resolve the issuer with inline JWKS content when neither property is set")
-        void shouldResolveContentIssuerWithoutProperties() {
-            List<IssuerConfig> result = resolverFor(issuerWithInlineContent()).resolveIssuerConfigs();
-
-            assertEquals(1, result.size(), "An inline-content issuer without the HTTP-only properties must resolve");
-        }
-
-        @ParameterizedTest(name = "{0}")
-        @MethodSource("de.cuioss.sheriff.token.quarkus.config.IssuerConfigResolverJwksLoaderOptInTest#httpOnlyProperties")
-        @DisplayName("should resolve the issuer for the same property on an HTTP issuer")
-        void shouldResolveSamePropertyOnHttpIssuer(String property, String value) {
-            Map<String, String> properties = issuerWithJwksUrl();
-            properties.put(property, value);
-
-            List<IssuerConfig> result = resolverFor(properties).resolveIssuerConfigs();
-
-            assertEquals(1, result.size(), "The same property is valid on an issuer that loads its JWKS over HTTP");
         }
     }
 }

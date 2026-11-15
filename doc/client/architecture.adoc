@@ -189,8 +189,12 @@ target. The engine therefore *owns* an in-module egress control, applied uniform
   refused by `DiscoveryResolver`, while an advertised field outside that set is not read. This control, the
   per-client trust (`sslContext`) and hostname verification are applied to the host actually
   contacted — the rewritten target when a back-channel origin applies.
-| *Bounded reads & timeouts* | Response bodies are size-capped *during* the read
-  (`BoundedContentBodyHandler`); connect / read timeouts come from `ClientConfiguration`.
+| *Bounded reads & timeouts* | Response bodies are size-capped through the commons
+  `BoundedBodyHandler`: a response advertising a `Content-Length` above the ceiling is refused
+  before a byte of it is read, and a body that crosses the ceiling while streaming is refused at the
+  crossing (see the
+  xref:../commons/specification/transport.adoc#bounded_response_body[transport specification]);
+  connect / read timeouts come from `ClientConfiguration`.
 |===
 
 [IMPORTANT]

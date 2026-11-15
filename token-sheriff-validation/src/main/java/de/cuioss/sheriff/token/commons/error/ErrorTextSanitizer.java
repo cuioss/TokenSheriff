@@ -41,6 +41,10 @@ import org.jspecify.annotations.Nullable;
  * with a caller-chosen marker. The JWE header and JWK field sanitisers use it with {@code '?'},
  * 64 characters and {@code "..."}.
  * <p>
+ * A third form, {@link #escapeNonPrintableAscii(String, int, String)}, is stricter: it escapes every
+ * character outside printable ASCII and the backslash itself, with upper-case hex, so the result is
+ * printable ASCII only - for a sink that must not carry any non-ASCII character at all.
+ * <p>
  * This is the single implementation of that behaviour. It lives in the {@code commons} base layer so
  * both the base layer itself ({@link InboundErrorNormalizer}, the JWK transport type) and the layers
  * above it (the client engine, the JWE decryptor), which may depend on the base layer but not the
@@ -80,6 +84,15 @@ public final class ErrorTextSanitizer {
 
     /** U+2069 POP DIRECTIONAL ISOLATE, the last of the isolate controls. */
     private static final char LAST_ISOLATE_CONTROL = 0x2069;
+
+    /** U+0020 SPACE, the first printable ASCII character. */
+    private static final char FIRST_PRINTABLE_ASCII = 0x0020;
+
+    /** U+007E TILDE, the last printable ASCII character. */
+    private static final char LAST_PRINTABLE_ASCII = 0x007E;
+
+    /** U+005C REVERSE SOLIDUS, escaped by the printable-ASCII form so a backslash always starts an escape. */
+    private static final char BACKSLASH = 0x005C;
 
     private ErrorTextSanitizer() {
         // utility class — never instantiated
@@ -158,6 +171,52 @@ public final class ErrorTextSanitizer {
             sanitized.append(truncationMarker);
         }
         return sanitized.toString();
+    }
+
+    /**
+     * Escapes every UTF-16 character outside printable ASCII (U+0020 to U+007E), and the backslash itself,
+     * as an upper-case backslash-{@code u} four-digit hex escape, so the result consists of printable ASCII
+     * only. This covers the control characters, DEL, the C1 controls, the Unicode line separators, the
+     * bidirectional controls, zero-width and combining characters, every ordinary non-ASCII letter, and
+     * each half of a surrogate pair (escaped separately). Escaping the backslash keeps the rendering
+     * unambiguous: a backslash in the result always starts an escape.
+     * <p>
+     * The cap counts source characters before escaping: a value longer than {@code maxLength} keeps its
+     * first {@code maxLength} characters, escapes them, and appends {@code truncationMarker}. The cut may
+     * fall between the two halves of a surrogate pair; because every half is escaped, no lone surrogate is
+     * ever written raw. The marker is appended only when the value was truncated, and is not escaped, so the
+     * caller must pass a printable-ASCII constant.
+     *
+     * @param value            the untrusted value to escape; may be {@code null}
+     * @param maxLength        the maximum number of source characters retained, not negative
+     * @param truncationMarker appended when the value was truncated; must itself be printable ASCII
+     * @return the escaped, length-bounded value, or {@code null} when {@code value} is {@code null}
+     * @throws IllegalArgumentException if {@code maxLength} is negative
+     * @since 1.0
+     */
+    public static @Nullable String escapeNonPrintableAscii(@Nullable String value, int maxLength,
+            String truncationMarker) {
+        if (maxLength < 0) {
+            throw new IllegalArgumentException("maxLength must not be negative, got " + maxLength);
+        }
+        if (value == null) {
+            return null;
+        }
+        boolean truncated = value.length() > maxLength;
+        int end = truncated ? maxLength : value.length();
+        StringBuilder escaped = new StringBuilder(end + (truncated ? truncationMarker.length() : 0));
+        for (int i = 0; i < end; i++) {
+            char c = value.charAt(i);
+            if (c < FIRST_PRINTABLE_ASCII || c > LAST_PRINTABLE_ASCII || c == BACKSLASH) {
+                escaped.append(String.format("\\u%04X", (int) c));
+            } else {
+                escaped.append(c);
+            }
+        }
+        if (truncated) {
+            escaped.append(truncationMarker);
+        }
+        return escaped.toString();
     }
 
     /**

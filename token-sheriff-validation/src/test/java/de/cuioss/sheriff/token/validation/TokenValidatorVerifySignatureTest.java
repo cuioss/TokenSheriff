@@ -26,12 +26,10 @@ import de.cuioss.sheriff.token.validation.domain.context.IdTokenRequest;
 import de.cuioss.sheriff.token.validation.domain.token.SignatureVerifiedToken;
 import de.cuioss.sheriff.token.validation.domain.token.TokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
-import de.cuioss.sheriff.token.validation.jwe.JweDecryptionConfig;
 import de.cuioss.sheriff.token.validation.jwks.JwksLoader;
 import de.cuioss.sheriff.token.validation.jwks.key.KeyInfo;
 import de.cuioss.sheriff.token.validation.test.InMemoryJWKSFactory;
 import de.cuioss.sheriff.token.validation.test.InMemoryKeyMaterialHandler;
-import de.cuioss.sheriff.token.validation.test.JweTestTokenFactory;
 import io.jsonwebtoken.Jwts;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
@@ -40,7 +38,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 
-import java.security.KeyPair;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -54,7 +51,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>
  * Every refusal is paired with a positive control and asserts the event type of the refusing stage, and
  * the claim-verdict cases are paired with a {@code createIdToken} / {@code createAccessToken} negative
- * control that refuses the same token.
+ * control that refuses the same token. The header posture, the returned {@code typ} header and the JWE
+ * handling are covered by {@link TokenValidatorVerifySignatureHeaderTest}.
  */
 @DisplayName("TokenValidator#verifySignature")
 class TokenValidatorVerifySignatureTest {
@@ -167,44 +165,6 @@ class TokenValidatorVerifySignatureTest {
     }
 
     @Nested
-    @DisplayName("Header posture")
-    class HeaderPosture {
-
-        @Test
-        @DisplayName("A token without kid is refused as MISSING_CLAIM")
-        void shouldRefuseMissingKeyId() {
-            String token = Jwts.builder()
-                    .claims(validClaims())
-                    .signWith(InMemoryKeyMaterialHandler.getDefaultPrivateKey(), Jwts.SIG.RS256)
-                    .compact();
-            TokenValidator validator = validator();
-
-            assertRefused(EventType.MISSING_CLAIM, () -> validator.verifySignature(token));
-            assertNotNull(validator.verifySignature(signed(validClaims(), null)), "positive control: with kid");
-        }
-
-        @Test
-        @DisplayName("The issuer's expected token type is not applied, while the verdict paths apply it")
-        void shouldSkipExpectedTokenType() {
-            TokenValidator validator = register(TokenValidator.builder()
-                    .issuerConfig(IssuerConfig.builder()
-                            .issuerIdentifier(ISSUER)
-                            .expectedAudience(AUDIENCE)
-                            .expectedTokenType("at+jwt")
-                            .jwksContent(InMemoryKeyMaterialHandler.createDefaultJwks())
-                            .build())
-                    .build());
-            String logoutToken = signed(validClaims(), "logout+jwt");
-
-            SignatureVerifiedToken verified = validator.verifySignature(logoutToken);
-
-            assertEquals(Optional.of("logout+jwt"), verified.getTypHeader());
-            AccessTokenRequest request = AccessTokenRequest.of(logoutToken);
-            assertRefused(EventType.TOKEN_TYPE_MISMATCH, () -> validator.createAccessToken(request));
-        }
-    }
-
-    @Nested
     @DisplayName("Signature")
     class SignatureChecks {
 
@@ -305,67 +265,6 @@ class TokenValidatorVerifySignatureTest {
     }
 
     @Nested
-    @DisplayName("typ header")
-    class TypHeader {
-
-        @Test
-        @DisplayName("A present typ is returned verbatim")
-        void shouldReturnPresentTyp() {
-            assertEquals(Optional.of("logout+jwt"),
-                    validator().verifySignature(signed(validClaims(), "logout+jwt")).getTypHeader());
-        }
-
-        @Test
-        @DisplayName("An absent typ is returned as empty")
-        void shouldReturnAbsentTyp() {
-            assertEquals(Optional.empty(), validator().verifySignature(signed(validClaims(), null)).getTypHeader());
-        }
-
-        @Test
-        @DisplayName("A mixed-case typ is returned unchanged, not normalised")
-        void shouldReturnMixedCaseTypVerbatim() {
-            assertEquals(Optional.of("Application/Logout+JWT"),
-                    validator().verifySignature(signed(validClaims(), "Application/Logout+JWT")).getTypHeader());
-        }
-    }
-
-    @Nested
-    @DisplayName("JWE")
-    class Jwe {
-
-        @Test
-        @DisplayName("A JWE is decrypted when JWE is configured and its inner token is verified")
-        void shouldVerifyJweWithConfig() {
-            KeyPair encryptionKeys = JweTestTokenFactory.generateRsaKeyPair();
-            String jwe = JweTestTokenFactory.encryptAsJwe(signed(validClaims(), "logout+jwt"),
-                    encryptionKeys.getPublic(), "RSA-OAEP", "A256GCM", null);
-            TokenValidator validator = register(TokenValidator.builder()
-                    .issuerConfig(issuerConfig())
-                    .jweDecryptionConfig(JweDecryptionConfig.builder()
-                            .defaultDecryptionKey(encryptionKeys.getPrivate()).build())
-                    .build());
-
-            SignatureVerifiedToken verified = validator.verifySignature(jwe);
-
-            assertEquals(ISSUER, verified.getClaims().get(ClaimName.ISSUER.getName()).getOriginalString());
-            assertEquals(Optional.of("logout+jwt"), verified.getTypHeader(), "typ of the inner token");
-            assertEquals(jwe, verified.getRawToken(), "the raw token is the token as presented");
-        }
-
-        @Test
-        @DisplayName("A JWE is refused as JWE_DECRYPTION_NOT_CONFIGURED when JWE is not configured")
-        void shouldRefuseJweWithoutConfig() {
-            KeyPair encryptionKeys = JweTestTokenFactory.generateRsaKeyPair();
-            String jwe = JweTestTokenFactory.encryptAsJwe(signed(validClaims(), null),
-                    encryptionKeys.getPublic(), "RSA-OAEP", "A256GCM", null);
-            TokenValidator validator = validator();
-
-            assertRefused(EventType.JWE_DECRYPTION_NOT_CONFIGURED, () -> validator.verifySignature(jwe));
-            assertNotNull(validator.verifySignature(signed(validClaims(), null)), "positive control: a plain JWS");
-        }
-    }
-
-    @Nested
     @DisplayName("Event accounting and cache")
     class Accounting {
 
@@ -456,7 +355,7 @@ class TokenValidatorVerifySignatureTest {
                 .compact();
     }
 
-    private static IssuerConfig issuerConfig() {
+    static IssuerConfig issuerConfig() {
         return IssuerConfig.builder()
                 .issuerIdentifier(ISSUER)
                 .expectedAudience(AUDIENCE)
@@ -487,7 +386,7 @@ class TokenValidatorVerifySignatureTest {
         return validator;
     }
 
-    private static void assertRefused(EventType expected, Executable call) {
+    static void assertRefused(EventType expected, Executable call) {
         TokenValidationException refused = assertThrows(TokenValidationException.class, call);
         assertEquals(expected, refused.getEventType());
     }

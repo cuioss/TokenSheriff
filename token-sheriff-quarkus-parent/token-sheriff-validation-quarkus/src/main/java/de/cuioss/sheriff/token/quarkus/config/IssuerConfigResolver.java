@@ -557,18 +557,38 @@ public class IssuerConfigResolver {
      * Maps the opt-in unknown-{@code kid} refresh window onto the loader configuration.
      * <p>
      * The builder is only called when the property is present, so the default stays off: an unknown
-     * {@code kid} never causes a fetch. A value that is not a whole number or not positive fails startup
-     * with the property named. The accepted range and the combination with a refresh interval of
-     * {@code 0} are validated by the builder, which fails startup as well.
+     * {@code kid} never causes a fetch. Every misconfiguration fails startup with the property named:
+     * a value that is not a whole number or not positive, a value outside the range the builder accepts
+     * ({@link HttpJwksLoaderConfig#MIN_UNKNOWN_KID_REFRESH_WINDOW} to
+     * {@link HttpJwksLoaderConfig#MAX_UNKNOWN_KID_REFRESH_WINDOW} inclusive), and the combination with a
+     * configured refresh interval of {@code 0}, which disables the background refresh the window needs.
+     * These are checked here, before the builder sees the value, so the failure names the Quarkus key
+     * rather than the builder method.
      * </p>
      *
-     * @throws IllegalStateException if the configured value is unparseable or not positive
+     * @throws IllegalStateException if the configured value is unparseable, not positive, outside the
+     *                               accepted range, or combined with a refresh interval of {@code 0}
      */
     private void configureUnknownKidRefreshWindow(HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder builder,
             String issuerName) {
         String property = JwtPropertyKeys.ISSUERS.UNKNOWN_KID_REFRESH_WINDOW_SECONDS.formatted(issuerName);
         readPositiveSeconds(property).ifPresent(seconds -> {
-            builder.unknownKidRefreshWindow(Duration.ofSeconds(seconds));
+            Duration window = Duration.ofSeconds(seconds);
+            Duration min = HttpJwksLoaderConfig.MIN_UNKNOWN_KID_REFRESH_WINDOW;
+            Duration max = HttpJwksLoaderConfig.MAX_UNKNOWN_KID_REFRESH_WINDOW;
+            if (window.compareTo(min) < 0 || window.compareTo(max) > 0) {
+                throw new IllegalStateException(
+                        "Property '%s' must be between %s and %s seconds inclusive, but was %s"
+                                .formatted(property, min.toSeconds(), max.toSeconds(), seconds));
+            }
+            String refreshProperty = JwtPropertyKeys.ISSUERS.REFRESH_INTERVAL_SECONDS.formatted(issuerName);
+            if (config.getOptionalValue(refreshProperty, Integer.class).filter(interval -> interval == 0).isPresent()) {
+                throw new IllegalStateException(
+                        ("Property '%s' requires the background refresh, but '%s' is 0. "
+                                + "Set a positive refresh interval, or remove '%s'.")
+                                .formatted(property, refreshProperty, property));
+            }
+            builder.unknownKidRefreshWindow(window);
             LOGGER.debug("Set unknown-kid refresh window for %s: %s seconds", issuerName, seconds);
         });
     }

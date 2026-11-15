@@ -19,18 +19,22 @@ import java.net.http.HttpClient;
 import java.net.http.HttpHeaders;
 import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Flow;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Drives an {@link HttpResponse.BodyHandler} against synthetic streamed bytes so the bounded
- * body-handler behaviour ({@link BoundedBodyHandlers}) can be asserted without a live network:
+ * body-handler behaviour ({@link BoundedBodyHandler}) can be asserted without a live network:
  * the body is fed in small chunks to prove the ceiling is enforced <em>during</em> streaming, and
  * cancellation of the subscription is recorded as the observable proof that an over-limit body is
- * rejected before it is fully buffered.
+ * rejected before it is fully buffered. {@link #subscribe(HttpResponse.BodyHandler, Long)} hands the
+ * caller every signal — chunk by chunk, an error, completion — for the edges the fixed driver cannot
+ * express.
  */
 final class BoundedBodyHandlerTestSupport {
 
@@ -109,17 +113,108 @@ final class BoundedBodyHandlerTestSupport {
         };
     }
 
-    private static final class RecordingSubscription implements Flow.Subscription {
+    /**
+     * Applies {@code handler} to a response optionally advertising {@code advertisedContentLength} and
+     * subscribes it; the caller then sends each signal through the returned {@link ManualDrive}.
+     */
+    static <T> ManualDrive<T> subscribe(HttpResponse.BodyHandler<T> handler, Long advertisedContentLength) {
+        HttpResponse.BodySubscriber<T> subscriber = handler.apply(responseInfo(advertisedContentLength));
+        AtomicBoolean cancelled = new AtomicBoolean(false);
+        AtomicBoolean requested = new AtomicBoolean(false);
+        subscriber.onSubscribe(new RecordingSubscription(cancelled, requested));
+        return new ManualDrive<>(subscriber, cancelled, requested);
+    }
+
+    /**
+     * A subscribed body subscriber driven signal by signal. Each fed chunk is its own
+     * {@code onNext} call and its buffer is returned, so a test can read how many of its bytes the
+     * subscriber consumed.
+     */
+    static final class ManualDrive<T> {
+
+        private final HttpResponse.BodySubscriber<T> subscriber;
+        private final AtomicBoolean cancelled;
+        private final AtomicBoolean requested;
+
+        private ManualDrive(HttpResponse.BodySubscriber<T> subscriber, AtomicBoolean cancelled,
+                AtomicBoolean requested) {
+            this.subscriber = subscriber;
+            this.cancelled = cancelled;
+            this.requested = requested;
+        }
+
+        ByteBuffer feed(byte[] chunk) {
+            ByteBuffer buffer = ByteBuffer.wrap(chunk);
+            subscriber.onNext(List.of(buffer));
+            return buffer;
+        }
+
+        void feedAll(byte[] body, int chunkSize) {
+            for (int offset = 0; offset < body.length; offset += chunkSize) {
+                feed(Arrays.copyOfRange(body, offset, Math.min(offset + chunkSize, body.length)));
+            }
+        }
+
+        void complete() {
+            subscriber.onComplete();
+        }
+
+        void error(Throwable throwable) {
+            subscriber.onError(throwable);
+        }
+
+        void resubscribe(Flow.Subscription second) {
+            subscriber.onSubscribe(second);
+        }
+
+        boolean cancelled() {
+            return cancelled.get();
+        }
+
+        boolean requested() {
+            return requested.get();
+        }
+
+        CompletableFuture<T> body() {
+            return subscriber.getBody().toCompletableFuture();
+        }
+
+        /**
+         * @return the failure the body future completed with
+         * @throws AssertionError when the body future is not done or did not fail
+         */
+        Throwable failure() {
+            CompletableFuture<T> future = body();
+            if (!future.isCompletedExceptionally()) {
+                throw new AssertionError("Expected a failed body future, but it was " + future);
+            }
+            try {
+                future.join();
+                throw new AssertionError("A failed body future must not join");
+            } catch (CompletionException e) {
+                return e.getCause();
+            }
+        }
+    }
+
+    static final class RecordingSubscription implements Flow.Subscription {
 
         private final AtomicBoolean cancelled;
+        private final AtomicBoolean requested;
 
         RecordingSubscription(AtomicBoolean cancelled) {
+            this(cancelled, new AtomicBoolean(false));
+        }
+
+        RecordingSubscription(AtomicBoolean cancelled, AtomicBoolean requested) {
             this.cancelled = cancelled;
+            this.requested = requested;
         }
 
         @Override
         public void request(long n) {
             // No back-pressure modelling needed: the driver feeds all chunks synchronously.
+            requested.set(true);
         }
 
         @Override

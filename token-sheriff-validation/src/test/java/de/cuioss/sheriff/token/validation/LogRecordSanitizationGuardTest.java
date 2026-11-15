@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.validation;
 
+import de.cuioss.sheriff.token.validation.domain.token.SignatureVerifiedToken;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -175,6 +177,19 @@ class LogRecordSanitizationGuardTest {
         assertEquals(List.of("request.requestUri()"), violations(synthetic.get(9)),
                 "an unsanitised request URI is a violation");
         assertEquals(List.of(), violations(synthetic.get(10)), "a sanitised request URI is not");
+    }
+
+    @Test
+    @DisplayName("SignatureVerifiedToken.toString renders no typ header value")
+    void shouldKeepTypHeaderOutOfSignatureVerifiedTokenToString() {
+        String forgedTyp = "logout+jwt\r\nFORGED-LOG-LINE";
+        var token = new SignatureVerifiedToken(Map.of(), Map.of(), Set.of(), forgedTyp, "raw.token.value");
+
+        String rendered = token.toString();
+
+        assertEquals(Optional.of(forgedTyp), token.getTypHeader(), "positive control: the header is carried");
+        assertFalse(rendered.contains("FORGED-LOG-LINE"), () -> "toString rendered the typ header: " + rendered);
+        assertFalse(rendered.contains("logout+jwt"), () -> "toString rendered the typ header: " + rendered);
     }
 
     private boolean isRemoteText(String argument) {
