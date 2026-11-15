@@ -30,12 +30,17 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -79,6 +84,45 @@ class TokenSheriffClientDiscoveryCacheTest {
 
     private static void startUp(TokenSheriffClientProducer producer) {
         producer.validateDiscoveryCacheOnStartup(new StartupEvent());
+    }
+
+    /**
+     * Derives every discovery cache setting key from the {@link ClientRuntimeConfig} declarations
+     * rather than a hand-maintained list: each {@code public static final String} constant named
+     * {@code DISCOVERY_CACHE_*} whose value is a key below {@link ClientRuntimeConfig#DISCOVERY_CACHE_PREFIX},
+     * except {@link ClientRuntimeConfig#DISCOVERY_CACHE_ENABLED}. A newly declared cache setting is
+     * therefore an orphan case automatically, and fails this test until the mapper's orphan check
+     * covers it. Reflection stays in the test; {@link ClientConfigMapper} remains reflection-free
+     * for native-image safety.
+     */
+    static Stream<String> declaredCacheSettingKeys() {
+        String keyPrefix = ClientRuntimeConfig.DISCOVERY_CACHE_PREFIX + ".";
+        List<String> keys = Arrays.stream(ClientRuntimeConfig.class.getDeclaredFields())
+                .filter(field -> field.getType() == String.class)
+                .filter(field -> Modifier.isPublic(field.getModifiers())
+                        && Modifier.isStatic(field.getModifiers())
+                        && Modifier.isFinal(field.getModifiers()))
+                .filter(field -> field.getName().startsWith("DISCOVERY_CACHE_"))
+                .map(TokenSheriffClientDiscoveryCacheTest::constantValue)
+                .filter(value -> value.startsWith(keyPrefix))
+                .filter(value -> !ClientRuntimeConfig.DISCOVERY_CACHE_ENABLED.equals(value))
+                .sorted()
+                .toList();
+        assertTrue(keys.containsAll(List.of(
+                        ClientRuntimeConfig.DISCOVERY_CACHE_TTL,
+                        ClientRuntimeConfig.DISCOVERY_CACHE_GRACE_PERIOD,
+                        ClientRuntimeConfig.DISCOVERY_CACHE_MIN_REFRESH_INTERVAL,
+                        ClientRuntimeConfig.DISCOVERY_CACHE_JITTER)),
+                "the derivation must find at least the four known cache settings, found: " + keys);
+        return keys.stream();
+    }
+
+    private static String constantValue(Field field) {
+        try {
+            return (String) field.get(null);
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("cannot read ClientRuntimeConfig." + field.getName(), e);
+        }
     }
 
     @Nested
@@ -211,11 +255,7 @@ class TokenSheriffClientDiscoveryCacheTest {
     class OrphanedProperties {
 
         @ParameterizedTest(name = "{0}")
-        @ValueSource(strings = {
-                ClientRuntimeConfig.DISCOVERY_CACHE_TTL,
-                ClientRuntimeConfig.DISCOVERY_CACHE_GRACE_PERIOD,
-                ClientRuntimeConfig.DISCOVERY_CACHE_MIN_REFRESH_INTERVAL,
-                ClientRuntimeConfig.DISCOVERY_CACHE_JITTER})
+        @MethodSource("de.cuioss.sheriff.token.client.quarkus.TokenSheriffClientDiscoveryCacheTest#declaredCacheSettingKeys")
         @DisplayName("Should fail startup naming a cache property set without enabled=true")
         void shouldFailStartupOnOrphanedProperty(String orphan) {
             Map<String, String> properties = minimalClientProperties();
