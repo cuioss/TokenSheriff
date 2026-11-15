@@ -302,8 +302,9 @@
                      an all-zero counter cannot bind — jacoco skips the limit rather than failing it —
                      so listing it would add a permanently vacuous entry that looks like coverage. Its
                      implementors (RedeemedResponseException, RedeemedScopeRefusalException,
-                     RedeemedValidationRefusalException) ARE listed, and that is where the redemption
-                     signal is actually measured.
+                     RedeemedValidationRefusalException, RedeemedIdentityRefusalException) ARE listed, and
+                     that is where the redemption signal is actually measured. RefreshResultVerifier, which
+                     raises the last two over a refresh result, is listed beside them.
 
                      Binding requirement — a green build is NOT evidence this rule fires. Because a
                      misspelled or vacuous include is silently skipped (see the FALSE GREEN note above),
@@ -324,7 +325,7 @@
                      as `..flow.Refresh*` / `..flow.Redeemed*`, which are incomplete — they miss
                      token.RotationResult, token.RefreshTokenFamily, lifecycle.RefreshScheduler and
                      lifecycle.InMemoryTokenStore, all of which are on the refresh path but named and
-                     packaged outside that shape. Twelve explicit dotted FQCNs, no wildcards.
+                     packaged outside that shape. Fourteen explicit dotted FQCNs, no wildcards.
 
                      Why token.TokenErrorResponse is deliberately NOT in the list, even though the
                      credential-rejected classification parses through it: adding it would make "Token"
@@ -367,6 +368,8 @@
                                         <include>de.cuioss.sheriff.token.client.flow.RedeemedResponseException</include>
                                         <include>de.cuioss.sheriff.token.client.flow.RedeemedScopeRefusalException</include>
                                         <include>de.cuioss.sheriff.token.client.flow.RedeemedValidationRefusalException</include>
+                                        <include>de.cuioss.sheriff.token.client.flow.RedeemedIdentityRefusalException</include>
+                                        <include>de.cuioss.sheriff.token.client.flow.RefreshResultVerifier</include>
                                         <include>de.cuioss.sheriff.token.client.token.RotationResult</include>
                                         <include>de.cuioss.sheriff.token.client.token.RefreshTokenFamily</include>
                                         <include>de.cuioss.sheriff.token.client.token.RefreshTokenFamilyRevokedException</include>

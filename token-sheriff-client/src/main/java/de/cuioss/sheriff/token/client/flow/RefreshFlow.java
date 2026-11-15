@@ -79,7 +79,11 @@ import java.util.Set;
  * {@link #classify(Throwable)} reads it back. The validation refusal is caught by type, and that catch
  * is sufficient by construction: every request-path guard in the validation pipeline raises the
  * declared {@code TokenValidationException}, enforced by that module's {@code UncheckedThrowBoundaryTest},
- * so no pipeline failure can bypass this arm and be read as pre-redemption.
+ * so no pipeline failure can bypass this arm and be read as pre-redemption. The checks a caller runs on
+ * the returned {@link RotationResult} before storing it — the refreshed ID token and the subject
+ * binding, published as {@link RefreshResultVerifier} — are raised after redemption too, and carry the
+ * same state ({@link RedeemedValidationRefusalException}, {@link RedeemedIdentityRefusalException}), so
+ * {@code classify} reads them back exactly like the flow's own refusals.
  * <p>
  * A failure raised before that point carries no redemption, and {@code classify} splits that region in
  * two rather than collapsing it. Most of it is
@@ -306,10 +310,15 @@ public class RefreshFlow {
      * see {@link RefreshFailureClassification}.
      * <p>
      * <strong>What it covers, and nothing else:</strong> a failure raised by
-     * {@link #refresh(ProviderMetadata, String)} or {@link #refresh(ProviderMetadata, String, List)}, and a {@link RefreshTokenFamilyRevokedException} raised
-     * by the {@link de.cuioss.sheriff.token.client.token.RefreshTokenFamily} the caller feeds the
-     * rotation into. Any other throwable — one raised by the caller's own store, binding or ID-token
-     * checks, for example — is outside its domain: it answers
+     * {@link #refresh(ProviderMetadata, String)} or {@link #refresh(ProviderMetadata, String, List)}, a
+     * refusal raised by {@link RefreshResultVerifier} over the returned result — a
+     * {@link RedeemedValidationRefusalException} or a {@link RedeemedIdentityRefusalException}, each
+     * classified {@link RefreshFailureClassification.Kind#REDEEMED} by the redemption it carries — and a
+     * {@link RefreshTokenFamilyRevokedException} raised by the
+     * {@link de.cuioss.sheriff.token.client.token.RefreshTokenFamily} the caller feeds the rotation into.
+     * Any other throwable — one raised by the caller's own store or sender-constraint checks, or by an
+     * ID-token or subject check the caller runs itself instead of through
+     * {@link RefreshResultVerifier}, for example — is outside its domain: it answers
      * {@link RefreshFailureClassification.Kind#PRE_REDEMPTION} for it, which is a statement about the
      * token exchange and says nothing about that other failure.
      * <p>
@@ -349,8 +358,8 @@ public class RefreshFlow {
      * that both implements it and extends one of the named classes must be classified by the state it
      * carries, not by its class.
      *
-     * @param failure the failure {@code refresh} or the refresh-token family raised; must not be
-     *                {@code null}
+     * @param failure the failure {@code refresh}, {@link RefreshResultVerifier} or the refresh-token
+     *                family raised; must not be {@code null}
      * @return the classification; never {@code null}
      */
     public static RefreshFailureClassification classify(Throwable failure) {
