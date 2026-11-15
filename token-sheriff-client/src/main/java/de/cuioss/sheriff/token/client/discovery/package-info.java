@@ -22,6 +22,17 @@
  * {@link de.cuioss.sheriff.token.client.discovery.ProviderMetadata} — the resolved endpoint URLs
  * plus the capability flags (PKCE {@code S256}, PAR, DPoP, end-session) the flows branch on. The
  * package adds no transport hardening of its own; it inherits the handler's TLS/SSRF posture.
+ * <p>
+ * {@link de.cuioss.sheriff.token.client.discovery.CachingDiscoveryResolver} is the opt-in cache in
+ * front of the resolver. It serves the last resolved document for a caller-stated time to live (there
+ * is no default), then refreshes it on demand — single-flight, on the caller's thread, with no
+ * background thread — through the unchanged resolver, so every refreshed document passes the same
+ * checks and a refused document never replaces the cached one. Its stale policy serves the last
+ * resolved document while refreshes fail until {@code lastSuccess + ttl + gracePeriod} and fails
+ * closed after that, waiting at least the configured minimum interval between a failed refresh and
+ * the next attempt. Its state is reported without I/O as an immutable
+ * {@link de.cuioss.sheriff.token.client.discovery.DiscoveryCacheStatus} and, for health checks, as a
+ * {@link de.cuioss.sheriff.token.commons.transport.LoaderStatus}.
  *
  * @since 1.0
  */
