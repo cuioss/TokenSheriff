@@ -20,6 +20,7 @@ import de.cuioss.sheriff.token.client.auth.ClientSecretBasicAuth;
 import de.cuioss.sheriff.token.client.auth.ClientSecretPostAuth;
 import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
+import de.cuioss.sheriff.token.client.discovery.CachingDiscoveryResolver;
 import de.cuioss.sheriff.token.client.discovery.DiscoveryResolver;
 import de.cuioss.sheriff.token.client.flow.AuthorizationCodeFlow;
 import de.cuioss.sheriff.token.client.flow.IssValidator;
@@ -39,9 +40,14 @@ import de.cuioss.sheriff.token.client.token.UserInfoClient;
 import de.cuioss.sheriff.token.validation.TokenValidator;
 import de.cuioss.tools.logging.CuiLogger;
 import io.quarkus.arc.DefaultBean;
+import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Produces;
+import jakarta.enterprise.inject.Typed;
 import org.eclipse.microprofile.config.Config;
+
+import java.time.InstantSource;
 
 /**
  * CDI producer that exposes the framework-agnostic {@code token-sheriff-client} engine to Quarkus
@@ -53,7 +59,15 @@ import org.eclipse.microprofile.config.Config;
  * {@link #clientConfiguration()} producer only demands the configuration when a consumer actually
  * injects an engine bean, so an application that has this extension on the classpath but does not use
  * the client never fails at startup — {@link ClientConfigMapper#isConfigured(Config)} guards the
- * required-property check.
+ * required-property check. The one check that does run at startup is the discovery cache
+ * configuration check: an orphaned {@code sheriff.client.discovery-cache.*} property, or an enabled
+ * cache without a TTL, fails the start (ADR-0026). It reads the configuration only and creates no
+ * client bean.
+ * <p>
+ * The opt-in {@link CachingDiscoveryResolver} is produced alongside the plain
+ * {@link DiscoveryResolver}, which stays the default and is unchanged. It is available only when
+ * {@code sheriff.client.discovery-cache.enabled} is {@code true}; an application without any
+ * discovery cache property is unaffected.
  * <p>
  * The engine entry points that need only the configuration are produced directly
  * ({@link TokenEndpointClient}, {@link DiscoveryResolver}, {@link UserInfoClient},
@@ -139,6 +153,45 @@ public class TokenSheriffClientProducer {
     @ApplicationScoped
     public DiscoveryResolver discoveryResolver(ClientConfiguration clientConfiguration) {
         return new DiscoveryResolver(clientConfiguration);
+    }
+
+    /**
+     * Produces the opt-in caching discovery resolver around the produced {@link DiscoveryResolver},
+     * configured from the {@code sheriff.client.discovery-cache.*} properties and the system clock.
+     * The plain {@link DiscoveryResolver} bean stays the default and is unchanged; an application
+     * injects this bean explicitly to use the cache.
+     *
+     * @param discoveryResolver the produced discovery resolver the cache refreshes through
+     * @return the caching discovery resolver
+     * @throws IllegalStateException when {@link ClientRuntimeConfig#DISCOVERY_CACHE_ENABLED} is not
+     *                               {@code true}, or when the discovery cache configuration is
+     *                               inconsistent
+     */
+    @Produces
+    @ApplicationScoped
+    // Typed to its own class: the bean must not also satisfy a LoadingStatusProvider injection point.
+    @Typed(CachingDiscoveryResolver.class)
+    public CachingDiscoveryResolver cachingDiscoveryResolver(DiscoveryResolver discoveryResolver) {
+        ClientConfigMapper.DiscoveryCacheSettings settings = ClientConfigMapper.mapDiscoveryCache(config)
+                .orElseThrow(() -> new IllegalStateException("The Token-Sheriff discovery cache is not enabled."
+                        + " Set '" + ClientRuntimeConfig.DISCOVERY_CACHE_ENABLED + "=true' and '"
+                        + ClientRuntimeConfig.DISCOVERY_CACHE_TTL + "' to inject a CachingDiscoveryResolver."));
+        LOGGER.debug("Produced CachingDiscoveryResolver with ttl %s and grace period %s", settings.ttl(),
+                settings.gracePeriod());
+        return settings.create(discoveryResolver, InstantSource.system());
+    }
+
+    /**
+     * Validates the discovery cache properties at application startup, so an orphaned
+     * {@code sheriff.client.discovery-cache.*} property (or an enabled cache without a TTL) fails the
+     * start instead of being silently ignored (ADR-0026). Only the configuration is read; no client
+     * bean is created and the produced beans stay lazy.
+     *
+     * @param event the startup event
+     * @throws IllegalStateException when the discovery cache configuration is inconsistent
+     */
+    void validateDiscoveryCacheOnStartup(@Observes StartupEvent event) {
+        ClientConfigMapper.validateDiscoveryCache(config);
     }
 
     /**
