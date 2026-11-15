@@ -151,7 +151,7 @@ class TokenSheriffClientDiscoveryCacheTest {
                     () -> assertNull(status.lastSuccess(), "nothing has been resolved yet"),
                     () -> assertNull(status.lastFailureCause(), "nothing has failed yet"),
                     () -> assertEquals(DiscoveryResolver.class, producer.discoveryResolver(
-                            producer.clientConfiguration()).getClass(),
+                                    producer.clientConfiguration()).getClass(),
                             "the plain DiscoveryResolver bean is unchanged when the cache is enabled"));
         }
 
