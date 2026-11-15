@@ -211,18 +211,20 @@ Without the setting, a token naming a key ID (`kid`) that is in neither the inst
 set is rejected, and a key the identity provider has just rotated in is accepted only after the next
 periodic refresh. With `unknownKidRefreshWindow(Duration)` set:
 
-* once a key set is installed, such a miss claims the window and schedules one background JWKS fetch from
-  the current endpoint, and `TokenSheriff-010` (`UNKNOWN_KID_REFRESH_SCHEDULED`) is logged with the
+* once a key set is installed and no other JWKS fetch is in flight, such a miss claims the window and
+  schedules one background JWKS fetch from the current endpoint (a miss while a fetch is in flight leaves
+  the window unclaimed), and `TokenSheriff-010` (`UNKNOWN_KID_REFRESH_SCHEDULED`) is logged with the
   sanitised key ID;
 * the lookup performs no I/O and does not wait, so the token that triggered the fetch is still rejected;
   once the fetch has installed the new key set, the next token naming that key ID is accepted;
 * the fetched key set is installed only if it holds the requested key ID, through the same commit step as
   a periodic refresh, so the grace period and `maxRetiredKeySets` apply;
 * a fetch that fails, returns unchanged content, yields no usable key or lacks the requested key ID is
-  discarded and logged as `TokenSheriff-173` (`UNKNOWN_KID_REFRESH_DISCARDED`): keys, retired key sets,
-  status, endpoint and the time of the last successful load stay unchanged, and the outcome is not
-  counted as a failed refresh cycle, so it neither triggers re-discovery nor contributes to the
-  `maxStaleness` degradation;
+  discarded: keys, retired key sets, status, endpoint and the time of the last successful load stay
+  unchanged, and the outcome is not counted as a failed refresh cycle, so it neither triggers re-discovery
+  nor contributes to the `maxStaleness` degradation. Unchanged content, the expected answer to a stale or
+  forged key ID, is logged at DEBUG; every other discard is logged as `TokenSheriff-173`
+  (`UNKNOWN_KID_REFRESH_DISCARDED`);
 * at most one such fetch runs per window and per loader, whatever the request rate and the number of
   distinct key IDs presented; further misses inside the window log at DEBUG only.
 
@@ -230,10 +232,12 @@ The lookup is reachable before any signature check, so an attacker presenting an
 the window. An attacker who does so in every window defers the on-demand pickup of a legitimate rotation
 entirely, because the fetched key set is installed only if it holds the attacker's invented key ID; such a
 rotation is then picked up by the periodic refresh only. The window is a refresh rate limit, not a pickup
-deadline: it bounds how often a fetch is claimed, not when a rotation is accepted. Choose the refresh
-interval as the longest delay
-you accept for picking up a rotated key under attack; the setter rejects a `null`, zero, negative or
-out-of-range value.
+deadline: it bounds how often a fetch is claimed, not when a rotation is accepted. The unknown key ID fetch
+and the periodic refresh share one in-flight guard, so a periodic cycle that falls on a running unknown key
+ID fetch skips its own fetch; a rotation that depended on the skipped cycle is then picked up one refresh
+interval later. Under attack the worst-case delay for picking up a rotated key is therefore one refresh
+interval plus one further interval; choose the refresh interval with that in mind. The setter rejects a
+`null`, zero, negative or out-of-range value.
 
 === Initial load retry
 
@@ -245,11 +249,14 @@ later. With `initialLoadRetry(true)`:
   above the refresh interval;
 * each attempt runs a regular refresh cycle, so a failed discovery is resolved again and a terminal
   rejection (for example an issuer mismatch) stays terminal;
-* attempts are strictly sequential and never overlap the periodic refresh or an unknown key ID fetch;
+* attempts are strictly sequential and run under the in-flight guard shared with the periodic refresh and
+  the unknown key ID fetch, so a retry never runs alongside either; a periodic cycle that falls on a running
+  attempt skips its fetch;
 * retries stop at the first installed key set, at the terminal `ERROR` status and at `close()`;
 * the status stays `UNDEFINED` (never `LOADING`) until keys are installed, and becomes `OK` only then.
 
-The delays are fixed and not configurable; the periodic refresh keeps its cadence alongside the retries.
+The delays are fixed and not configurable; the periodic refresh keeps its schedule alongside the retries,
+except that a cycle falling on a running attempt skips its fetch.
 
 == Complete Integration Example
 

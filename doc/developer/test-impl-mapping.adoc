@@ -28,7 +28,11 @@ Package prefix: `de.cuioss.sheriff.token`.
 |Production package |Test classes
 
 |`commons.error`
-|`ErrorTextSanitizerTest`, `InboundErrorNormalizerTest`
+|`ErrorTextSanitizerPrintableAsciiTest`, `ErrorTextSanitizerTest`, `InboundErrorNormalizerTest`
+
+|`commons.http`
+|`BearerChallengeTest`, `BearerCredentialsTest`; the round trip through the client's challenge
+parser is `InsufficientScopeChallengeRoundTripTest` in token-sheriff-client (`client.flow`)
 
 |`commons.events`
 |`EventCategoryTest`, `SecurityEventCounterTest` (both in the test package `validation.security`)
@@ -37,8 +41,10 @@ Package prefix: `de.cuioss.sheriff.token`.
 |No test class of its own.
 
 |`commons.transport`
-|`CleartextEndpointsTest`, `DirectDeserializationTest`, `EgressPolicyTest`,
+|`BoundedBodyHandlerTest`, `BoundedBodyHandlerTruncateTest`, `CleartextEndpointsTest`,
+`DirectDeserializationTest`, `EgressPolicyTest`,
 `HttpHandlerVerifyHostnameContractTest`, `HttpJwksLoaderConfigTest`,
+`HttpJwksLoaderConfigTransportTest`, `HttpJwksLoaderConfigUnknownKidTest`,
 `HttpJwksLoaderConfigWellKnownTest`, `HttpWellKnownResolverIssuerTest`,
 `HttpWellKnownResolverTest`, `JwksHostnameVerificationTest`, `JwksHttpContentConverterTest`,
 `LoadingStatusProviderTest`, `ParserConfigTest`, `WellKnownConfigTest`,
@@ -98,11 +104,13 @@ Package prefix: `de.cuioss.sheriff.token`.
 
 |`validation.jwks.http`
 |`HttpJwksLoaderAsyncInitializationTest`, `HttpJwksLoaderDefaultBehaviourUnchangedTest`,
-`HttpJwksLoaderEgressRefreshTest`, `HttpJwksLoaderFailureAdvertisedJwksUriTest`,
-`HttpJwksLoaderFailureTest`, `HttpJwksLoaderGracePeriodTest`, `HttpJwksLoaderInitialRetryTest`,
-`HttpJwksLoaderIssuerTest`, `HttpJwksLoaderKeyRotationTest`, `HttpJwksLoaderLockFreeStatusTest`,
-`HttpJwksLoaderRediscoveryTest`, `HttpJwksLoaderSchedulerTest`, `HttpJwksLoaderTest`,
-`HttpJwksLoaderUnknownKidAttackTest`, `HttpJwksLoaderUnknownKidRefreshTest`,
+`HttpJwksLoaderEgressRefreshTest`, `HttpJwksLoaderExecutorHandOffTest`,
+`HttpJwksLoaderFailureAdvertisedJwksUriTest`, `HttpJwksLoaderFailureTest`,
+`HttpJwksLoaderGracePeriodTest`, `HttpJwksLoaderInitialRetryLifecycleTest`,
+`HttpJwksLoaderInitialRetryTest`, `HttpJwksLoaderIssuerTest`, `HttpJwksLoaderKeyRotationTest`,
+`HttpJwksLoaderLockFreeStatusTest`, `HttpJwksLoaderRediscoveryTest`, `HttpJwksLoaderSchedulerTest`,
+`HttpJwksLoaderTest`, `HttpJwksLoaderUnknownKidAttackTest`, `HttpJwksLoaderUnknownKidGapsTest`,
+`HttpJwksLoaderUnknownKidRefreshTest`,
 `HttpJwksLoaderValidatorCloseTest`, `HttpJwksLoaderWellKnownAsyncTest`,
 `SimpleHttpJwksLoaderTest`
 
@@ -114,7 +122,8 @@ Package prefix: `de.cuioss.sheriff.token`.
 `KeyProcessorTest`
 
 |`validation.logout`
-|`LogoutTokenReplayGuardTest`, `LogoutTokenValidatorReplayTest`, `LogoutTokenValidatorTest`
+|`LogoutTokenReplayGuardTest`, `LogoutTokenValidatorNumericDateTest`, `LogoutTokenValidatorReplayTest`,
+`LogoutTokenValidatorTest`
 
 |`validation.metrics`
 |`MeasurementTypeTest`, `MetricsTickerFactoryTest`, `TokenValidatorMonitorTest`
@@ -191,7 +200,7 @@ Package prefix: `de.cuioss.sheriff.token.client`.
 `AuthorizationRequestOptionsTest`, `CallbackHandlerTest`,
 `CallbackParametersAttackDatabaseTest`, `CallbackParametersTest`, `ClientCredentialsFlowTest`,
 `CodeInjectionTest`, `InsufficientScopeChallengeAttackDatabaseTest`,
-`InsufficientScopeChallengeParserTest`, `IssValidatorTest`, `ParClientTest`, `PkceChallengeTest`,
+`InsufficientScopeChallengeParserTest`, `InsufficientScopeChallengeRoundTripTest`, `IssValidatorTest`, `ParClientTest`, `PkceChallengeTest`,
 `PkceDowngradeTest`, `RedeemedRefreshFailureTest`, `RefreshFailureClassificationTest`,
 `RefreshFlowScopeOverrideTest`, `RefreshFlowTest`, `RefreshRedemptionTest`,
 `StepUpChallengeAttackDatabaseTest`, `StepUpChallengeParserTest`, `StepUpHandlerOptionsTest`,
@@ -200,7 +209,7 @@ Package prefix: `de.cuioss.sheriff.token.client`.
 
 |`internal`
 |`BackChannelEgressPolicyTest`, `BackChannelHostnameVerificationTest`,
-`BackChannelHttpTlsTrustTest`, `BackChannelOriginMappingTest`, `BackChannelOriginRoutingTest`,
+`BackChannelHttpBoundedBodyTest`, `BackChannelHttpTlsTrustTest`, `BackChannelOriginMappingTest`, `BackChannelOriginRoutingTest`,
 `EndpointQueryTest`, `EndpointSchemePolicyTest`, `FormEncoderTest`, `JsonEscaperTest`,
 `JsonResponseMediaTypeTest`, `LogSanitizerTest`
 
@@ -257,7 +266,8 @@ Package prefix: `de.cuioss.sheriff.token.quarkus`.
 |`ProblemDetailExceptionMapperTest`
 
 |`health`
-|`JwksEndpointHealthCheckTest`, `TokenValidatorHealthCheckTest`
+|`JwksEndpointHealthCheckExternalValidatorTest`, `JwksEndpointHealthCheckIssuerStatusFailureTest`,
+`JwksEndpointHealthCheckTest`, `TokenValidatorHealthCheckTest`
 
 |`interceptor`
 |`BearerTokenInterceptorTest`
@@ -282,7 +292,8 @@ Package prefix: `de.cuioss.sheriff.token.quarkus`.
 `ObservedValidatorResolverTest`
 
 |`producer`
-|`BearerTokenProducerTest`, `BearerTokenResponseFactoryTest`, `BearerTokenResultTest`,
+|`BearerTokenProducerSchemeRuleTest`, `BearerTokenProducerTest`, `BearerTokenResponseFactoryTest`,
+`BearerTokenResultTest`,
 `EmptyJsonWebTokenTest`, `JsonWebTokenAdapterTest`, `NativeTokenValidatorProducerIT`,
 `QuarkusTokenValidatorProducerTest`, `TokenValidatorProducerUnitTest`,
 `TokenValidatorStartupInitializerTest`
