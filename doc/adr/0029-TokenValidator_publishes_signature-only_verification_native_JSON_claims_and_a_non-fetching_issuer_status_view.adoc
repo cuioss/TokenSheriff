@@ -266,7 +266,8 @@ the consuming application. The library validates the token; it does not receive 
 * The single-instant rule assumes a clock that does not move backward. When the wall clock steps back after
   the guard has purged an entry, a token whose `iat` is fresh again at the earlier instant is admitted a
   second time, because its `jti` is no longer held. The limit is stated in the validator's Javadoc and the
-  security reference; a deployment needs a clock that does not step back by more than the freshness window.
+  security reference; a deployment needs a clock that never steps back, because a step smaller than the
+  freshness window can already re-admit a purged token.
 * Opting into external-validator reporting can turn readiness `DOWN` when a foreign validator's loader is
   not `OK`, which is why the key is opt-in.
 

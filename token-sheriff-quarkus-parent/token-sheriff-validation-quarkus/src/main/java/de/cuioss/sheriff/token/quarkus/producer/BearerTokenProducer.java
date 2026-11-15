@@ -224,7 +224,7 @@ public class BearerTokenProducer {
         }
 
         // Both sources yield a non-blank token: BearerCredentials refuses an empty one as MALFORMED
-        // and the cookie lookup treats an empty value as no cookie
+        // and the cookie lookup treats an empty or blank value as no cookie
         String bearerToken = tokenResult.get();
 
         try {
@@ -336,7 +336,8 @@ public class BearerTokenProducer {
                 if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
                     value = value.substring(1, value.length() - 1);
                 }
-                if (value.isEmpty()) {
+                // Blank, not just empty: removing the quotes can leave whitespace only (Bearer="   ")
+                if (value.isBlank()) {
                     LOGGER.debug("Cookie '%s' found but value is empty", tokenCookieName);
                     return Optional.empty();
                 }

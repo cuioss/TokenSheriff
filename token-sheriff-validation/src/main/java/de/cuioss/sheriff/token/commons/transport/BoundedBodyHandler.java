@@ -15,11 +15,11 @@
  */
 package de.cuioss.sheriff.token.commons.transport;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.OptionalLong;
@@ -256,7 +256,9 @@ public final class BoundedBodyHandler {
         private final OverLimitPolicy policy;
         private final String boundOrigin;
         private final CompletableFuture<BoundedBody> result = new CompletableFuture<>();
-        private final List<byte[]> chunks = new ArrayList<>();
+        // One growable buffer, not one array per delivered ByteBuffer: a body of one-byte chunks must not
+        // cost one object per payload byte, which the byte ceiling alone does not bound
+        private final ByteArrayOutputStream chunks = new ByteArrayOutputStream();
         private long total;
         private Flow.Subscription subscription;
 
@@ -293,7 +295,7 @@ public final class BoundedBodyHandler {
                     onCrossing(buffer);
                     return;
                 }
-                chunks.add(read(buffer, remaining));
+                chunks.writeBytes(read(buffer, remaining));
                 total += remaining;
             }
         }
@@ -301,13 +303,13 @@ public final class BoundedBodyHandler {
         private void onCrossing(ByteBuffer buffer) {
             subscription.cancel();
             if (policy == OverLimitPolicy.TRUNCATE) {
-                chunks.add(read(buffer, (int) (maxBytes - total)));
+                chunks.writeBytes(read(buffer, (int) (maxBytes - total)));
                 total = maxBytes;
-                result.complete(new BoundedBody(assemble(), true));
+                result.complete(new BoundedBody(chunks.toByteArray(), true));
             } else {
                 result.completeExceptionally(new IOException(overLimitMessage(maxBytes, boundOrigin)));
             }
-            chunks.clear();
+            chunks.reset();
         }
 
         private static byte[] read(ByteBuffer buffer, int length) {
@@ -316,19 +318,9 @@ public final class BoundedBodyHandler {
             return chunk;
         }
 
-        private byte[] assemble() {
-            byte[] all = new byte[(int) total];
-            int position = 0;
-            for (byte[] chunk : chunks) {
-                System.arraycopy(chunk, 0, all, position, chunk.length);
-                position += chunk.length;
-            }
-            return all;
-        }
-
         @Override
         public void onError(Throwable throwable) {
-            chunks.clear();
+            chunks.reset();
             result.completeExceptionally(throwable);
         }
 
@@ -337,8 +329,8 @@ public final class BoundedBodyHandler {
             if (result.isDone()) {
                 return;
             }
-            result.complete(new BoundedBody(assemble(), false));
-            chunks.clear();
+            result.complete(new BoundedBody(chunks.toByteArray(), false));
+            chunks.reset();
         }
     }
 }

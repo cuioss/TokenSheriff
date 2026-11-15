@@ -77,8 +77,9 @@ import java.util.*;
  * <strong>Limit: a backward wall-clock step.</strong> The one-instant guarantee assumes the clock does not
  * move backward. When it steps back after the replay guard has purged an entry, a token whose {@code iat}
  * is fresh again at the earlier instant is admitted a second time, because its {@code jti} is no longer
- * held. Use a clock that does not step backward by more than the freshness window, or accept this window
- * of re-admission.
+ * held. A step smaller than the freshness window is enough: with a 300 second window, a token admitted at
+ * {@code t} is purged by an admission at {@code t + 301}, and after a step back to {@code t + 299} it is
+ * admitted again. Use a clock that never steps backward, or accept this window of re-admission.
  * <p>
  * {@code iat} and {@code exp} are bounded before they are read: a value outside the {@link Instant} range,
  * of either exponent sign, is refused by its own check rather than expanded, and the freshness window is
@@ -185,7 +186,7 @@ public final class LogoutTokenValidator {
         try {
             // A null token is handed on as the empty string, which the signature-only entry refuses and
             // counts exactly as it counts a null one
-            verified = tokenValidator.verifySignature(Objects.requireNonNullElse(rawToken, ""));
+            verified = tokenValidator.verifySignature(rawToken == null ? "" : rawToken);
         } catch (ClaimMappingException e) {
             return LogoutTokenValidationResult.refused(checkOfUnmappableClaim(e.getClaimName()));
         } catch (TokenValidationException e) {

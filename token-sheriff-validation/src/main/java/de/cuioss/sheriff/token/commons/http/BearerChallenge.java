@@ -198,48 +198,48 @@ public final class BearerChallenge {
             }
             return value.toString();
         }
-    }
 
-    private static @Nullable String checkQuotable(@Nullable String value, String attribute) {
-        if (value == null) {
-            return null;
-        }
-        for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
-            if (c < 0x20 || c == DELETE) {
-                throw new IllegalArgumentException(
-                        "The " + attribute + " value holds a control character at index " + i);
+        private static @Nullable String checkQuotable(@Nullable String value, String attribute) {
+            if (value == null) {
+                return null;
             }
-        }
-        return value;
-    }
-
-    private static StringBuilder appendQuoted(StringBuilder target, String name, String value) {
-        target.append(name).append("=\"");
-        for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
-            if (c == '"' || c == '\\') {
-                target.append('\\');
+            for (int i = 0; i < value.length(); i++) {
+                char c = value.charAt(i);
+                if (c < 0x20 || c == DELETE) {
+                    throw new IllegalArgumentException(
+                            "The " + attribute + " value holds a control character at index " + i);
+                }
             }
-            target.append(c);
+            return value;
         }
-        return target.append('"');
-    }
 
-    /**
-     * @return whether {@code token} is non-empty and every character is in {@code %x21 / %x23-5B / %x5D-7E}
-     */
-    private static boolean isScopeToken(String token) {
-        if (token.isEmpty()) {
-            return false;
+        private static StringBuilder appendQuoted(StringBuilder target, String name, String value) {
+            target.append(name).append("=\"");
+            for (int i = 0; i < value.length(); i++) {
+                char c = value.charAt(i);
+                if (c == '"' || c == '\\') {
+                    target.append('\\');
+                }
+                target.append(c);
+            }
+            return target.append('"');
         }
-        for (int i = 0; i < token.length(); i++) {
-            char c = token.charAt(i);
-            boolean allowed = c == 0x21 || (c >= 0x23 && c <= 0x5B) || (c >= 0x5D && c <= 0x7E);
-            if (!allowed) {
+
+        /**
+         * @return whether {@code token} is non-empty and every character is in {@code %x21 / %x23-5B / %x5D-7E}
+         */
+        private static boolean isScopeToken(String token) {
+            if (token.isEmpty()) {
                 return false;
             }
+            for (int i = 0; i < token.length(); i++) {
+                char c = token.charAt(i);
+                boolean allowed = c == 0x21 || (c >= 0x23 && c <= 0x5B) || (c >= 0x5D && c <= 0x7E);
+                if (!allowed) {
+                    return false;
+                }
+            }
+            return true;
         }
-        return true;
     }
 }

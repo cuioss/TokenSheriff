@@ -235,8 +235,9 @@ rotation is then picked up by the periodic refresh only. The window is a refresh
 deadline: it bounds how often a fetch is claimed, not when a rotation is accepted. The unknown key ID fetch
 and the periodic refresh share one in-flight guard, so a periodic cycle that falls on a running unknown key
 ID fetch skips its own fetch; a rotation that depended on the skipped cycle is then picked up one refresh
-interval later. Under attack the worst-case delay for picking up a rotated key is therefore one refresh
-interval plus one further interval; choose the refresh interval with that in mind. The setter rejects a
+interval later. A fetch that overlaps each successive periodic cycle, which a caller-supplied multi-thread
+executor allows, skips every one of them, so under a sustained attack the pickup of a rotated key has no fixed
+deadline; choose the refresh interval with that in mind. The setter rejects a
 `null`, zero, negative or out-of-range value.
 
 === Initial load retry

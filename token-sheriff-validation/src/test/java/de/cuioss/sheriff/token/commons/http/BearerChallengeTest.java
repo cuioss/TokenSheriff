@@ -135,11 +135,12 @@ class BearerChallengeTest {
         @DisplayName("A scope name outside the scope-token grammar is refused")
         void shouldRefuseScopeOutsideGrammar(String scope) {
             BearerChallenge.Builder builder = BearerChallenge.insufficientScope();
+            BearerChallenge.Builder collectionBuilder = BearerChallenge.insufficientScope();
+            List<String> requested = List.of("read", scope);
 
             assertThrows(IllegalArgumentException.class, () -> builder.scope(scope),
                     "OD-3: a scope name outside RFC 6749 section 3.3 is refused, never escaped");
-            assertThrows(IllegalArgumentException.class,
-                    () -> BearerChallenge.insufficientScope().scopes(List.of("read", scope)),
+            assertThrows(IllegalArgumentException.class, () -> collectionBuilder.scopes(requested),
                     "OD-3: the collection form refuses it as well");
         }
 
