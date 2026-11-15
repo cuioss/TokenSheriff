@@ -23,6 +23,8 @@
  *   <li>{@link de.cuioss.sheriff.token.commons.http.BearerCredentials} - extracts the {@code Bearer} token
  *       from an {@code Authorization} field value and reports whether credentials are absent, malformed or
  *       present</li>
+ *   <li>{@link de.cuioss.sheriff.token.commons.http.BearerChallenge} - builds the {@code WWW-Authenticate}
+ *       value of an RFC 6750 §3.1 {@code insufficient_scope} challenge</li>
  * </ul>
  * The helpers return plain Java values; none of them depends on a web framework, produces a response or
  * decides an HTTP status. Mapping a result to a status code stays with the integration.
