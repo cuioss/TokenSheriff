@@ -202,8 +202,10 @@ total would exceed the ceiling, so the full body is never materialised first.
   `truncated()` `true`. A body of exactly the ceiling is not truncated.
 
 | Memory bound
-| Both policies hold at most the ceiling plus the one chunk in flight, and ignore every chunk that arrives
-  after the first crossing.
+| While the body streams, both policies hold at most the ceiling plus the one chunk in flight, and ignore
+  every chunk that arrives after the first crossing. Delivering the result copies the held bytes into one
+  array before the held chunks are released, so a body that stays within the ceiling is briefly held twice
+  at completion.
 
 | Failure message
 | The read completes exceptionally with an `IOException` reading
