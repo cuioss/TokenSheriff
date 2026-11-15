@@ -173,6 +173,16 @@ public class CachingDiscoveryResolver implements LoadingStatusProvider {
             }
             CompletableFuture<CacheState> claim = new CompletableFuture<>();
             if (inFlight.compareAndSet(null, claim)) {
+                CacheState latest = state.get();
+                if (latest != current) {
+                    // Another caller published a newer state between the read above and the claim:
+                    // refreshing against the outdated read could replace that newer entry with a
+                    // failure derived from the old one. Hand the newer state to anyone already joined,
+                    // release the slot and re-evaluate against it.
+                    claim.complete(latest);
+                    inFlight.compareAndSet(claim, null);
+                    continue;
+                }
                 CacheState refreshed = refreshAsWinner(current, claim);
                 return answer(refreshed, clock.instant());
             }

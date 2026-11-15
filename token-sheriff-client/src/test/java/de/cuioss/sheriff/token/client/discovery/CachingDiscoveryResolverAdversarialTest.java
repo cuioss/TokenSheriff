@@ -83,7 +83,14 @@ class CachingDiscoveryResolverAdversarialTest {
     private final RefreshDispatcher moduleDispatcher = new RefreshDispatcher();
 
     private final AtomicReference<Instant> now = new AtomicReference<>(START);
-    private final InstantSource clock = now::get;
+    private final AtomicReference<@Nullable Runnable> beforeNextClockRead = new AtomicReference<>();
+    private final InstantSource clock = () -> {
+        Runnable hook = beforeNextClockRead.getAndSet(null);
+        if (hook != null) {
+            hook.run();
+        }
+        return now.get();
+    };
 
     /** A hostile document served on refresh, each refused by a different {@link DiscoveryResolver} check. */
     enum Attack {
@@ -173,6 +180,29 @@ class CachingDiscoveryResolverAdversarialTest {
                 () -> assertEquals(STAMPEDE_THREADS, distinct.size(), "every caller receives its own copy"),
                 () -> assertEquals(DiscoveryCacheStatus.State.RESOLVED, resolver.status().state()),
                 () -> assertEquals(START.plus(TTL), resolver.status().lastSuccess()));
+    }
+
+    @Test
+    @DisplayName("Should not replace a newer entry with a failure derived from a stale read")
+    void shouldNotOverwriteNewerEntryFromStaleRead(URIBuilder uriBuilder, SSLContext sslContext) {
+        var resolver = resolver(uriBuilder, sslContext);
+        var good = resolver.resolve();
+        advance(TTL);
+        // A competing caller finishes a successful refresh between this caller's read of the cache
+        // state and its claim of the in-flight slot; any further fetch would now be refused.
+        beforeNextClockRead.set(() -> {
+            resolver.resolve();
+            moduleDispatcher.serve(Attack.ISSUER_CHANGED.response::apply);
+        });
+
+        var served = resolver.resolve();
+
+        assertAll("stale read does not clobber the newer entry",
+                () -> assertEquals(2, moduleDispatcher.requests(), "no second refresh against the outdated read"),
+                () -> assertEquals(good.getTokenEndpoint(), served.getTokenEndpoint(), "the fresh document is served"),
+                () -> assertEquals(DiscoveryCacheStatus.State.RESOLVED, resolver.status().state()),
+                () -> assertEquals(START.plus(TTL), resolver.status().lastSuccess(),
+                        "lastSuccess is the competing caller's refresh"));
     }
 
     private CachingDiscoveryResolver resolver(URIBuilder uriBuilder, SSLContext sslContext) {
