@@ -1,0 +1,246 @@
+= ADR-0031: Bearer extraction, the scope challenge, the sanitiser escape and bounded body reads are public commons helpers
+:toc: left
+:toclevels: 3
+:toc-title: Table of Contents
+:sectnums:
+:source-highlighter: highlight.js
+
+// adr-metadata
+// summary: The RFC 6750 Bearer credential extractor and insufficient_scope challenge builder become public classes in commons.http, ErrorTextSanitizer gains a printable-ASCII escape form, and one public BoundedBodyHandler with a fail or truncate policy replaces the validation and client body handlers; the Quarkus producer adopts the RFC rules, which changes several default behaviours that are itemised here
+// tags: commons, http, rfc6750, cwe-117, denial-of-service, api-surface
+// affects: token-sheriff-validation, token-sheriff-validation-quarkus, token-sheriff-client
+// supersedes:
+// end-adr-metadata
+
+== Status
+
+Accepted
+
+== Context
+
+Four pieces of HTTP-edge logic existed as private or duplicated code:
+
+* **Bearer extraction.** `BearerTokenProducer` read the `Authorization` field with a private method that
+  accepted only the exact prefix `"Bearer "`. A gateway built on the library, such as API Sheriff, needs the
+  same extraction and had to copy it.
+* **The `insufficient_scope` challenge.** `BearerTokenResponseFactory` built the RFC 6750 §3.1
+  `WWW-Authenticate` value with a private method that escaped a quote inside a scope name. The client's
+  `InsufficientScopeChallengeParser` refuses such a scope after unquoting, because RFC 6749 §3.3 does not
+  allow a quote in a `scope-token`, so the producer could emit a challenge its own sibling parser rejects.
+* **A printable-ASCII rendering of untrusted text.** Some sinks must not carry any non-ASCII character at
+  all. `ErrorTextSanitizer` (ADR-0022) escapes only the unsafe characters and keeps every other non-ASCII
+  character, so such a sink would need a second sanitiser.
+* **Bounded response-body reads.** The validation module bounded its discovery and JWKS reads with the
+  package-private `BoundedBodyHandlers`; the client bounded its back-channel reads with its own
+  `BoundedContentBodyHandler`. The two implemented one security control twice and differed in eight
+  observable ways (see the table below), the client handler had no `Content-Length` pre-check and no test
+  class, and neither offered the keep-the-prefix mode a gateway needs for a capped upstream body.
+
+The structural choice points are where the shared helpers live, how strictly they apply the RFCs, and
+whether the two body handlers become one.
+
+== Decision
+
+The four helpers become public, framework-neutral classes in the commons layer of
+`token-sheriff-validation`, and the Quarkus producer and the client adopt them:
+
+* **`commons.http.BearerCredentials`** extracts RFC 6750 §2.1 credentials from an `Authorization` value and
+  reports exactly one of `ABSENT`, `MALFORMED` or `PRESENT`. `BearerTokenProducer` maps `ABSENT` to the
+  existing no-token path (the cookie fallback included), `MALFORMED` to `INVALID_REQUEST` and `PRESENT` to
+  validation.
+* **`commons.http.BearerChallenge`** builds the `insufficient_scope` challenge as a string and never decides
+  a status code. `BearerTokenResponseFactory` builds its scope challenge through it and keeps answering 401.
+* **`ErrorTextSanitizer.escapeNonPrintableAscii(String, int, String)`** is a third form of the one
+  commons-layer sanitiser of ADR-0022.
+* **`commons.transport.BoundedBodyHandler`** is the one bounded body handler, with an `OverLimitPolicy` of
+  `FAIL` or `TRUNCATE`. `JwksHttpContentConverter`, `WellKnownConfigurationConverter` and
+  `BackChannelHttp.bodyHandler()` use it; `BoundedBodyHandlers` and `BoundedContentBodyHandler` are deleted.
+
+=== Operator decisions
+
+The open design questions were settled as follows:
+
+[cols="1,3",options="header"]
+|===
+|Question |Decision
+
+|OD-1: Does the extractor match the scheme name exactly or case-insensitively?
+|Case-insensitively, as RFC 9110 §11.1 prescribes for authentication schemes, and the producer adopts it.
+`bearer`, `BEARER` and `bEaReR` name the `Bearer` scheme.
+
+|OD-2: How is whitespace around and inside the credentials handled?
+|The field value is trimmed of SP and HTAB (RFC 9110 §5.5). The scheme must be followed by one or more SP
+(RFC 6750 §2.1 `1*SP`); a tab after the scheme does not separate it, so such a value carries no `Bearer`
+credentials. An empty or whitespace-only token, and a token holding SP, HTAB or a control character (CR, LF,
+NUL and the other C0 controls, DEL, C1), are `MALFORMED`.
+
+|OD-3: Are scope names outside the `scope-token` grammar escaped or refused?
+|Refused with `IllegalArgumentException`. `realm` and `error_description` are written as RFC 9110 §5.6.4
+quoted strings that escape `"` and `\`, and refuse CR, LF, NUL, the other C0 controls and DEL. The
+producer's `insufficient_privileges` header escapes the backslash as well as the quote.
+
+|OD-4: What shape does the printable-ASCII form take?
+|`escapeNonPrintableAscii(String value, int maxLength, String truncationMarker)`: every character outside
+U+0020 to U+007E, and the backslash itself, is written as an upper-case backslash-`u` four-digit escape;
+`maxLength` counts source characters before escaping; `null` in gives `null` out; a negative `maxLength`
+is refused.
+
+|OD-5: Do the validation and client body handlers become one?
+|Yes. The shared handler keeps the validation module's behaviour and failure message; every difference of
+the two old handlers is pinned by a named test before either is removed.
+
+|OD-6: Where do the helpers live?
+|The Bearer helpers in a new package `de.cuioss.sheriff.token.commons.http`. The bounded handler stays in
+`commons.transport`, where the transport specification places it and where its validation callers live.
+|===
+
+=== Rationale for OD-5
+
+One handler means one implementation of a security control instead of two that had already drifted apart.
+The client gains the `Content-Length` pre-check the validation handler already had, so an over-advertised
+back-channel response fails before a byte of it is read. The truncate policy gives a gateway a capped,
+explicitly signalled read of an upstream body — the mode API Sheriff's `CappedByteArrayBodySubscriber`
+implements on its own — without a third copy of the counting logic.
+
+=== Pinned differences of the two old handlers
+
+Each row is asserted by a named case in `BoundedBodyHandlerTest` or `BoundedBodyHandlerTruncateTest`.
+
+[cols="1,3,3,4",options="header"]
+|===
+|# |Validation `BoundedBodyHandlers` |Client `BoundedContentBodyHandler` |Shared `BoundedBodyHandler`
+
+|1
+|`long` ceiling
+|`int` ceiling
+|`long` ceiling, accepted from 0 to `MAX_CEILING` (`Integer.MAX_VALUE - 8`, the largest array the result can
+hold)
+
+|2
+|negative ceiling not checked
+|negative ceiling refused
+|a negative ceiling and a ceiling above `MAX_CEILING` refused with `IllegalArgumentException`
+
+|3
+|`Content-Length` pre-check, subscription cancelled in `onSubscribe`
+|no pre-check
+|pre-check under `FAIL`; under `TRUNCATE` an over-advertised body is read up to the ceiling
+
+|4
+|chunks after the failure ignored, buffered chunks kept
+|buffer reset on failure, later chunks not checked
+|buffered bytes released at the first crossing, and later chunks ignored
+
+|5
+|charset parameter
+|fixed UTF-8
+|`ofString(Charset, long, String)` keeps the parameter; the client passes UTF-8
+
+|6
+|no null checks
+|`charset` and `boundOrigin` checked
+|`charset`, `policy` and `boundOrigin` checked with `requireNonNull`
+
+|7
+|`Response body exceeds maximum allowed size of N bytes (origin)`
+|`response body exceeds the maximum allowed size of N bytes (origin)`
+|the validation message, byte for byte
+
+|8
+|package-private factory class
+|public class in `client.internal`
+|one `public final` class in `commons.transport`
+|===
+
+=== Changed default behaviour
+
+Each change below alters what an existing deployment observes:
+
+* **OD-1** — a lower-case or mixed-case scheme (`bearer abc`, `BEARER abc`) is now a presented token. Before,
+  it was treated as no token at all.
+* **OD-2** — leading and trailing whitespace of the `Authorization` value is now ignored. A tab after the
+  scheme is not `Bearer` credentials, so it is treated as no token (the cookie fallback applies when
+  configured). A token holding an internal space or a control character is now answered 400
+  `INVALID_REQUEST` and the cookie is not consulted; before, it reached the validator and was answered 401
+  `PARSING_ERROR`.
+* **OD-3** — a required scope whose name is outside the `scope-token` grammar is now refused with
+  `IllegalArgumentException` when the challenge is built, instead of being escaped into the header. A
+  backslash in a role or group name of the `insufficient_privileges` header is now written as `\\`. The
+  `QuoteEscaping` expectations of `BearerTokenResponseFactoryTest` changed accordingly: a scope name holding
+  `"` is refused, scope names holding a backslash, a space or a non-ASCII letter are refused, and a backslash
+  in a role or group is escaped.
+* **Scope order** — the scopes of the challenge are now written in sorted order, with duplicates collapsed,
+  independent of the iteration order of the required-scope set. For scope names inside the grammar the
+  challenge is otherwise byte-identical to the previous one.
+* **OD-5** — the client's back-channel reads now refuse a response whose `Content-Length` exceeds the
+  ceiling before reading its body. The client's over-limit message is now the validation form
+  (`Response body exceeds maximum allowed size of N bytes (origin)`); the lower-case client form is retired.
+  On the validation path, a negative ceiling or one above `MAX_CEILING` is refused when the handler is
+  created; `ParserConfig` already refuses non-positive sizes, so no configuration reaches that refusal.
+
+== Consequences
+
+=== Positive
+
+* A gateway or a second HTTP edge extracts credentials and builds the challenge with the library's own
+  classes instead of copying them, so a fix reaches every edge at once.
+* The challenge the producer emits is always one the client parser accepts: the bounds of 64 scope tokens and
+  8192 characters match the parser's, and a round-trip test drives builder output through the parser.
+* A caller-supplied value can neither split the challenge header nor add a parameter to it.
+* A sink that must stay printable ASCII uses the one sanitiser, so ADR-0022's single definition of unsafe
+  characters still holds.
+* One bounded body handler serves both modules; the client gains the pre-check and a test class, and a
+  gateway gains the truncate policy.
+
+=== Negative
+
+* The itemised default changes can turn a request a deployment answered before into a different answer: a
+  lower-case scheme is now validated, and a token with an internal space is now a 400.
+* A scope name outside the grammar now fails the response instead of producing a header; a deployment that
+  configured such a name must rename it.
+* The public API of the validation module grows by three classes and one method.
+
+=== Risks
+
+* The extractor checks the characters the RFC rules refuse, not the full `b64token` grammar; a token that
+  passes extraction is still judged by the token validation pipeline.
+* `TRUNCATE` hands the caller a prefix of the body. A caller that forgets to read
+  `BoundedBody.truncated()` processes an incomplete body as if it were complete.
+
+== Alternatives Considered
+
+**Keep the helpers private and let each edge copy them.** It costs nothing in API surface. It was rejected
+because the copies had already diverged: the producer and the client parser disagreed on which scope names a
+challenge may carry, and the two body handlers on whether a `Content-Length` is checked.
+
+**Match the scheme exactly, as before.** It keeps the old behaviour for lower-case schemes. It was rejected
+because RFC 9110 §11.1 makes the scheme name case-insensitive, so a conforming client sending `bearer` was
+refused for no reason the RFC supports.
+
+**Escape a scope name outside the grammar.** It keeps the old producer output. It was rejected because the
+escaped name is not a `scope-token` after unquoting, so a conforming parser rejects the whole challenge.
+
+**Keep two body handlers and align them.** It avoids a cross-module dependency on one class. It was rejected
+because the client already depends on the validation module's commons layer (ADR-0001), so sharing costs no
+new dependency, and two aligned copies drift again.
+
+The rejected options share one flaw: each keeps an HTTP-edge security rule in more than one place, where the
+places have already been shown to disagree.
+
+== References
+
+* ADR-0001 — the commons base layer that every module may depend on.
+* ADR-0022 — the one commons-layer sanitiser that the printable-ASCII form extends.
+* xref:../validation/requirements.adoc#VALIDATION-14[VALIDATION-14] — the Bearer extractor and challenge
+  builder.
+* xref:../commons/requirements.adoc#COMMONS-16[COMMONS-16] and
+  xref:../commons/requirements.adoc#COMMONS-17[COMMONS-17] — the printable-ASCII form and the bounded body
+  handler.
+* xref:../commons/specification/transport.adoc#bounded_response_body[Transport specification] — the
+  bounded response body.
+* `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/commons/http/BearerCredentials.java` and
+  `BearerChallenge.java` — the Bearer helpers.
+* `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/commons/transport/BoundedBodyHandler.java`
+  — the shared handler.
+* `token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/flow/InsufficientScopeChallengeRoundTripTest.java`
+  — the builder and parser round trip.

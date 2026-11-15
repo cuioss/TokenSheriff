@@ -84,6 +84,16 @@ CDI producer for bearer token validation:
 * Handles token extraction from HTTP requests
 * Supports scope, role, and group validation
 
+The `Authorization` header is read by the commons `BearerCredentials` helper, which applies the RFC rules:
+
+* The scheme name matches case-insensitively, so `Bearer`, `bearer` and `BEARER` all present a token (RFC 9110 §11.1)
+* Leading and trailing whitespace of the header value is ignored, and the scheme must be followed by one or more spaces (RFC 6750 §2.1)
+* A value naming another scheme, the bare scheme `Bearer`, or the scheme followed by a tab carries no token; with `sheriff.token.token.header=Cookie` the cookie fallback then applies
+* A presented token that is empty or whitespace-only, or holds a space, a tab or a control character, is answered `INVALID_REQUEST` (HTTP 400), and the cookie is not consulted
+
+The `insufficient_scope` challenge of a scope violation is built by the commons `BearerChallenge` helper and sent with HTTP 401: scopes are listed in sorted order, and a required scope whose name is not an RFC 6749 §3.3 `scope-token` is refused instead of being escaped. See
+xref:../../doc/adr/0031-Bearer_extraction_scope_challenge_sanitiser_escape_and_bounded_body_reads_are_public_commons_helpers.adoc[ADR-0031].
+
 === Health Checks
 
 For comprehensive health check configuration, implementation details, and Kubernetes integration, see xref:../doc/integration/health-checks.adoc[Health Checks Documentation].

@@ -7,7 +7,8 @@
 
 == Overview
 
-_Realizes xref:../requirements.adoc#COMMONS-9[COMMONS-9]–xref:../requirements.adoc#COMMONS-12[COMMONS-12].
+_Realizes xref:../requirements.adoc#COMMONS-9[COMMONS-9]–xref:../requirements.adoc#COMMONS-12[COMMONS-12]
+and xref:../requirements.adoc#COMMONS-16[COMMONS-16].
 See xref:../threat-model.adoc#T-LEAK[T-LEAK]._
 
 The error model splits cleanly by layer: *libraries throw typed exceptions*; *HTTP edges
@@ -85,6 +86,45 @@ switch to a serialized DTO with proper JSON escaping rather than string concaten
 Commons normalizes inbound OAuth error responses (`error` / `error_description`, RFC 6749
 §5.2) into the same typed model the edges render — *one contract, both directions*. The
 raw upstream error is never passed through to the caller verbatim.
+
+[#printable_ascii_escape]
+== Printable-ASCII escape form (COMMONS-16)
+
+`ErrorTextSanitizer` is the one sanitiser of untrusted text
+(xref:../../adr/0022-A_flow_context_is_single-use_and_untrusted_text_is_sanitised_by_one_commons-layer_utility.adoc[ADR-0022]).
+Besides its escaping default form and its replacing parameterised form, it offers a printable-ASCII
+form for a sink that must not carry any non-ASCII character:
+
+[source,java]
+----
+String rendered = ErrorTextSanitizer.escapeNonPrintableAscii(untrusted, 128, "...");
+----
+
+[cols="1,3", options="header"]
+|===
+| Aspect | Rule
+
+| Escaped characters
+| Every UTF-16 character outside U+0020 to U+007E — controls, DEL, C1, the line separators, the
+  bidirectional controls, zero-width and combining characters, every ordinary non-ASCII letter, and
+  each half of a surrogate pair — and the backslash itself.
+
+| Rendering
+| An upper-case backslash-`u` four-digit escape, for example `é` for `é` and `\` for the
+  backslash, so a backslash in the result always starts an escape.
+
+| Length bound
+| `maxLength` counts source characters before escaping. A longer value keeps its first `maxLength`
+  characters and is followed by `truncationMarker`; the marker is appended only on a cut and is not
+  escaped, so it must be a printable-ASCII constant. A negative `maxLength` is refused with
+  `IllegalArgumentException`.
+
+| `null`
+| `null` in, `null` out.
+|===
+
+The result consists of printable ASCII only, whatever the input. See
+xref:../../adr/0031-Bearer_extraction_scope_challenge_sanitiser_escape_and_bounded_body_reads_are_public_commons_helpers.adoc[ADR-0031].
 
 == See also
 

@@ -7,7 +7,8 @@
 
 == Overview
 
-_Realizes xref:../requirements.adoc#COMMONS-1[COMMONS-1]–xref:../requirements.adoc#COMMONS-8[COMMONS-8].
+_Realizes xref:../requirements.adoc#COMMONS-1[COMMONS-1]–xref:../requirements.adoc#COMMONS-8[COMMONS-8]
+and xref:../requirements.adoc#COMMONS-17[COMMONS-17].
 See xref:../threat-model.adoc[Threat Model] and xref:../architecture.adoc[Architecture]._
 
 `commons.transport` owns the validation-side outbound HTTP to an OpenID Provider —
@@ -162,6 +163,63 @@ xref:../threat-model.adoc#T-DISCOVERY[T-DISCOVERY].
 Each fetch applies a connect/read timeout, a response-size limit, and bounded
 retry/backoff. No unbounded buffering of response bodies. Mitigates
 xref:../threat-model.adoc#T-DOS[T-DOS].
+
+=== [[bounded_response_body]] Bounded response body (COMMONS-17)
+
+The response-size limit is enforced by one public handler, `commons.transport.BoundedBodyHandler`,
+which every bounded read uses: the validation-side discovery and JWKS converters
+(`WellKnownConfigurationConverter`, `JwksHttpContentConverter`) and the client's back-channel reads
+(`BackChannelHttp.bodyHandler()`). It counts bytes while the body streams and acts the moment the running
+total would exceed the ceiling, so the full body is never materialised first.
+
+[cols="1,2", options="header"]
+|===
+| Aspect | Rule
+
+| Factory methods
+| `ofString(Charset, long maxBytes, String boundOrigin)` reads under the fail policy and decodes with the
+  given charset; it is the form all three callers use. `ofBytes(long maxBytes, OverLimitPolicy, String
+  boundOrigin)` returns an immutable `BoundedBody` (`bytes()` returns a copy, `truncated()`,
+  `asString(Charset)`; its `toString` shows the length, never the content).
+
+| Ceiling
+| Inclusive; a body strictly larger is over the limit. Accepted from 0 to `MAX_CEILING`
+  (`Integer.MAX_VALUE - 8`, the largest array the result can hold); a negative or larger ceiling is refused
+  with `IllegalArgumentException` when the handler is created. `charset`, `policy` and `boundOrigin` must
+  not be `null`.
+
+| `FAIL` policy — pre-check
+| A response that advertises a `Content-Length` above the ceiling is refused before a byte of its body is
+  read: the subscription is cancelled in `onSubscribe`.
+
+| `FAIL` policy — streaming
+| A body that crosses the ceiling while streaming — one that lied about its `Content-Length` or advertised
+  none — cancels the subscription, releases the buffered bytes and fails the read.
+
+| `TRUNCATE` policy
+| The advertised `Content-Length` is not checked. The body is read up to the ceiling, the subscription is
+  cancelled at the first crossing, and the result holds exactly the first `maxBytes` bytes with
+  `truncated()` `true`. A body of exactly the ceiling is not truncated.
+
+| Memory bound
+| Both policies hold at most the ceiling plus the one chunk in flight, and ignore every chunk that arrives
+  after the first crossing.
+
+| Failure message
+| The read completes exceptionally with an `IOException` reading
+  `Response body exceeds maximum allowed size of N bytes (boundOrigin)`. The `boundOrigin` names the setting
+  that produced the ceiling and whether it is settable, for example
+  `ParserConfig.maxHttpResponseSize` on the validation side and the client's fixed `ParserConfig.maxPayloadSize`
+  bound, so a reader of the failure can tell a tunable bound from a fixed one.
+
+| Logging and threading
+| The handler logs nothing. It is immutable and may be shared across requests; each response gets a fresh
+  subscriber.
+|===
+
+See
+xref:../../adr/0031-Bearer_extraction_scope_challenge_sanitiser_escape_and_bounded_body_reads_are_public_commons_helpers.adoc[ADR-0031]
+for the decision that merged the former validation and client handlers into this one.
 
 === Caching (COMMONS-8)
 

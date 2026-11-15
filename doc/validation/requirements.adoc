@@ -49,7 +49,7 @@ Token-Sheriff already satisfies the OAuth 2.1 resource server requirements:
 * **RFC 9068 token type validation** - Optional per-issuer `typ: at+jwt` header validation (see xref:#VALIDATION-8.6[VALIDATION-8.6])
 * **RFC 9449 DPoP sender-constrained tokens** - Optional per-issuer DPoP proof validation binding access tokens to client public keys (see xref:#VALIDATION-8.7[VALIDATION-8.7])
 
-NOTE: Requirement IDs are stable identifiers referenced across documentation and are not sequential. Functional requirements use IDs 1-8, 12 and 13; non-functional requirements use IDs 9-10.
+NOTE: Requirement IDs are stable identifiers referenced across documentation and are not sequential. Functional requirements use IDs 1-8 and 12-14; non-functional requirements use IDs 9-10.
 
 == Functional Requirements
 
@@ -627,6 +627,48 @@ The library must refuse a logout token whose `jti` was already admitted, through
 The guard is consulted last, so a token refused by any other check takes no guard capacity.
 
 _See specification: xref:security-reference.adoc#logout-replay-guard[Logout Replay Guard]_
+
+[#VALIDATION-14]
+=== VALIDATION-14: Framework-Neutral Bearer Helpers
+
+The library must offer the RFC 6750 handling of an HTTP edge - reading `Bearer` credentials and building the `insufficient_scope` challenge - as public classes of the commons layer that depend on `java.util` and JSpecify only, so that every edge built on the library applies the same rules without copying them.
+
+_See specification: xref:../adr/0031-Bearer_extraction_scope_challenge_sanitiser_escape_and_bounded_body_reads_are_public_commons_helpers.adoc[ADR-0031]_
+
+[#VALIDATION-14.1]
+==== VALIDATION-14.1: Bearer Credential Extraction
+
+`BearerCredentials.extract` must read the `Bearer` credentials of an `Authorization` field value (https://datatracker.ietf.org/doc/html/rfc6750#section-2.1[RFC 6750 §2.1]) and report exactly one of three states:
+
+* `ABSENT` - no `Bearer` credentials: no value, an empty value, another scheme, a longer scheme that starts with `Bearer`, the bare scheme, or the scheme followed by a tab
+* `MALFORMED` - the scheme is presented, but the token is empty or whitespace-only, or holds a space, a tab or a control character (CR, LF, NUL and the other C0 controls, DEL, C1)
+* `PRESENT` - the token
+
+Key requirements:
+
+* The scheme name matches case-insensitively (https://www.rfc-editor.org/rfc/rfc9110#section-11.1[RFC 9110 §11.1])
+* Leading and trailing optional whitespace of the field value is ignored (RFC 9110 §5.5); the scheme is followed by one or more spaces
+* From a header map, the first value of the field is read, found under the lower-case key first and under a case-variant key otherwise
+* The value is scanned once; no token size limit is imposed, since token size limits stay with xref:#VALIDATION-8.1[VALIDATION-8.1]
+* A result never prints the token or a refused value
+
+The Quarkus producer answers `MALFORMED` with `INVALID_REQUEST` (HTTP 400) without consulting the cookie fallback.
+
+_See specification: xref:../adr/0031-Bearer_extraction_scope_challenge_sanitiser_escape_and_bounded_body_reads_are_public_commons_helpers.adoc[ADR-0031]_
+
+[#VALIDATION-14.2]
+==== VALIDATION-14.2: Insufficient-Scope Challenge
+
+`BearerChallenge.insufficientScope()` must build the `WWW-Authenticate` value of an https://datatracker.ietf.org/doc/html/rfc6750#section-3.1[RFC 6750 §3.1] `insufficient_scope` challenge as a string, with optional `realm`, `error_description` and `scope` attributes, and must never decide an HTTP status.
+
+Key requirements:
+
+* Scopes are written sorted, duplicates collapsed; an empty scope set omits the attribute
+* A scope name outside the RFC 6749 §3.3 `scope-token` grammar is refused with `IllegalArgumentException`, never escaped
+* `realm` and `error_description` escape `"` and `\`; a value holding CR, LF, NUL, another C0 control or DEL is refused
+* At most 64 distinct scope tokens and 8192 characters, the bounds the client's challenge parser reads, so the parser accepts every built value and reads back the same scope set
+
+_See specification: xref:../adr/0031-Bearer_extraction_scope_challenge_sanitiser_escape_and_bounded_body_reads_are_public_commons_helpers.adoc[ADR-0031]_
 
 == Non-Functional Requirements
 

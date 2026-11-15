@@ -6,7 +6,7 @@
 :source-highlighter: highlight.js
 
 // adr-metadata
-// summary: A FlowContext is used up by the first callback handled against it, whatever that call's outcome, through one atomic claim; and every CWE-117 sanitisation of untrusted text goes through ErrorTextSanitizer in the validation module's commons layer, whose default form escapes and whose parameterised form replaces
+// summary: A FlowContext is used up by the first callback handled against it, whatever that call's outcome, through one atomic claim; and every CWE-117 sanitisation of untrusted text goes through ErrorTextSanitizer in the validation module's commons layer, whose default form escapes, whose parameterised form replaces and whose printable-ASCII form escapes every non-ASCII character
 // tags: security, single-use, csrf, cwe-117, log-injection, commons, layering
 // affects: token-sheriff-client, token-sheriff-validation
 // supersedes:
@@ -52,14 +52,18 @@ the single implementation of the unsafe-character set: the ASCII control charact
 and tab, DEL, the C1 controls U+0080 to U+009F, U+2028 / U+2029, and the bidirectional controls
 U+202A to U+202E and U+2066 to U+2069. Both forms cut a long value without splitting a surrogate pair:
 a cut that would leave a lone high surrogate keeps one character fewer. It offers two forms over that
-one set:
+one set, and a third, stricter form:
 
 * the default form escapes each unsafe character (`\r`, `\n`, `\t`, otherwise a backslash-`u` escape),
   truncates to 256 characters and marks a truncation with `...[truncated]`; it serves the error-text
   surfaces, such as the inbound error normaliser and the client's log sanitiser;
 * the parameterised form replaces each unsafe character with a caller-chosen character and truncates to
   a caller-chosen length with a caller-chosen marker; the JWE header and JWK field sanitisers use it
-  with `?`, 64 characters and `...`.
+  with `?`, 64 characters and `...`;
+* the printable-ASCII form, `escapeNonPrintableAscii`, escapes every character outside U+0020 to
+  U+007E and the backslash itself as an upper-case backslash-`u` escape, for a sink that must carry
+  printable ASCII only. It covers the unsafe set and every other non-ASCII character, so it stays inside
+  this decision; ADR-0031 records it.
 
 No other component carries its own replacement loop. The utility sits in
 `de.cuioss.sheriff.token.commons.error` because the commons layer may be depended on by the
@@ -121,6 +125,7 @@ site that needs it, instead of establishing it once where all sites can reach it
 * `token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/CallbackHandler.java` — the
   check order, single use first.
 * `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/commons/error/ErrorTextSanitizer.java`
-  — the unsafe-character set and its two forms.
+  — the unsafe-character set and its three forms.
+* ADR-0031 — the printable-ASCII form.
 * `doc/validation/specification/token-decryption.adoc` — the JWE header value sanitisation rules the
   parameterised form implements.

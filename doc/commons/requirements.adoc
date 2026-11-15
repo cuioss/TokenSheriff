@@ -124,6 +124,27 @@ exhaust memory or block a caller indefinitely.
 
 * Source: https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4] (availability), https://www.rfc-editor.org/rfc/rfc7230[RFC 7230] (message framing bounds).
 
+[#COMMONS-17]
+=== COMMONS-17: One bounded response-body handler
+
+The response-size limit of xref:#COMMONS-4[COMMONS-4] MUST be enforced by one public handler,
+`commons.transport.BoundedBodyHandler`, for the validation-side discovery and JWKS reads and for the
+client's back-channel reads alike. It counts bytes while the body streams, never buffers more than the
+ceiling plus the one chunk in flight, and offers two policies:
+
+* *Fail* — a response advertising a `Content-Length` above the ceiling is refused before a byte of its
+  body is read; a body crossing the ceiling while streaming is refused at the crossing. Both fail the
+  read with an `IOException` whose message names the ceiling and its `boundOrigin`.
+* *Truncate* — the body is read up to the ceiling and the result carries exactly the first ceiling
+  bytes with an explicit truncation signal.
+
+The ceiling is accepted from 0 to `Integer.MAX_VALUE - 8` bytes; any other value is refused when the
+handler is created. The handler logs nothing. See
+xref:specification/transport.adoc#bounded_response_body[Transport specification] and
+xref:../adr/0031-Bearer_extraction_scope_challenge_sanitiser_escape_and_bounded_body_reads_are_public_commons_helpers.adoc[ADR-0031].
+
+* Source: https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4] (availability), https://www.rfc-editor.org/rfc/rfc9110#section-8.6[RFC 9110 §8.6] (`Content-Length`).
+
 [#COMMONS-5]
 === COMMONS-5: Discovery (`.well-known`)
 
@@ -204,6 +225,20 @@ leak stack traces, internal identifiers, upstream URLs, or credential material.
 
 * Source: https://www.rfc-editor.org/rfc/rfc9457#section-3[RFC 9457 §3] (member semantics), https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4] (information disclosure).
 
+[#COMMONS-16]
+=== COMMONS-16: Printable-ASCII rendering of untrusted text
+
+Untrusted text bound for a sink that must carry printable ASCII only MUST be rendered by the one
+commons-layer sanitiser, `ErrorTextSanitizer`, through its printable-ASCII form
+`escapeNonPrintableAscii(value, maxLength, truncationMarker)`: every character outside U+0020 to
+U+007E, and the backslash itself, is written as an upper-case backslash-`u` four-digit escape, the
+value is cut to `maxLength` source characters before escaping, and a cut is marked. No second
+sanitiser is introduced
+(xref:../adr/0022-A_flow_context_is_single-use_and_untrusted_text_is_sanitised_by_one_commons-layer_utility.adoc[ADR-0022]).
+See xref:specification/error-model.adoc#printable_ascii_escape[Error-model specification].
+
+* Source: https://cwe.mitre.org/data/definitions/117.html[CWE-117] (improper output neutralization for logs).
+
 == Security-event requirements
 
 _See xref:specification/observability.adoc[Observability specification]._
@@ -248,7 +283,9 @@ and xref:specification/observability.adoc[observability] specifications.
 | Requirement | Threats | Specification
 
 | COMMONS-1..8 | T-SSRF, T-TLS, T-DOS, T-DISCOVERY | transport.adoc
+| COMMONS-17 | T-DOS | transport.adoc
 | COMMONS-9..12 | T-LEAK | error-model.adoc
+| COMMONS-16 | T-LEAK | error-model.adoc
 | COMMONS-13..14 | T-LEAK (categorization) | observability.adoc
 | COMMONS-15 | — | observability.adoc
 |===
