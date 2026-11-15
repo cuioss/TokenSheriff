@@ -249,6 +249,17 @@ test asserts rejection:
   redirect it builds (`id_token_hint`, the exact registered `post_logout_redirect_uri`,
   `state`); the revocation of held tokens is covered by the revocation and lifecycle tests.
 
+| xref:../threat-model.adoc#T-REFRESH-IDENTITY[T-REFRESH-IDENTITY]
+| `RefreshResultVerifierAdversarialTest` drives refreshed ID tokens carrying a substituted `sub`, a
+  substituted issuer, `alg=none`, an expired `exp`, no signature and a wrong audience, and an
+  access token without a `sub` while a subject is bound; each is refused and classified `REDEEMED`.
+
+| xref:../threat-model.adoc#T-DISCOVERY-STALE[T-DISCOVERY-STALE]
+| `CachingDiscoveryResolverAdversarialTest` serves a hostile document on refresh — another issuer,
+  a cleartext endpoint inside an `https` document, an oversized body, a non-JSON media type — and
+  asserts each is refused by the unchanged discovery checks and never replaces the cached document;
+  a refresh stampede of concurrent callers after TTL expiry reaches the server exactly once.
+
 | xref:../threat-model.adoc#T-CONSTRAINT-LOSS[T-CONSTRAINT-LOSS]
 | A DPoP / mTLS-bound token is asserted to keep its binding across storage and refresh.
   "mTLS-bound" means an existing `cnf.x5t#S256` binding, not mTLS client authentication, which
@@ -538,6 +549,34 @@ an isolated-component or server-capability test alone does not qualify the row a
   not mutated, concurrent calls keep their own sets,
   and the two-argument refresh form is unchanged
 | `PushedAuthorizationFlowSpecIT`: the pushed path against real Keycloak (capability-gated) | all
+
+| xref:../requirements.adoc#CLIENT-28[CLIENT-28] | T-REFRESH-IDENTITY, T-IDTOKEN-INTEGRITY, T-REFRESH-REFUSAL
+| `RefreshResultVerifierTest`: absent and blank ID token return `null`, a valid one is returned,
+  a pipeline failure is carried by `RedeemedValidationRefusalException` with the original as cause,
+  an `iss` mismatch logs `TokenSheriffClient-109` exactly once, a `sub` mismatch, an access token
+  without a `sub` (passes §12.2), a bound subject that differs or is absent, and a `null` bound
+  subject (step skipped); every refusal is classified `REDEEMED` with `rotated(successor)` for a
+  rotated and `notRotated()` for an unrotated input. `RefreshResultVerifierAdversarialTest`: the
+  attack cases of xref:#_adversarial_coverage[]. `RedeemedIdentityRefusalExceptionTest`: message and
+  cause kept, the redemption carried, a serialization round trip degrades to `rotationUnknown()`
+  without the successor. The lifecycle manager's refresh tests stay unchanged and green on the
+  verifier
+| `RefreshProductionPathSpecIT`: refresh through the lifecycle manager against real Keycloak | all
+
+| xref:../requirements.adoc#CLIENT-29[CLIENT-29] | T-DISCOVERY-STALE, T-SSRF-ADVERTISED
+| `CachingDiscoveryResolverTest`: TTL freshness, defensive copies, jitter bounds, constructor
+  validation, the status snapshot and the `LoaderStatus` mapping;
+  `CachingDiscoveryResolverStalePolicyTest`: a failed refresh served stale until
+  `lastSuccess + ttl + gracePeriod` and refused after it, a never-resolved cache propagating the
+  failure, the minimum refresh interval, and the `TokenSheriffClient-115` / `-116` / `-4` records
+  each logged once per episode; `CachingDiscoveryResolverAdversarialTest`: the attack cases of
+  xref:#_adversarial_coverage[]. `TokenSheriffClientDiscoveryCacheTest`: the cache is off by
+  default and the `DiscoveryResolver` bean unchanged, an enabled cache produces a
+  `CachingDiscoveryResolver` reporting `NOT_ATTEMPTED`, each orphaned property and an enabled cache
+  without a `ttl` fail startup naming the property, and injection while disabled fails naming
+  `enabled`
+| `DiscoverySpecIT`: two resolutions within the TTL against the real Keycloak realm return equal,
+  independent copies, and the cache reports `RESOLVED` and `LoaderStatus.OK` | all
 |===
 
 == Per-increment definition of done (test view)

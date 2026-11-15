@@ -445,6 +445,43 @@ two-argument refresh keeps the configured scopes as both.
 
 * Source: https://www.rfc-editor.org/rfc/rfc6749#section-3.3[RFC 6749 §3.3] (`scope`), https://openid.net/specs/oauth-v2-form-post-response-mode-1_0.html[OAuth 2.0 Form Post Response Mode], https://openid.net/specs/oauth-v2-multiple-response-types-1_0.html#ResponseModes[OAuth 2.0 Multiple Response Type Encoding Practices §2.1] (`response_mode`), https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest[OIDC Core §3.1.2.1] (`prompt`), https://www.rfc-editor.org/rfc/rfc9126[RFC 9126].
 
+[#CLIENT-29]
+=== CLIENT-29: Opt-in caching discovery resolver
+
+The engine MUST offer an *opt-in* cache around the discovery resolver
+(`CachingDiscoveryResolver`) and MUST leave the plain `DiscoveryResolver` unchanged: without the
+cache every resolution fetches the discovery document.
+
+*Freshness.* A resolved document MUST be served from the cache for a caller-stated time to live,
+measured from the successful resolution. The TTL has no default and MUST be positive. An optional
+jitter, smaller than the TTL, shortens each freshness window by a random amount so clients sharing a
+TTL do not refresh at the same instant.
+
+*Refresh.* A stale or never-resolved cache MUST refresh lazily, on the calling thread, through the
+plain resolver, so every check an uncached resolution performs (TLS, the `issuer` match, the endpoint
+schemes, the media type, the size bound — xref:#CLIENT-14[]) runs again on every refreshed document.
+A refused document MUST NOT replace the cached one. Concurrent callers MUST share one refresh. The
+cache MUST NOT start a background thread.
+
+*Bounded stale grace, then fail closed.* When a refresh fails, the last successfully resolved
+document MAY be served until `lastSuccess + ttl + gracePeriod`; the grace period defaults to zero.
+After that instant a resolution MUST fail closed with a `TransportException`. A cache that never
+resolved a document MUST propagate the refresh failure. After a failed refresh no further refresh is
+attempted before an optional minimum refresh interval has elapsed.
+
+*Isolation and status.* Every resolution MUST return an independent copy, so a caller's mutation never
+reaches the cache. The cache state MUST be readable without I/O as `DiscoveryCacheStatus` (state, last
+success, class name of the last failure) and as a `LoaderStatus`.
+
+*Quarkus wiring.* Under Quarkus the cache is off by default and enabled by
+`sheriff.client.discovery-cache.enabled=true`, which requires `sheriff.client.discovery-cache.ttl`
+and makes a `CachingDiscoveryResolver` bean available beside the unchanged `DiscoveryResolver` bean.
+A `sheriff.client.discovery-cache.*` property set while the cache is not enabled, or an enabled cache
+without a TTL, MUST fail application startup with an error naming the property
+(xref:../adr/0026-Orphaned_or_unresolvable_extension_configuration_fails_startup_instead_of_being_ignored.adoc[ADR-0026]).
+
+* Source: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationValidation[OIDC Discovery 1.0 §4.3] (every document is validated), https://www.rfc-editor.org/rfc/rfc8414#section-3[RFC 8414 §3], xref:threat-model.adoc#T-DISCOVERY-STALE[T-DISCOVERY-STALE].
+
 == Token requirements
 
 _The server-side lifecycle delta on top of the validation module — storage, refresh,
@@ -527,6 +564,34 @@ client errors MUST conform to the commons RFC 9457 error model: `token-sheriff-c
 IdP error responses are normalized by commons (`COMMONS-11`), not passed through verbatim.
 
 * Source: https://www.rfc-editor.org/rfc/rfc9457[RFC 9457], xref:../commons/requirements.adoc#COMMONS-9[COMMONS-9]–xref:../commons/requirements.adoc#COMMONS-12[COMMONS-12].
+
+[#CLIENT-28]
+=== CLIENT-28: Published refresh-result verification
+
+The engine MUST publish the checks a refresh result owes before it is stored as one public verifier
+(`RefreshResultVerifier`), so a caller that drives `RefreshFlow` itself — a gateway — applies the
+same checks as the lifecycle manager (xref:#CLIENT-17[]) instead of re-implementing them. The
+verifier MUST run three steps, in this order, and stop at the first refusal:
+
+. *ID-token validation.* A refreshed ID token MUST be validated through the validation pipeline
+  (signature, `iss`, `aud`, `exp` / `iat`; no `nonce`, OIDC Core §12.2). An absent or blank ID token
+  skips this step and the next.
+. *§12.2 consistency.* The validated ID token MUST be refused when its `iss` differs from the
+  refreshed access token's issuer, or when the access token carries a `sub` that differs from the
+  ID token's `sub` (xref:#CLIENT-16[]).
+. *Subject binding.* When the caller names the subject its session is bound to, the refresh MUST be
+  refused unless the refreshed access token carries a `sub` equal to it, compared in constant time.
+  A caller that names no subject skips this step.
+
+The verifier MUST return the verified ID token, or none when the exchange issued none. Every refusal
+is raised after the authorization server answered, so it MUST carry the redemption state of the
+exchange — rotated with the successor, or not rotated — and MUST classify as redeemed through
+`RefreshFlow.classify`: a validation refusal as `RedeemedValidationRefusalException`, a consistency
+or binding refusal as `RedeemedIdentityRefusalException`. The verifier MUST NOT store, revoke or
+clear anything, and MUST NOT log a token or a subject. The lifecycle manager MUST use it with no
+bound subject, keeping its own subject binding inside the atomic store transform.
+
+* Source: https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse[OIDC Core §12.2], xref:threat-model.adoc#T-REFRESH-IDENTITY[T-REFRESH-IDENTITY].
 
 == [[_security_exclusions_legacy_discouraged]] Security exclusions (legacy / discouraged, refused)
 
@@ -678,12 +743,14 @@ sourced xref:best-practices.adoc[best-practices] checklist, and realized in a sp
 | CLIENT-24 | T-SSRF-ADVERTISED, T-TLS-TOKEN (back-channel routing without identity or TLS relaxation) | xref:../commons/specification/transport.adoc#client_back_channel_origin[transport (client back-channel origin)]
 | CLIENT-25 | T-CHALLENGE-INJECTION | step-up-and-logout
 | CLIENT-27 | T-URL-LEAK (opt-in `query` re-opens it), T-PARAM-INTEGRITY (pushed path) | retrieval-flow
+| CLIENT-29 | T-DISCOVERY-STALE, T-SSRF-ADVERTISED (every refreshed document re-checked) | retrieval-flow
 | CLIENT-15 | T-AUD-CONFUSION | xref:specification/token-handling.adoc[token-handling]
 | CLIENT-16 | T-IDTOKEN-INTEGRITY | token-handling
 | CLIENT-17 | T-REFRESH-THEFT, T-LOGOUT | token-handling
 | CLIENT-18 | T-CONSTRAINT-LOSS | token-handling
 | CLIENT-19 | (BFF groundwork — non-preclusion) | xref:architecture.adoc[architecture], token-handling
 | CLIENT-20 | xref:../commons/threat-model.adoc#T-LEAK[commons T-LEAK] (delegated) | token-handling
+| CLIENT-28 | T-REFRESH-IDENTITY, T-IDTOKEN-INTEGRITY, T-REFRESH-REFUSAL | token-handling
 | CLIENT-21..22 | (cross-cutting: engine boundary + adversarial coverage) | xref:architecture.adoc[architecture], xref:specification/test-strategy.adoc[test-strategy], all specs
 | CLIENT-26 | (non-functional: native-image contract) | xref:specification/test-strategy.adoc#_native_image_contract[test-strategy (native-image contract)]
 |===

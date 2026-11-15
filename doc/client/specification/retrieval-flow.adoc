@@ -8,7 +8,7 @@
 == Overview
 
 _Realizes xref:../requirements.adoc#CLIENT-1[CLIENT-1]–xref:../requirements.adoc#CLIENT-11[CLIENT-11],
-xref:../requirements.adoc#CLIENT-14[CLIENT-14], xref:../requirements.adoc#CLIENT-23[CLIENT-23] and xref:../requirements.adoc#CLIENT-27[CLIENT-27]. See xref:../threat-model.adoc[Threat Model],
+xref:../requirements.adoc#CLIENT-14[CLIENT-14], xref:../requirements.adoc#CLIENT-23[CLIENT-23], xref:../requirements.adoc#CLIENT-27[CLIENT-27] and xref:../requirements.adoc#CLIENT-29[CLIENT-29]. See xref:../threat-model.adoc[Threat Model],
 xref:../best-practices.adoc[Best Practices] and xref:../architecture.adoc[Architecture]._
 
 This specification covers the net-new aspect the client capability owns: the
@@ -229,6 +229,104 @@ the token endpoint (xref:../threat-model.adoc#T-URL-LEAK[T-URL-LEAK]). All token
 `cui-http` TLS primitive; xref:../threat-model.adoc#T-TLS-TOKEN[T-TLS-TOKEN], `COMMONS-2`) and
 passes the in-module egress / path control before the fetch
 (xref:../architecture.adoc#_owned_back_channel_http[owned back-channel HTTP]).
+
+== [[_discovery_cache]] Opt-in discovery cache
+
+`DiscoveryResolver` fetches the issuer's `.well-known/openid-configuration` on every call, and stays
+that way. `CachingDiscoveryResolver` is an opt-in wrapper around it that serves the last resolved
+document while it is fresh and refreshes it on demand once it is stale
+(xref:../requirements.adoc#CLIENT-29[CLIENT-29],
+xref:../threat-model.adoc#T-DISCOVERY-STALE[T-DISCOVERY-STALE]). It is constructed with the
+delegate resolver, a TTL, a grace period, and optionally a minimum refresh interval and a jitter,
+plus the `InstantSource` it reads the time from.
+
+[cols="1,1,3", options="header"]
+|===
+| Setting | Default | Rule
+
+| `ttl` | none (required) | How long a resolved document is served without a refresh, measured from the successful resolution. Must be positive.
+| `gracePeriod` | none (required); `PT0S` under Quarkus | How long past its TTL the last resolved document is still served while refreshes fail. Must not be negative. Zero fails closed as soon as the TTL has elapsed and a refresh fails.
+| `minRefreshInterval` | `PT0S` | The minimum time between a failed refresh and the next attempt. Must not be negative. Zero retries on the next call.
+| `jitter` | `PT0S` | The upper bound of a random amount by which each freshness window is shortened. Must not be negative and must be smaller than the TTL. Zero disables it.
+|===
+
+*Lazy, single-flight refresh.* No background thread is started. The first `resolve()` call on a
+stale or never-resolved cache refreshes through `DiscoveryResolver.resolve()` on its own thread.
+Concurrent callers share that refresh: the first caller claims the in-flight slot with one atomic
+compare-and-set, every other caller joins its result, and the new cache entry is published before
+the slot is cleared.
+
+*Every check runs again.* A refresh is an ordinary `DiscoveryResolver.resolve()`, so every check an
+uncached resolution performs — TLS, the `issuer` match, the endpoint schemes, the egress policy, the
+media type, the size bound (xref:../requirements.adoc#CLIENT-14[CLIENT-14]) — runs on every refreshed
+document. A refused document never replaces the cached one.
+
+*Stale grace, then fail closed.* When a refresh fails, the last successfully resolved document is
+still served until `lastSuccess + ttl + gracePeriod`. Once that instant has passed, `resolve()`
+throws a `TransportException` stating that the cached metadata expired and naming the class of the
+last failure, with the last failure as cause. A cache that has never resolved a document has nothing
+to serve and propagates the refresh failure itself. Within the minimum refresh interval after a
+failure no refresh is attempted, and the same stale policy answers from the cache.
+
+*Defensive copy.* Every `resolve()` returns an independent copy (`ProviderMetadata.copy()`). The
+cache holds its own copy, so a caller that mutates the returned metadata never changes what the next
+caller gets.
+
+*Status without I/O.* `status()` returns a `DiscoveryCacheStatus` snapshot, and `getLoaderStatus()`
+maps it to a `LoaderStatus`. Neither performs I/O or waits for an in-flight refresh.
+`DiscoveryCacheStatus.lastFailureCause` is the fully qualified class name of the exception that
+failed the most recent attempt — never its message or a response body.
+
+[cols="1,2,1", options="header"]
+|===
+| `DiscoveryCacheStatus.State` | Meaning | `getLoaderStatus()`
+
+| `NOT_ATTEMPTED` | No resolution has been attempted yet; `lastSuccess` and `lastFailureCause` are `null`. | `UNDEFINED`
+| `RESOLVED` | The most recent attempt succeeded. | `OK`
+| `FAILED` | The most recent attempt failed and a document is still served within the grace period. | `UNDEFINED`
+| `FAILED` | The most recent attempt failed and nothing can be served. | `ERROR`
+|===
+
+*Logging.* A successful refresh logs at `DEBUG`; the delegate's own discovery `INFO` line therefore
+appears at most once per TTL period. A failure episode is logged once, not per attempt:
+
+* entering it while a document is still servable logs `TokenSheriffClient-115` at `WARN`;
+* the end of the grace period, on the first resolution refused after it, logs
+  `TokenSheriffClient-116` at `WARN`;
+* the first successful refresh after a failure logs `TokenSheriffClient-4` at `INFO`.
+
+A failure cause is logged as its exception class name. A failure message reaches the `DEBUG` log only
+through `LogSanitizer`, and no response body is logged
+(xref:../../LogMessages.adoc[Log messages]).
+
+=== [[_discovery_cache_quarkus]] Quarkus configuration
+
+The `token-sheriff-client-quarkus` extension leaves the cache *off by default*. Without any
+`sheriff.client.discovery-cache.*` property the produced `DiscoveryResolver` bean is the plain
+resolver. Setting `sheriff.client.discovery-cache.enabled=true` makes a `CachingDiscoveryResolver`
+bean available beside it, built around the produced `DiscoveryResolver` and the system clock. An
+application injects that bean explicitly; it is typed to `CachingDiscoveryResolver` only, so it does
+not also satisfy a `LoadingStatusProvider` injection point.
+
+[cols="2,1,1", options="header"]
+|===
+| Property | Type | Default
+
+| `sheriff.client.discovery-cache.enabled` | boolean | `false`
+| `sheriff.client.discovery-cache.ttl` | Duration | none — required when enabled
+| `sheriff.client.discovery-cache.grace-period` | Duration | `PT0S`
+| `sheriff.client.discovery-cache.min-refresh-interval` | Duration | `PT0S`
+| `sheriff.client.discovery-cache.jitter` | Duration | `PT0S`
+|===
+
+An inconsistent configuration fails application startup with an `IllegalStateException` naming the
+property and the fix
+(xref:../../adr/0026-Orphaned_or_unresolvable_extension_configuration_fails_startup_instead_of_being_ignored.adoc[ADR-0026]):
+`ttl`, `grace-period`, `min-refresh-interval` or `jitter` set while `enabled` is not `true` would
+otherwise be silently ignored, and `enabled=true` without a `ttl` has no usable time to live. The
+check runs from a startup observer and reads the configuration only; every client bean stays lazy.
+Injecting `CachingDiscoveryResolver` while the cache is not enabled fails with an
+`IllegalStateException` naming `sheriff.client.discovery-cache.enabled`.
 
 == Adversarial coverage
 
