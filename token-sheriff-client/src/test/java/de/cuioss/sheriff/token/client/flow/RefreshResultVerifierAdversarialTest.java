@@ -77,7 +77,7 @@ class RefreshResultVerifierAdversarialTest {
 
         /** The payload's {@code sub} is swapped for another user's while the original signature is kept. */
         SUBJECT_SUBSTITUTION((holder, subject) -> substituteClaim(holder.getRawToken(), "sub", subject,
-                subject + "-victim")),
+            subject + "-victim")),
 
         /** The payload's {@code iss} is swapped while the original signature is kept. */
         ISSUER_SUBSTITUTION((holder, subject) -> substituteClaim(holder.getRawToken(), "iss",

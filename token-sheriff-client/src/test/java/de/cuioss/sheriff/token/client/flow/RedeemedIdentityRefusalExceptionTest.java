@@ -74,7 +74,7 @@ class RedeemedIdentityRefusalExceptionTest {
 
     @Test
     @DisplayName("Should degrade to rotationUnknown after serialization without carrying the successor")
-    void shouldDegradeAfterSerialization() throws IOException, ClassNotFoundException {
+    void shouldDegradeAfterSerialization() throws Exception {
         String successor = Generators.letterStrings(30, 50).next();
         var carrier = new RedeemedIdentityRefusalException(new IllegalStateException("refused"),
                 RefreshRedemption.rotated(successor));
