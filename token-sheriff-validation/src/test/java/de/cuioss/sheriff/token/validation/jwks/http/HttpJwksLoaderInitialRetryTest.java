@@ -24,34 +24,27 @@ import de.cuioss.test.juli.junit5.EnableTestLogger;
 import de.cuioss.test.mockwebserver.EnableMockWebServer;
 import de.cuioss.test.mockwebserver.URIBuilder;
 import lombok.Getter;
-import mockwebserver3.Dispatcher;
-import mockwebserver3.MockResponse;
-import mockwebserver3.MockWebServer;
-import mockwebserver3.RecordedRequest;
-import okhttp3.Headers;
-import okhttp3.HttpUrl;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Behaviour of the opt-in initial-load retry of {@link HttpJwksLoader}: the backoff sequence and its
- * caps, the stop conditions (first installed key set, terminal {@code ERROR}, {@link HttpJwksLoader#close()}),
- * the shared in-flight guard with the periodic cycle, the status contract while retrying, and the
- * unchanged cadence when the setting is off.
+ * Behaviour of the opt-in initial-load retry of {@link HttpJwksLoader} for a direct JWKS endpoint: the
+ * backoff sequence and its caps, the stop at the first installed key set, the shared in-flight guard with
+ * the periodic cycle, the status contract while retrying, and the unchanged cadence when the setting is off.
+ * The lifecycle stops ({@link HttpJwksLoader#close()}, terminal {@code ERROR}) and the well-known mode are
+ * covered by {@link HttpJwksLoaderInitialRetryLifecycleTest}.
  * <p>
  * Most tests inject a {@link RecordingScheduler}: it records every one-shot attempt with its delay
  * instead of running it, and records the fixed-rate task without letting it fire, so the test runs each
@@ -63,13 +56,10 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("HttpJwksLoader initial-load retry")
 class HttpJwksLoaderInitialRetryTest {
 
-    private static final int LONG_REFRESH_INTERVAL_SECONDS = 3600;
-    private static final String WELL_KNOWN_PATH = "/.well-known/openid-configuration";
-    private static final String WELL_KNOWN_JWKS_PATH = "/jwks.json";
-    private static final String FOREIGN_ISSUER = "https://foreign-issuer.example.com";
+    static final int LONG_REFRESH_INTERVAL_SECONDS = 3600;
 
     /** One attempt per fetch, so every refresh cycle issues exactly one request. */
-    private static final RetryConfig SINGLE_ATTEMPT = RetryConfig.builder()
+    static final RetryConfig SINGLE_ATTEMPT = RetryConfig.builder()
             .maxAttempts(1)
             .initialDelay(Duration.ofMillis(1))
             .maxDelay(Duration.ofMillis(5))
@@ -91,7 +81,7 @@ class HttpJwksLoaderInitialRetryTest {
         scheduler.shutdownNow();
     }
 
-    private static HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder directConfig(URIBuilder uriBuilder,
+    static HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder directConfig(URIBuilder uriBuilder,
             ScheduledExecutorService executor) {
         return HttpJwksLoaderConfig.builder()
                 .allowLoopbackEgress(true)
@@ -103,14 +93,14 @@ class HttpJwksLoaderInitialRetryTest {
                 .scheduledExecutorService(executor);
     }
 
-    private static HttpJwksLoader initializedLoader(HttpJwksLoaderConfig config, LoaderStatus expected) {
+    static HttpJwksLoader initializedLoader(HttpJwksLoaderConfig config, LoaderStatus expected) {
         HttpJwksLoader loader = new HttpJwksLoader(config);
         assertEquals(expected, loader.initJWKSLoader(new SecurityEventCounter()).join(),
                 "unexpected status after the initial load");
         return loader;
     }
 
-    private static List<Duration> seconds(long... values) {
+    static List<Duration> seconds(long... values) {
         return Arrays.stream(values).mapToObj(Duration::ofSeconds).toList();
     }
 
@@ -178,44 +168,6 @@ class HttpJwksLoaderInitialRetryTest {
                 LoaderStatus.OK);
 
         assertTrue(scheduler.getOneShotDelays().isEmpty());
-        loader.close();
-    }
-
-    @Test
-    @DisplayName("close() ends the retries: a pending attempt fetches and schedules nothing")
-    void shouldStopAtClose(URIBuilder uriBuilder) {
-        HttpJwksLoader loader = initializedLoader(directConfig(uriBuilder, scheduler).initialLoadRetry(true).build(),
-                LoaderStatus.UNDEFINED);
-        int afterInit = moduleDispatcher.getRequestCount();
-
-        loader.close();
-        scheduler.runNextOneShot();
-
-        assertAll(
-                () -> assertEquals(afterInit, moduleDispatcher.getRequestCount(), "the closed attempt fetches nothing"),
-                () -> assertEquals(seconds(1), scheduler.getOneShotDelays(), "the closed attempt schedules nothing"),
-                () -> assertEquals(LoaderStatus.UNDEFINED, loader.getLoaderStatus()));
-    }
-
-    @Test
-    @DisplayName("An attempt of a closed generation does not leak into a re-initialized loader")
-    void shouldNotLetClosedGenerationScheduleAttempts(URIBuilder uriBuilder) {
-        HttpJwksLoader loader = initializedLoader(directConfig(uriBuilder, scheduler).initialLoadRetry(true).build(),
-                LoaderStatus.UNDEFINED);
-        loader.close();
-        assertEquals(LoaderStatus.UNDEFINED, loader.initJWKSLoader(new SecurityEventCounter()).join());
-        int afterReInit = moduleDispatcher.getRequestCount();
-
-        scheduler.runNextOneShot();
-
-        assertAll("the old attempt is inert, the new generation's own attempt is still pending",
-                () -> assertEquals(afterReInit, moduleDispatcher.getRequestCount()),
-                () -> assertEquals(seconds(1, 1), scheduler.getOneShotDelays()),
-                () -> assertEquals(1, scheduler.pendingOneShots()));
-        scheduler.runNextOneShot();
-        assertAll("the new generation keeps retrying",
-                () -> assertEquals(afterReInit + 1, moduleDispatcher.getRequestCount()),
-                () -> assertEquals(seconds(1, 1, 2), scheduler.getOneShotDelays()));
         loader.close();
     }
 
@@ -292,90 +244,6 @@ class HttpJwksLoaderInitialRetryTest {
     }
 
     @Test
-    @DisplayName("Well-known mode: a failed initial JWKS fetch is retried until keys are installed")
-    void shouldRetryFailedFetchInWellKnownMode() throws Exception {
-        WellKnownDispatcher dispatcher = new WellKnownDispatcher();
-        dispatcher.setJwksFailing(true);
-        try (MockWebServer server = startServer(dispatcher)) {
-            HttpJwksLoader loader = initializedLoader(wellKnownConfig(server), LoaderStatus.UNDEFINED);
-            scheduler.runNextOneShot();
-            dispatcher.setJwksFailing(false);
-
-            scheduler.runNextOneShot();
-
-            assertAll(
-                    () -> assertEquals(LoaderStatus.OK, loader.getLoaderStatus()),
-                    () -> assertEquals(3, dispatcher.getJwksFetches(), "initial fetch and one per attempt"),
-                    () -> assertEquals(seconds(1, 2), scheduler.getOneShotDelays()),
-                    () -> assertEquals(0, scheduler.pendingOneShots()));
-            loader.close();
-        }
-    }
-
-    @Test
-    @DisplayName("Well-known mode: a rejected re-discovery during the retries ends them in a terminal ERROR")
-    void shouldStopAtTerminalErrorInWellKnownMode() throws Exception {
-        WellKnownDispatcher dispatcher = new WellKnownDispatcher();
-        dispatcher.setDiscovery(WellKnownDispatcher.Discovery.NO_JWKS_URI);
-        try (MockWebServer server = startServer(dispatcher)) {
-            HttpJwksLoader loader = initializedLoader(wellKnownConfig(server), LoaderStatus.UNDEFINED);
-            scheduler.runNextOneShot();
-            assertEquals(LoaderStatus.UNDEFINED, loader.getLoaderStatus(), "an unavailable discovery keeps retrying");
-            dispatcher.setDiscovery(WellKnownDispatcher.Discovery.FOREIGN_ISSUER);
-
-            scheduler.runNextOneShot();
-
-            assertAll("terminal ERROR, nothing scheduled any more",
-                    () -> assertEquals(LoaderStatus.ERROR, loader.getLoaderStatus()),
-                    () -> assertFalse(loader.isBackgroundRefreshActive(), "the periodic task is cancelled"),
-                    () -> assertEquals(seconds(1, 2), scheduler.getOneShotDelays()),
-                    () -> assertEquals(0, scheduler.pendingOneShots()),
-                    () -> assertEquals(0, dispatcher.getJwksFetches(), "no JWKS was ever fetched"));
-            loader.close();
-        }
-    }
-
-    @Test
-    @DisplayName("Well-known mode: a terminal rejection at initialization schedules no attempt")
-    void shouldNotRetryTerminalRejectionAtInitialization() throws Exception {
-        WellKnownDispatcher dispatcher = new WellKnownDispatcher();
-        dispatcher.setDiscovery(WellKnownDispatcher.Discovery.FOREIGN_ISSUER);
-        try (MockWebServer server = startServer(dispatcher)) {
-            HttpJwksLoader loader = initializedLoader(wellKnownConfig(server), LoaderStatus.ERROR);
-
-            assertAll(
-                    () -> assertTrue(scheduler.getOneShotDelays().isEmpty()),
-                    () -> assertEquals(0, dispatcher.getJwksFetches(), "no JWKS was fetched"));
-            loader.close();
-        }
-    }
-
-    @Test
-    @DisplayName("A pending attempt runs no cycle once a periodic cycle reached the terminal ERROR")
-    void shouldNotRunPendingAttemptAfterTerminalError() throws Exception {
-        WellKnownDispatcher dispatcher = new WellKnownDispatcher();
-        dispatcher.setDiscovery(WellKnownDispatcher.Discovery.NO_JWKS_URI);
-        try (MockWebServer server = startServer(dispatcher)) {
-            HttpJwksLoader loader = initializedLoader(wellKnownConfig(server), LoaderStatus.UNDEFINED);
-            dispatcher.setDiscovery(WellKnownDispatcher.Discovery.FOREIGN_ISSUER);
-            scheduler.getPeriodicTask().run();
-            assertEquals(LoaderStatus.ERROR, loader.getLoaderStatus(), "the periodic cycle's rejection is terminal");
-            int discoveriesAtError = dispatcher.getDiscoveryFetches();
-
-            assertTrue(scheduler.runNextOneShot(), "the attempt scheduled at initialization was still pending");
-
-            assertAll("the pending attempt is inert",
-                    () -> assertEquals(discoveriesAtError, dispatcher.getDiscoveryFetches(),
-                            "the discovery is not repeated"),
-                    () -> assertEquals(0, dispatcher.getJwksFetches(), "no JWKS was fetched"),
-                    () -> assertEquals(LoaderStatus.ERROR, loader.getLoaderStatus()),
-                    () -> assertEquals(seconds(1), scheduler.getOneShotDelays(), "no successor is scheduled"),
-                    () -> assertEquals(0, scheduler.pendingOneShots()));
-            loader.close();
-        }
-    }
-
-    @Test
     @DisplayName("A pending attempt runs no cycle once a periodic cycle installed keys")
     void shouldNotRunPendingAttemptAfterKeysInstalled(URIBuilder uriBuilder) {
         HttpJwksLoader loader = initializedLoader(directConfig(uriBuilder, scheduler).initialLoadRetry(true).build(),
@@ -395,56 +263,13 @@ class HttpJwksLoaderInitialRetryTest {
         loader.close();
     }
 
-    @Test
-    @DisplayName("Well-known mode: a pending attempt of a closed loader repeats no discovery")
-    void shouldNotRediscoverInPendingAttemptAfterClose() throws Exception {
-        WellKnownDispatcher dispatcher = new WellKnownDispatcher();
-        dispatcher.setDiscovery(WellKnownDispatcher.Discovery.NO_JWKS_URI);
-        try (MockWebServer server = startServer(dispatcher)) {
-            HttpJwksLoader loader = initializedLoader(wellKnownConfig(server), LoaderStatus.UNDEFINED);
-            int discoveriesAtClose = dispatcher.getDiscoveryFetches();
-            loader.close();
-
-            assertTrue(scheduler.runNextOneShot(), "the attempt scheduled at initialization was still pending");
-
-            assertAll("the pending attempt is inert",
-                    () -> assertEquals(discoveriesAtClose, dispatcher.getDiscoveryFetches(),
-                            "the discovery is not repeated"),
-                    () -> assertEquals(0, dispatcher.getJwksFetches(), "no JWKS was fetched"),
-                    () -> assertEquals(LoaderStatus.UNDEFINED, loader.getLoaderStatus()),
-                    () -> assertEquals(seconds(1), scheduler.getOneShotDelays(), "no successor is scheduled"),
-                    () -> assertEquals(0, scheduler.pendingOneShots()));
-        }
-    }
-
-    private static MockWebServer startServer(WellKnownDispatcher dispatcher) throws IOException {
-        MockWebServer server = new MockWebServer();
-        server.setDispatcher(dispatcher);
-        server.start();
-        return server;
-    }
-
-    private HttpJwksLoaderConfig wellKnownConfig(MockWebServer server) {
-        String serverUrl = server.url("/").toString();
-        return HttpJwksLoaderConfig.builder()
-                .allowLoopbackEgress(true)
-                .allowInsecureHttp(true)
-                .wellKnownUrl(server.url(WELL_KNOWN_PATH).toString())
-                .issuerIdentifier(serverUrl.substring(0, serverUrl.length() - 1))
-                .retryConfig(SINGLE_ATTEMPT)
-                .refreshIntervalSeconds(LONG_REFRESH_INTERVAL_SECONDS)
-                .scheduledExecutorService(scheduler)
-                .initialLoadRetry(true)
-                .build();
-    }
-
     /**
      * Scheduler that records instead of running: a one-shot task with a positive delay (an initial-load
      * retry attempt) is queued with its delay until the test runs it, and the fixed-rate task is recorded
      * together with its period while a placeholder that never fires keeps the periodic task observable as
-     * scheduled. Tasks without a delay run as usual.
+     * scheduled. Tasks without a delay run as usual. Shared with {@link HttpJwksLoaderInitialRetryLifecycleTest}.
      */
-    private static final class RecordingScheduler extends ScheduledThreadPoolExecutor {
+    static final class RecordingScheduler extends ScheduledThreadPoolExecutor {
 
         @Getter
         private final List<Duration> oneShotDelays = new CopyOnWriteArrayList<>();
@@ -499,73 +324,6 @@ class HttpJwksLoaderInitialRetryTest {
             Runnable task = periodicTask;
             assertNotNull(task, "the periodic task must have been scheduled");
             return task;
-        }
-    }
-
-    /**
-     * Well-known endpoint whose discovery document can advertise a matching issuer, a foreign issuer or no
-     * {@code jwks_uri} at all (an unavailable discovery), and whose JWKS endpoint can fail with HTTP 500.
-     * Discovery requests and JWKS fetches are counted.
-     */
-    private static final class WellKnownDispatcher extends Dispatcher {
-
-        enum Discovery {
-            MATCHING, NO_JWKS_URI, FOREIGN_ISSUER
-        }
-
-        private final AtomicInteger discoveryFetches = new AtomicInteger();
-        private final AtomicInteger jwksFetches = new AtomicInteger();
-        private volatile Discovery discovery = Discovery.MATCHING;
-        private volatile boolean jwksFailing;
-
-        void setDiscovery(Discovery discovery) {
-            this.discovery = discovery;
-        }
-
-        void setJwksFailing(boolean jwksFailing) {
-            this.jwksFailing = jwksFailing;
-        }
-
-        int getJwksFetches() {
-            return jwksFetches.get();
-        }
-
-        int getDiscoveryFetches() {
-            return discoveryFetches.get();
-        }
-
-        @Override
-        public MockResponse dispatch(RecordedRequest request) {
-            HttpUrl url = request.getUrl();
-            String path = url.encodedPath();
-            Headers json = Headers.of("Content-Type", "application/json");
-            if (WELL_KNOWN_PATH.equals(path)) {
-                discoveryFetches.incrementAndGet();
-                String baseUrl = url.newBuilder().encodedPath("/").build().toString();
-                String serverIssuer = baseUrl.substring(0, baseUrl.length() - 1);
-                String jwksUri = serverIssuer + WELL_KNOWN_JWKS_PATH;
-                return new MockResponse(200, json, switch (discovery) {
-                    case MATCHING -> document(serverIssuer, jwksUri);
-                    case FOREIGN_ISSUER -> document(FOREIGN_ISSUER, jwksUri);
-                    case NO_JWKS_URI -> "{\"issuer\": \"%s\"}".formatted(serverIssuer);
-                });
-            }
-            if (WELL_KNOWN_JWKS_PATH.equals(path)) {
-                jwksFetches.incrementAndGet();
-                return jwksFailing
-                        ? new MockResponse(500, Headers.of(), "")
-                        : new MockResponse(200, json, InMemoryJWKSFactory.createDefaultJwks());
-            }
-            return new MockResponse(404, Headers.of(), "");
-        }
-
-        private static String document(String issuer, String jwksUri) {
-            return """
-                    {
-                      "issuer": "%s",
-                      "jwks_uri": "%s"
-                    }
-                    """.formatted(issuer, jwksUri);
         }
     }
 }
