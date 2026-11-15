@@ -255,6 +255,11 @@ class UncheckedThrowBoundaryTest {
                     CALLER_INPUT_CONTRACT + " — refuses a challenge beyond the client parser's scope-count"
                             + " and length bounds"),
 
+            // --- commons sanitiser, argument contract on a caller constant ---
+            Map.entry("de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer#escapeNonPrintableAscii",
+                    "outside the validation call: refuses a negative maxLength, a caller-chosen constant;"
+                            + " no create*Token call stack invokes this form"),
+
             // --- dual-use utility, unreachable from the request path ---
             Map.entry("de.cuioss.sheriff.token.validation.util.JwkThumbprintUtil#canonicalJson",
                     "dual-use and unreachable from the request path: construction-time for the client's"
