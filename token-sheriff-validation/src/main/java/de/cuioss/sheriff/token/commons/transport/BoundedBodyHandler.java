@@ -15,11 +15,11 @@
  */
 package de.cuioss.sheriff.token.commons.transport;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.OptionalLong;
@@ -46,9 +46,8 @@ import java.util.concurrent.Flow;
  *   <li>{@link OverLimitPolicy#TRUNCATE} — keep the prefix. The advertised {@code Content-Length} is not
  *       checked; the body is read up to the ceiling, the subscription is cancelled at the first crossing,
  *       and the result holds exactly the first {@code maxBytes} bytes with
- *       {@link BoundedBody#truncated()} {@code true}. No byte past the ceiling is delivered; while
- *       reading, the delivered bytes sit in one growing buffer whose backing array can briefly reach
- *       about twice their count, and the result holds one further copy.</li>
+ *       {@link BoundedBody#truncated()} {@code true}. No byte past the ceiling is delivered; at most the
+ *       ceiling plus the one in-flight chunk is held while reading.</li>
  * </ul>
  * Chunks that arrive after the first crossing are ignored under both policies. The handlers log
  * nothing; an over-limit body never becomes an {@code OutOfMemoryError}.
@@ -257,9 +256,7 @@ public final class BoundedBodyHandler {
         private final OverLimitPolicy policy;
         private final String boundOrigin;
         private final CompletableFuture<BoundedBody> result = new CompletableFuture<>();
-        // One growable buffer, not one array per delivered ByteBuffer: a body of one-byte chunks must not
-        // cost one object per payload byte, which the byte ceiling alone does not bound
-        private final ByteArrayOutputStream chunks = new ByteArrayOutputStream();
+        private final List<byte[]> chunks = new ArrayList<>();
         private long total;
         private Flow.Subscription subscription;
 
@@ -296,7 +293,7 @@ public final class BoundedBodyHandler {
                     onCrossing(buffer);
                     return;
                 }
-                chunks.writeBytes(read(buffer, remaining));
+                chunks.add(read(buffer, remaining));
                 total += remaining;
             }
         }
@@ -304,13 +301,13 @@ public final class BoundedBodyHandler {
         private void onCrossing(ByteBuffer buffer) {
             subscription.cancel();
             if (policy == OverLimitPolicy.TRUNCATE) {
-                chunks.writeBytes(read(buffer, (int) (maxBytes - total)));
+                chunks.add(read(buffer, (int) (maxBytes - total)));
                 total = maxBytes;
-                result.complete(new BoundedBody(chunks.toByteArray(), true));
+                result.complete(new BoundedBody(assemble(), true));
             } else {
                 result.completeExceptionally(new IOException(overLimitMessage(maxBytes, boundOrigin)));
             }
-            chunks.reset();
+            chunks.clear();
         }
 
         private static byte[] read(ByteBuffer buffer, int length) {
@@ -319,9 +316,19 @@ public final class BoundedBodyHandler {
             return chunk;
         }
 
+        private byte[] assemble() {
+            byte[] all = new byte[(int) total];
+            int position = 0;
+            for (byte[] chunk : chunks) {
+                System.arraycopy(chunk, 0, all, position, chunk.length);
+                position += chunk.length;
+            }
+            return all;
+        }
+
         @Override
         public void onError(Throwable throwable) {
-            chunks.reset();
+            chunks.clear();
             result.completeExceptionally(throwable);
         }
 
@@ -330,8 +337,8 @@ public final class BoundedBodyHandler {
             if (result.isDone()) {
                 return;
             }
-            result.complete(new BoundedBody(chunks.toByteArray(), false));
-            chunks.reset();
+            result.complete(new BoundedBody(assemble(), false));
+            chunks.clear();
         }
     }
 }
