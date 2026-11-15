@@ -876,6 +876,14 @@ public class HttpJwksLoaderConfig {
 
         /**
          * Sets the ScheduledExecutorService for background refresh operations.
+         * <p>
+         * <strong>Requirement on a caller-supplied executor:</strong> it must run or reject every task it
+         * accepts. The loader serialises its periodic refresh, the initial-load retries and the
+         * {@linkplain #unknownKidRefreshWindow(Duration) unknown-{@code kid} fetch} through one in-flight
+         * guard. The unknown-{@code kid} fetch takes that guard before it is handed to the executor and
+         * releases it only when the task runs. A rejection, or any other failure of the hand-off, releases
+         * the guard at once; a task the executor accepts and then silently discards leaves the guard held,
+         * so every later periodic fetch is skipped and no unknown-{@code kid} fetch is scheduled again.
          *
          * @param scheduledExecutorService the executor service to use
          * @return this builder instance
@@ -936,7 +944,11 @@ public class HttpJwksLoaderConfig {
          * no point in time is guaranteed by which a rotated key is available.
          * <p>
          * The fetch runs on the loader's background refresh executor, so {@link #build()} rejects this
-         * setting combined with {@link #refreshIntervalSeconds(int) refreshIntervalSeconds(0)}.
+         * setting combined with {@link #refreshIntervalSeconds(int) refreshIntervalSeconds(0)}. A
+         * {@linkplain #scheduledExecutorService(ScheduledExecutorService) caller-supplied executor} must run
+         * or reject every task it accepts: the fetch holds the loader's in-flight guard until it runs, so a
+         * task the executor silently discards leaves the guard held and no further unknown-{@code kid}
+         * fetch is scheduled. A rejected hand-off releases the guard and never throws on the lookup.
          *
          * @param unknownKidRefreshWindow the window, from {@link #MIN_UNKNOWN_KID_REFRESH_WINDOW 5 seconds}
          *                                to {@link #MAX_UNKNOWN_KID_REFRESH_WINDOW 3600 seconds} inclusive
