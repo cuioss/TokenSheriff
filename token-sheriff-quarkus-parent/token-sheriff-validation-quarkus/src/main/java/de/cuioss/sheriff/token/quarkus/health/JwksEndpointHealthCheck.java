@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.quarkus.health;
 
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
 import de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys;
 import de.cuioss.sheriff.token.quarkus.observability.ObservedValidatorResolver;
@@ -205,7 +206,7 @@ public class JwksEndpointHealthCheck implements HealthCheck {
 
                 return new EndpointResult(issuer, jwksLoader.getJwksType().toString(), status);
             } catch (IllegalStateException | IllegalArgumentException e) {
-                LOGGER.warn(e, WARN.ERROR_CHECKING_JWKS_LOADER, issuer, e.getMessage());
+                logLoaderCheckFailure(issuer, e);
                 return new EndpointResult(issuer, "none", LoaderStatus.ERROR);
             }
         }
@@ -224,9 +225,22 @@ public class JwksEndpointHealthCheck implements HealthCheck {
                 LOGGER.debug("JWKS loader status for issuer %s: %s", issuer, status);
                 return new EndpointResult(issuer, view.jwksType().toString(), status);
             } catch (IllegalStateException | IllegalArgumentException e) {
-                LOGGER.warn(e, WARN.ERROR_CHECKING_JWKS_LOADER, issuer, e.getMessage());
+                logLoaderCheckFailure(issuer, e);
                 return new EndpointResult(issuer, "none", LoaderStatus.ERROR);
             }
+        }
+
+        /**
+         * Logs a failed loader check. The issuer identifier and the exception message may carry loader or
+         * configuration text, so both pass through {@link ErrorTextSanitizer}, and the exception object is not
+         * attached: its stack trace would print the same message raw (CWE-117).
+         *
+         * @param issuer the issuer whose loader check failed
+         * @param e      the exception the check raised
+         */
+        private static void logLoaderCheckFailure(String issuer, RuntimeException e) {
+            LOGGER.warn(WARN.ERROR_CHECKING_JWKS_LOADER, ErrorTextSanitizer.sanitize(issuer),
+                    ErrorTextSanitizer.sanitize(e.getMessage()));
         }
 
         /**
