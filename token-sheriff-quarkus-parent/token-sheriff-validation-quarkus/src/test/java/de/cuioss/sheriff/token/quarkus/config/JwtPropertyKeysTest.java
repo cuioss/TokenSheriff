@@ -28,6 +28,29 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("JwtPropertyKeys")
 class JwtPropertyKeysTest {
 
+    /**
+     * Every {@code public static final String} key template that {@link JwtPropertyKeys.ISSUERS} declares
+     * under {@code base}, the base template itself excluded.
+     */
+    private static Set<String> declaredIssuerKeysUnder(String base) {
+        Set<String> keys = new TreeSet<>();
+        for (Field field : JwtPropertyKeys.ISSUERS.class.getFields()) {
+            int modifiers = field.getModifiers();
+            if (!Modifier.isStatic(modifiers) || !Modifier.isFinal(modifiers) || field.getType() != String.class) {
+                continue;
+            }
+            try {
+                String value = (String) field.get(null);
+                if (value.startsWith(base) && !base.equals(value)) {
+                    keys.add(value);
+                }
+            } catch (IllegalAccessException e) {
+                throw new IllegalStateException("Cannot read public constant " + field.getName(), e);
+            }
+        }
+        return keys;
+    }
+
     @Nested
     @DisplayName("Base Properties")
     class BaseProperties {
@@ -201,23 +224,7 @@ class JwtPropertyKeysTest {
          * under {@link JwtPropertyKeys.ISSUERS#HTTP_BASE}, the base template itself excluded.
          */
         private static Set<String> declaredHttpKeys() {
-            Set<String> keys = new TreeSet<>();
-            for (Field field : JwtPropertyKeys.ISSUERS.class.getFields()) {
-                int modifiers = field.getModifiers();
-                if (!Modifier.isStatic(modifiers) || !Modifier.isFinal(modifiers) || field.getType() != String.class) {
-                    continue;
-                }
-                try {
-                    String value = (String) field.get(null);
-                    if (value.startsWith(JwtPropertyKeys.ISSUERS.HTTP_BASE)
-                            && !JwtPropertyKeys.ISSUERS.HTTP_BASE.equals(value)) {
-                        keys.add(value);
-                    }
-                } catch (IllegalAccessException e) {
-                    throw new IllegalStateException("Cannot read public constant " + field.getName(), e);
-                }
-            }
-            return keys;
+            return declaredIssuerKeysUnder(JwtPropertyKeys.ISSUERS.HTTP_BASE);
         }
 
         /**
@@ -294,6 +301,83 @@ class JwtPropertyKeysTest {
 
             assertEquals(List.of(newKey), unclassified(declared),
                     "A jwks.http key outside both sets must be reported as unclassified");
+        }
+    }
+
+    /**
+     * Guards {@link JwtPropertyKeys.ISSUERS#DPOP_SUB_PROPERTIES} against drift from the key definitions.
+     * <p>
+     * The population is derived from the {@code public static final String} templates that
+     * {@link JwtPropertyKeys.ISSUERS} declares under {@link JwtPropertyKeys.ISSUERS#DPOP_BASE}, not repeated
+     * here. Every such key other than {@link JwtPropertyKeys.ISSUERS#DPOP_ENABLED} only takes effect while
+     * DPoP is enabled and must therefore be listed, so an orphaned value fails startup. A newly added
+     * {@code dpop.*} key fails this guard until it is listed.
+     * </p>
+     */
+    @Nested
+    @DisplayName("DPoP sub-property list")
+    class DpopSubPropertyList {
+
+        /**
+         * Every {@code public static final String} key template that {@link JwtPropertyKeys.ISSUERS} declares
+         * under {@link JwtPropertyKeys.ISSUERS#DPOP_BASE}, the base template itself excluded.
+         */
+        private static Set<String> declaredDpopKeys() {
+            return declaredIssuerKeysUnder(JwtPropertyKeys.ISSUERS.DPOP_BASE);
+        }
+
+        /**
+         * The keys of {@code declared}, {@link JwtPropertyKeys.ISSUERS#DPOP_ENABLED} excluded, that are not
+         * listed in {@link JwtPropertyKeys.ISSUERS#DPOP_SUB_PROPERTIES}.
+         */
+        private static List<String> unlisted(Collection<String> declared) {
+            List<String> result = new ArrayList<>();
+            for (String key : declared) {
+                if (!JwtPropertyKeys.ISSUERS.DPOP_ENABLED.equals(key)
+                        && !JwtPropertyKeys.ISSUERS.DPOP_SUB_PROPERTIES.contains(key)) {
+                    result.add(key);
+                }
+            }
+            return result;
+        }
+
+        @Test
+        @DisplayName("should derive a dpop key population holding the enabled switch and every listed sub-property")
+        void shouldDeriveNonEmptyPopulation() {
+            Set<String> declared = declaredDpopKeys();
+
+            assertAll("Derived dpop population",
+                    () -> assertTrue(declared.contains(JwtPropertyKeys.ISSUERS.DPOP_ENABLED),
+                            "The derived population must contain the enabled switch: " + declared),
+                    () -> assertTrue(declared.containsAll(JwtPropertyKeys.ISSUERS.DPOP_SUB_PROPERTIES),
+                            "The derived population must contain every listed sub-property: " + declared));
+        }
+
+        @Test
+        @DisplayName("should list exactly the declared dpop keys other than the enabled switch, each once")
+        void shouldListEveryDeclaredDpopSubProperty() {
+            Set<String> expected = new TreeSet<>(declaredDpopKeys());
+            expected.remove(JwtPropertyKeys.ISSUERS.DPOP_ENABLED);
+            List<String> listed = JwtPropertyKeys.ISSUERS.DPOP_SUB_PROPERTIES;
+
+            assertAll("DPoP sub-property list content",
+                    () -> assertEquals(listed.size(), Set.copyOf(listed).size(),
+                            "The DPoP sub-property list must not repeat a key: " + listed),
+                    () -> assertEquals(expected, new TreeSet<>(listed),
+                            "Every dpop key other than the enabled switch must be listed in "
+                                    + "JwtPropertyKeys.ISSUERS.DPOP_SUB_PROPERTIES, and nothing else; unlisted: "
+                                    + unlisted(declaredDpopKeys())));
+        }
+
+        @Test
+        @DisplayName("should report a newly added dpop key that is not listed")
+        void shouldReportUnlistedNewKey() {
+            String newKey = JwtPropertyKeys.ISSUERS.DPOP_BASE + "some-new-setting";
+            Set<String> declared = new TreeSet<>(declaredDpopKeys());
+            declared.add(newKey);
+
+            assertEquals(List.of(newKey), unlisted(declared),
+                    "A dpop key missing from the sub-property list must be reported as unlisted");
         }
     }
 
