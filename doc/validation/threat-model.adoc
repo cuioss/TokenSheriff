@@ -366,7 +366,7 @@ _See Requirement xref:requirements.adoc#VALIDATION-13[VALIDATION-13: Public Vali
 |PS1
 |Misuse of a signature-only result as an authentication decision
 |`TokenValidator.verifySignature` returns a link:../../token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/domain/token/SignatureVerifiedToken.java[SignatureVerifiedToken] that implements neither `TokenContent` nor `MinimalTokenContent`, so it cannot reach code that accepts a validated token and is never cached; the missing claim verdict and the unchecked `typ` are stated once in xref:security-reference.adoc#signature-only-verification[Signature-Only Verification]. A caller that reads claims from it without checking them remains possible and is the residual risk
-|link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/TokenValidatorVerifySignatureTest.java[TokenValidatorVerifySignatureTest], link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/TokenValidatorVerifySignatureAttackTest.java[TokenValidatorVerifySignatureAttackTest]
+|link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/TokenValidatorVerifySignatureTest.java[TokenValidatorVerifySignatureTest], link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/TokenValidatorVerifySignatureHeaderTest.java[TokenValidatorVerifySignatureHeaderTest], link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/TokenValidatorVerifySignatureAttackTest.java[TokenValidatorVerifySignatureAttackTest]
 
 |PS2
 |Issuer disclosure through the JWKS readiness probe
@@ -376,7 +376,7 @@ _See Requirement xref:requirements.adoc#VALIDATION-13[VALIDATION-13: Public Vali
 |PS3
 |Logout-token replay
 |The `jti` of each admitted logout token is kept as a SHA-256 digest in link:../../token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/logout/LogoutTokenReplayGuard.java[LogoutTokenReplayGuard] until `iat` plus the freshness window; a retained `jti` is refused as `REPLAYED`, and a token past that instant is refused by the `iat` check
-|link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/logout/LogoutTokenValidatorTest.java[LogoutTokenValidatorTest], link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/logout/LogoutTokenReplayGuardTest.java[LogoutTokenReplayGuardTest]
+|link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/logout/LogoutTokenValidatorReplayTest.java[LogoutTokenValidatorReplayTest], link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/logout/LogoutTokenReplayGuardTest.java[LogoutTokenReplayGuardTest]
 
 |PS4
 |Forged or cross-type logout token (for example an ID token presented as a logout token)
@@ -386,7 +386,7 @@ _See Requirement xref:requirements.adoc#VALIDATION-13[VALIDATION-13: Public Vali
 |PS5
 |Replay-guard exhaustion
 |The guard is bounded and fails closed: at capacity a new logout token is refused as `REPLAY_GUARD_FULL` rather than a live entry evicted, so exhaustion denies new logouts but never re-opens a replay. Expired entries are purged on every admission, and the guard is consulted last, so a token refused by any other check takes no capacity. Size the capacity above the number of logout tokens an issuer can send within twice the freshness window
-|link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/logout/LogoutTokenReplayGuardTest.java[LogoutTokenReplayGuardTest], link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/logout/LogoutTokenValidatorTest.java[LogoutTokenValidatorTest]
+|link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/logout/LogoutTokenReplayGuardTest.java[LogoutTokenReplayGuardTest], link:../../token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/logout/LogoutTokenValidatorReplayTest.java[LogoutTokenValidatorReplayTest]
 |===
 
 ==== Open Recommendations

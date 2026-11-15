@@ -56,7 +56,8 @@ Package prefix: `de.cuioss.sheriff.token`.
 `TokenValidatorIssuerStatusTest`, `TokenValidatorJweTest`, `TokenValidatorMetricsTest`,
 `TokenValidatorMetricsVerificationTest`, `TokenValidatorPerformanceIntegrationTest`,
 `TokenValidatorSecurityEventTest`, `TokenValidatorTest`,
-`TokenValidatorVerifySignatureAttackTest`, `TokenValidatorVerifySignatureTest`
+`TokenValidatorVerifySignatureAttackTest`, `TokenValidatorVerifySignatureHeaderTest`,
+`TokenValidatorVerifySignatureTest`
 
 |`validation.cache`
 |`AccessTokenCacheConfigTest`, `AccessTokenCacheTest`
@@ -113,7 +114,7 @@ Package prefix: `de.cuioss.sheriff.token`.
 `KeyProcessorTest`
 
 |`validation.logout`
-|`LogoutTokenReplayGuardTest`, `LogoutTokenValidatorTest`
+|`LogoutTokenReplayGuardTest`, `LogoutTokenValidatorReplayTest`, `LogoutTokenValidatorTest`
 
 |`validation.metrics`
 |`MeasurementTypeTest`, `MetricsTickerFactoryTest`, `TokenValidatorMonitorTest`
@@ -157,7 +158,7 @@ tests check that infrastructure, not production code: `InMemoryKeyHandlingTest`,
 Fixtures that are not test classes: `BoundedBodyHandlerTestSupport` (`commons.transport`),
 `DiscoveryGenerationDispatcher` and `UnknownKidJwksDispatcher` (`validation.jwks.http`),
 `DpopProofValidatorSupport` (`validation.dpop`), `JwksLoaderKeyIdsContractSupport`
-(`validation.jwks`) and `JsonTypedIdentifierClaimFixture` (`validation.pipeline.validator`).
+(`validation.jwks`), `LogoutTokenValidatorSupport` (`validation.logout`) and `JsonTypedIdentifierClaimFixture` (`validation.pipeline.validator`).
 
 [#client]
 == token-sheriff-client
