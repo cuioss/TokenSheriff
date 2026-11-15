@@ -46,8 +46,9 @@ import java.util.concurrent.Flow;
  *   <li>{@link OverLimitPolicy#TRUNCATE} — keep the prefix. The advertised {@code Content-Length} is not
  *       checked; the body is read up to the ceiling, the subscription is cancelled at the first crossing,
  *       and the result holds exactly the first {@code maxBytes} bytes with
- *       {@link BoundedBody#truncated()} {@code true}. No byte past the ceiling is delivered; at most the
- *       ceiling plus the one in-flight chunk is held while reading.</li>
+ *       {@link BoundedBody#truncated()} {@code true}. No byte past the ceiling is delivered; while
+ *       reading, the delivered bytes sit in one growing buffer whose backing array can briefly reach
+ *       about twice their count, and the result holds one further copy.</li>
  * </ul>
  * Chunks that arrive after the first crossing are ignored under both policies. The handlers log
  * nothing; an over-limit body never becomes an {@code OutOfMemoryError}.

@@ -158,7 +158,8 @@ Each change below alters what an existing deployment observes:
 
 * **OD-1** — a lower-case or mixed-case scheme (`bearer abc`, `BEARER abc`) is now a presented token. Before,
   it was treated as no token at all.
-* **OD-2** — leading and trailing whitespace of the `Authorization` value is now ignored. A tab after the
+* **OD-2** — leading and trailing whitespace of the `Authorization` value is now ignored, and several spaces
+  between the scheme and the token are accepted. A tab after the
   scheme is not `Bearer` credentials, so it is treated as no token (the cookie fallback applies when
   configured). A token holding an internal space or a control character is now answered 400
   `INVALID_REQUEST` and the cookie is not consulted; before, it reached the validator and was answered 401
@@ -169,6 +170,9 @@ Each change below alters what an existing deployment observes:
   `QuoteEscaping` expectations of `BearerTokenResponseFactoryTest` changed accordingly: a scope name holding
   `"` is refused, scope names holding a backslash, a space or a non-ASCII letter are refused, and a backslash
   in a role or group is escaped.
+* **Quoted blank cookie** — when the token is read from a cookie, a quoted cookie value holding only
+  whitespace (for example `Bearer="   "`) is now treated as no token. Before, the quotes were stripped and
+  the remaining blank value passed the emptiness check.
 * **Scope order** — the scopes of the challenge are now written in sorted order, with duplicates collapsed,
   independent of the iteration order of the required-scope set. For scope names inside the grammar the
   challenge is otherwise byte-identical to the previous one.

@@ -245,7 +245,7 @@ class UncheckedThrowBoundaryTest {
                             + " claim is validated through getClaimOption, not this accessor"),
 
             // --- commons HTTP helper, called by an integration to answer a request ---
-            Map.entry("de.cuioss.sheriff.token.commons.http.BearerChallenge#checkQuotable",
+            Map.entry("de.cuioss.sheriff.token.commons.http.BearerChallenge$Builder#checkQuotable",
                     CALLER_INPUT_CONTRACT + " — refuses a realm or error_description that would split the"
                             + " WWW-Authenticate header"),
             Map.entry("de.cuioss.sheriff.token.commons.http.BearerChallenge$Builder#scope",
