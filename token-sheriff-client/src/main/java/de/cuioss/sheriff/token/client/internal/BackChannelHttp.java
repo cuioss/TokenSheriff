@@ -23,6 +23,7 @@ import de.cuioss.http.security.monitoring.SecurityEventCounter;
 import de.cuioss.http.security.pipeline.PipelineFactory;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.commons.error.TransportException;
+import de.cuioss.sheriff.token.commons.transport.BoundedBodyHandler;
 import de.cuioss.sheriff.token.commons.transport.EgressPolicy;
 import de.cuioss.tools.logging.CuiLogger;
 import org.jspecify.annotations.Nullable;
@@ -31,6 +32,7 @@ import javax.net.ssl.SSLContext;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -94,9 +96,11 @@ import java.util.concurrent.ConcurrentMap;
  *   <li><strong>Configurable timeouts (L15):</strong> connect / read timeouts are read from
  *       {@link ClientConfiguration}, not hardcoded per client.</li>
  *   <li><strong>Bounded body reads (M7):</strong> {@link #bodyHandler()} enforces the payload ceiling
- *       during the read via {@link BoundedContentBodyHandler}. The ceiling's provenance travels with
- *       the failure: each construction site supplies a {@code boundOrigin} descriptor naming the knob
- *       that set the bound and whether it is settable, and the over-limit message reports it.</li>
+ *       during the read via the commons {@link BoundedBodyHandler}: a response advertising a
+ *       {@code Content-Length} above the ceiling fails before any byte is read, and a body that crosses
+ *       the ceiling while streaming fails at the crossing. The ceiling's provenance travels with the
+ *       failure: each construction site supplies a {@code boundOrigin} descriptor naming the knob that
+ *       set the bound and whether it is settable, and the over-limit message reports it.</li>
  * </ul>
  *
  * @since 1.0
@@ -326,6 +330,6 @@ public final class BackChannelHttp {
      * @return a bounded body handler that enforces the configured payload ceiling during the read (M7)
      */
     public HttpResponse.BodyHandler<String> bodyHandler() {
-        return BoundedContentBodyHandler.of(maxContentSize, boundOrigin);
+        return BoundedBodyHandler.ofString(StandardCharsets.UTF_8, maxContentSize, boundOrigin);
     }
 }

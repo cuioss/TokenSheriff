@@ -18,8 +18,8 @@
  * <p>
  * These types are implementation details of the client engine, not part of its public API:
  * {@link de.cuioss.sheriff.token.client.internal.BackChannelHttp} centralises the shared back-channel
- * egress/SSRF and TLS controls; {@link de.cuioss.sheriff.token.client.internal.BoundedContentBodyHandler}
- * enforces the response payload ceiling during the read;
+ * egress/SSRF and TLS controls and bounds every response read through the commons
+ * {@link de.cuioss.sheriff.token.commons.transport.BoundedBodyHandler};
  * {@link de.cuioss.sheriff.token.client.internal.FormEncoder} and
  * {@link de.cuioss.sheriff.token.client.internal.JsonEscaper} handle request/response encoding; and
  * {@link de.cuioss.sheriff.token.client.internal.LogSanitizer} neutralizes externally-sourced values
