@@ -18,9 +18,12 @@ package de.cuioss.sheriff.token.client.lifecycle;
 import de.cuioss.sheriff.token.client.auth.ClientAuthentication;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
 import de.cuioss.sheriff.token.client.dpop.ConstraintBinding;
+import de.cuioss.sheriff.token.client.flow.RedeemedIdentityRefusalException;
+import de.cuioss.sheriff.token.client.flow.RedeemedValidationRefusalException;
 import de.cuioss.sheriff.token.client.flow.RefreshFailureClassification;
 import de.cuioss.sheriff.token.client.flow.RefreshFlow;
 import de.cuioss.sheriff.token.client.flow.RefreshRedemption;
+import de.cuioss.sheriff.token.client.flow.RefreshResultVerifier;
 import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
 import de.cuioss.sheriff.token.client.token.IdTokenValidationBridge;
 import de.cuioss.sheriff.token.client.token.RefreshTokenFamily;
@@ -29,8 +32,6 @@ import de.cuioss.sheriff.token.client.token.RotationResult;
 import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
 import de.cuioss.sheriff.token.commons.error.TokenSheriffException;
 import de.cuioss.sheriff.token.commons.error.TransportException;
-import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
-import de.cuioss.sheriff.token.validation.domain.token.IdTokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
 import de.cuioss.tools.logging.CuiLogger;
 import org.jspecify.annotations.Nullable;
@@ -134,10 +135,10 @@ import java.util.concurrent.locks.ReentrantLock;
  * fail-closed ({@code CLIENT-5}). A
  * per-session single-flight collapses a concurrent proactive refresh onto one in-flight rotation, so
  * a benign race never redeems the same token twice and self-classifies as reuse. A refreshed ID token
- * is validated through the token-validation pipeline (signature, {@code iss}, {@code aud},
- * {@code exp} / {@code iat}), verified for OIDC Core §12.2 {@code iss}/{@code sub} consistency against
- * the refreshed access token, and carried forward, rather than silently preserving the pre-refresh ID
- * token. A refreshed ID token that fails the pipeline ({@link TokenValidationException}) or is
+ * is checked by the public {@link RefreshResultVerifier} — validated through the token-validation
+ * pipeline (signature, {@code iss}, {@code aud}, {@code exp} / {@code iat}) and verified for OIDC Core
+ * §12.2 {@code iss}/{@code sub} consistency against the refreshed access token — and carried forward,
+ * rather than silently preserving the pre-refresh ID token. A refreshed ID token that fails the pipeline ({@link TokenValidationException}) or is
  * inconsistent ({@link IllegalStateException}) is refused like a binding mismatch: when the
  * authorization server rotated the refresh token the session is quarantined (revoking the rotated
  * successor is attempted best-effort and a clear is attempted), and when it did not rotate nothing is
@@ -570,8 +571,9 @@ public class TokenLifecycleManager {
      * in-flight rotation rather than redeeming the token twice, so a benign race never self-classifies as
      * reuse.
      * A refreshed ID token is validated through the token-validation pipeline and verified for §12.2
-     * {@code iss}/{@code sub} consistency against the refreshed access token before it is carried
-     * forward.
+     * {@code iss}/{@code sub} consistency against the refreshed access token by
+     * {@link RefreshResultVerifier} before it is carried forward; a refusal reaches the caller as the
+     * original exception the verifier carried, not as its carrier.
      * <p>
      * <strong>A refresh yields to a re-login that lands while it is in flight.</strong> The family is
      * captured before the exchange and rotated on that captured instance, and the refreshed bundle is
@@ -853,10 +855,15 @@ public class TokenLifecycleManager {
         }
 
         // The refreshed ID token is checked BEFORE the family is advanced, so a refusal here can never
-        // leave a half-applied rotation behind. Two refusals are possible: the ID token fails the
-        // validation pipeline (signature, iss, aud, exp / iat — a TokenValidationException), or it
-        // validates but is inconsistent with the refreshed access token (OIDC Core §12.2 — an
-        // IllegalStateException). Both are treated alike. What the refusal must do next depends on
+        // leave a half-applied rotation behind. The check is the public RefreshResultVerifier, with no
+        // bound subject: the subject binding keeps running in StoredToken.refreshed inside the atomic
+        // store transform below (ADR-0007). Two refusals are possible, each carried by the verifier: the
+        // ID token fails the validation pipeline (signature, iss, aud, exp / iat — a
+        // RedeemedValidationRefusalException carrying the bridge's TokenValidationException), or it
+        // validates but is inconsistent with the refreshed access token (OIDC Core §12.2 — a
+        // RedeemedIdentityRefusalException carrying an IllegalStateException). Both are treated alike,
+        // and the carried original is what is rethrown, so callers see exactly the exception they saw
+        // before the verifier existed. What the refusal must do next depends on
         // whether the AS rotated: when it did not, the presented refresh token is still valid, so the
         // refusal propagates with the family and the store left untouched. When it did, the AS has
         // already burned the presented token, so keeping it would leave the session holding a dead
@@ -870,13 +877,13 @@ public class TokenLifecycleManager {
         // revocation call or from TokenStore.remove replaces it.
         String refreshedIdToken;
         try {
-            refreshedIdToken = verifiedRefreshedIdToken(rotation, idTokenValidationBridge);
-        } catch (IllegalStateException | TokenValidationException refusedIdToken) {
+            refreshedIdToken = RefreshResultVerifier.verify(rotation, idTokenValidationBridge, null);
+        } catch (RedeemedValidationRefusalException | RedeemedIdentityRefusalException refusedIdToken) {
             if (rotation.rotated()) {
                 quarantineRejectedRotation(sessionId, presentedRefreshToken, metadata, rotation.refreshToken(),
                         revocationClient, clientAuthentication);
             }
-            throw refusedIdToken;
+            throw carriedRefusal(refusedIdToken);
         }
 
         if (rotation.rotated()) {
@@ -1255,43 +1262,14 @@ public class TokenLifecycleManager {
     }
 
     /**
-     * Validates a refreshed ID token through the token-validation pipeline, verifies it against the
-     * refreshed access token (OIDC Core §12.2) and returns the ID token to carry forward, or {@code null}
-     * when the AS omitted one on the refresh.
-     * <p>
-     * Both refusals propagate to {@link #doRefresh}, which quarantines the session when the exchange
-     * rotated the refresh token: a {@link TokenValidationException} when the pipeline rejects the ID
-     * token, and an {@link IllegalStateException} when the validated ID token is inconsistent with the
-     * access token.
-     *
-     * @throws TokenValidationException if the refreshed ID token fails pipeline validation
-     * @throws IllegalStateException    if the refreshed ID token is inconsistent with the refreshed access
-     *                                  token
+     * The refusal a {@link RefreshResultVerifier} carrier wraps: the bridge's
+     * {@link TokenValidationException} for a pipeline failure, the {@link IllegalStateException} with the
+     * §12.2 message for an inconsistency. Rethrowing it rather than the carrier keeps the thrown type and
+     * instance {@link #refresh} has always documented. Both carriers set a runtime cause by construction;
+     * the carrier itself is the fallback should that ever not hold.
      */
-    @Nullable
-    private static String verifiedRefreshedIdToken(RotationResult rotation,
-            IdTokenValidationBridge idTokenValidationBridge) {
-        String rawIdToken = rotation.idToken();
-        if (rawIdToken == null || rawIdToken.isBlank()) {
-            return null;
-        }
-        IdTokenContent refreshedIdToken = idTokenValidationBridge.validateRefreshedIdToken(rawIdToken);
-        if (!consistentWithAccessToken(rotation.accessToken(), refreshedIdToken)) {
-            LOGGER.warn(ClientLogMessages.WARN.REFRESHED_ID_TOKEN_INCONSISTENT);
-            throw new IllegalStateException(
-                    "refreshed ID token is inconsistent with the refreshed access token (OIDC Core §12.2)");
-        }
-        return rawIdToken;
-    }
-
-    private static boolean consistentWithAccessToken(AccessTokenContent accessToken, IdTokenContent idToken) {
-        if (!accessToken.getIssuer().equals(idToken.getIssuer())) {
-            return false;
-        }
-        // 'sub' is mandatory on an OIDC ID token but optional on an access token: cross-check it only
-        // when the access token actually carries a subject (§12.2 "the access token's sub").
-        Optional<String> accessSubject = accessToken.getSubject();
-        return accessSubject.isEmpty() || accessSubject.equals(idToken.getSubject());
+    private static RuntimeException carriedRefusal(RuntimeException carrier) {
+        return carrier.getCause() instanceof RuntimeException original ? original : carrier;
     }
 
     private static Optional<StoredToken> awaitInFlight(
