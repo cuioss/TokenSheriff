@@ -164,7 +164,15 @@ public final class ClientRuntimeConfig {
      */
     public static final String ALLOWED_EGRESS_HOSTS = PREFIX + ".allowed-egress-hosts";
 
-    /** The common prefix for the opt-in discovery cache properties. */
+    /**
+     * The common prefix for the opt-in discovery cache properties.
+     * <p>
+     * Every value rule stated on the discovery cache properties below is checked at application
+     * startup, before the first resolution: a value that does not parse as a {@code Duration}, or that
+     * breaks its rule, fails the start with an {@link IllegalStateException} naming the property. The
+     * rules are those of
+     * {@link de.cuioss.sheriff.token.client.discovery.CachingDiscoveryResolver#checkSettings}.
+     */
     public static final String DISCOVERY_CACHE_PREFIX = PREFIX + ".discovery-cache";
 
     /**
@@ -172,9 +180,11 @@ public final class ClientRuntimeConfig {
      * {@code sheriff.client.discovery-cache.enabled}. Defaults to {@code false}.
      * <p>
      * When {@code true}, a {@link de.cuioss.sheriff.token.client.discovery.CachingDiscoveryResolver}
-     * bean is available and {@link #DISCOVERY_CACHE_TTL} is required. When it is not {@code true}, every
-     * other {@code sheriff.client.discovery-cache.*} property is an orphan and fails application startup
-     * rather than being silently ignored. The plain
+     * bean is available and {@link #DISCOVERY_CACHE_TTL} is required. It must be {@code true} for an
+     * application that injects {@code CachingDiscoveryResolver} (directly or through {@code Instance},
+     * {@code Provider} or {@code InjectableInstance}); otherwise the deployment fails at startup. When
+     * it is not {@code true}, every other {@code sheriff.client.discovery-cache.*} property is an
+     * orphan and fails application startup rather than being silently ignored. The plain
      * {@link de.cuioss.sheriff.token.client.discovery.DiscoveryResolver} bean is unchanged either way.
      */
     public static final String DISCOVERY_CACHE_ENABLED = DISCOVERY_CACHE_PREFIX + ".enabled";
@@ -183,7 +193,7 @@ public final class ClientRuntimeConfig {
      * How long a resolved discovery document is served without a refresh, as a {@code Duration}.
      * Property: {@code sheriff.client.discovery-cache.ttl}. No default: required when
      * {@link #DISCOVERY_CACHE_ENABLED} is {@code true}, and an orphan that fails startup when it is
-     * not. Must be positive.
+     * not. Must be positive and at most 365 days; checked at startup.
      */
     public static final String DISCOVERY_CACHE_TTL = DISCOVERY_CACHE_PREFIX + ".ttl";
 
@@ -191,7 +201,8 @@ public final class ClientRuntimeConfig {
      * How long past its time to live the last resolved document is still served while refreshes fail,
      * as a {@code Duration}. Property: {@code sheriff.client.discovery-cache.grace-period}. Defaults to
      * {@code PT0S} (fail closed at TTL expiry). An orphan that fails startup unless
-     * {@link #DISCOVERY_CACHE_ENABLED} is {@code true}. Must not be negative.
+     * {@link #DISCOVERY_CACHE_ENABLED} is {@code true}. Must not be negative and at most 365 days;
+     * checked at startup.
      */
     public static final String DISCOVERY_CACHE_GRACE_PERIOD = DISCOVERY_CACHE_PREFIX + ".grace-period";
 
@@ -199,7 +210,7 @@ public final class ClientRuntimeConfig {
      * The minimum time between a failed refresh and the next refresh attempt, as a {@code Duration}.
      * Property: {@code sheriff.client.discovery-cache.min-refresh-interval}. Defaults to {@code PT0S}
      * (retry on the next call). An orphan that fails startup unless {@link #DISCOVERY_CACHE_ENABLED}
-     * is {@code true}. Must not be negative.
+     * is {@code true}. Must not be negative and at most 365 days; checked at startup.
      */
     public static final String DISCOVERY_CACHE_MIN_REFRESH_INTERVAL = DISCOVERY_CACHE_PREFIX + ".min-refresh-interval";
 
@@ -207,7 +218,8 @@ public final class ClientRuntimeConfig {
      * The upper bound of the random amount by which each freshness window is shortened, as a
      * {@code Duration}. Property: {@code sheriff.client.discovery-cache.jitter}. Defaults to
      * {@code PT0S} (no jitter). An orphan that fails startup unless {@link #DISCOVERY_CACHE_ENABLED} is
-     * {@code true}. Must not be negative and must be smaller than {@link #DISCOVERY_CACHE_TTL}.
+     * {@code true}. Must not be negative and must be smaller than {@link #DISCOVERY_CACHE_TTL}; checked
+     * at startup.
      */
     public static final String DISCOVERY_CACHE_JITTER = DISCOVERY_CACHE_PREFIX + ".jitter";
 }

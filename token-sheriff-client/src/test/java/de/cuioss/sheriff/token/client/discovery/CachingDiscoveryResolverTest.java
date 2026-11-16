@@ -38,16 +38,13 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.InstantSource;
+import java.util.EnumSet;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.assertAll;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Caching, refresh and status behaviour of {@link CachingDiscoveryResolver} against a mocked
@@ -62,7 +59,9 @@ class CachingDiscoveryResolverTest {
     private static final Instant START = Instant.parse("2026-01-01T00:00:00Z");
     private static final Duration TTL = Duration.ofMinutes(5);
     private static final Duration GRACE = Duration.ofMinutes(10);
+    private static final Duration UPPER_BOUND = Duration.ofDays(365);
     private static final String TRANSPORT_EXCEPTION = TransportException.class.getName();
+    private static final int JITTER_SAMPLES = 200;
 
     @Getter
     private final WellKnownDispatcher moduleDispatcher = new WellKnownDispatcher();
@@ -91,26 +90,118 @@ class CachingDiscoveryResolverTest {
     }
 
     static Stream<Arguments> invalidDurations() {
+        Duration aboveBound = UPPER_BOUND.plusNanos(1);
         return Stream.of(
-                Arguments.of("zero ttl", Duration.ZERO, Duration.ZERO, Duration.ZERO, Duration.ZERO),
-                Arguments.of("negative ttl", Duration.ofSeconds(-1), Duration.ZERO, Duration.ZERO, Duration.ZERO),
-                Arguments.of("negative grace", TTL, Duration.ofSeconds(-1), Duration.ZERO, Duration.ZERO),
-                Arguments.of("negative min refresh interval", TTL, GRACE, Duration.ofSeconds(-1), Duration.ZERO),
-                Arguments.of("negative jitter", TTL, GRACE, Duration.ZERO, Duration.ofSeconds(-1)),
-                Arguments.of("jitter equal to ttl", TTL, GRACE, Duration.ZERO, TTL),
-                Arguments.of("jitter above ttl", TTL, GRACE, Duration.ZERO, TTL.plusSeconds(1)));
+                Arguments.of("zero ttl", "ttl", Duration.ZERO, Duration.ZERO, Duration.ZERO, Duration.ZERO),
+                Arguments.of("negative ttl", "ttl", Duration.ofSeconds(-1), Duration.ZERO, Duration.ZERO,
+                        Duration.ZERO),
+                Arguments.of("ttl above the bound", "ttl", aboveBound, Duration.ZERO, Duration.ZERO, Duration.ZERO),
+                Arguments.of("negative grace", "gracePeriod", TTL, Duration.ofSeconds(-1), Duration.ZERO,
+                        Duration.ZERO),
+                Arguments.of("grace above the bound", "gracePeriod", TTL, aboveBound, Duration.ZERO, Duration.ZERO),
+                Arguments.of("negative min refresh interval", "minRefreshInterval", TTL, GRACE,
+                        Duration.ofSeconds(-1), Duration.ZERO),
+                Arguments.of("min refresh interval above the bound", "minRefreshInterval", TTL, GRACE, aboveBound,
+                        Duration.ZERO),
+                Arguments.of("negative jitter", "jitter", TTL, GRACE, Duration.ZERO, Duration.ofSeconds(-1)),
+                Arguments.of("jitter equal to ttl", "jitter", TTL, GRACE, Duration.ZERO, TTL),
+                Arguments.of("jitter above ttl", "jitter", TTL, GRACE, Duration.ZERO, TTL.plusSeconds(1)));
+    }
+
+    static Stream<Arguments> invalidSettings() {
+        Duration aboveBound = UPPER_BOUND.plusNanos(1);
+        return Stream.of(
+                Arguments.of("zero ttl", CachingDiscoveryResolver.Setting.TTL, Duration.ZERO, Duration.ZERO,
+                        Duration.ZERO, Duration.ZERO),
+                Arguments.of("negative ttl", CachingDiscoveryResolver.Setting.TTL, Duration.ofSeconds(-1),
+                        Duration.ZERO, Duration.ZERO, Duration.ZERO),
+                Arguments.of("ttl above the bound", CachingDiscoveryResolver.Setting.TTL, aboveBound, Duration.ZERO,
+                        Duration.ZERO, Duration.ZERO),
+                Arguments.of("negative grace", CachingDiscoveryResolver.Setting.GRACE_PERIOD, TTL,
+                        Duration.ofSeconds(-1), Duration.ZERO, Duration.ZERO),
+                Arguments.of("grace above the bound", CachingDiscoveryResolver.Setting.GRACE_PERIOD, TTL, aboveBound,
+                        Duration.ZERO, Duration.ZERO),
+                Arguments.of("negative min refresh interval", CachingDiscoveryResolver.Setting.MIN_REFRESH_INTERVAL,
+                        TTL, GRACE, Duration.ofSeconds(-1), Duration.ZERO),
+                Arguments.of("min refresh interval above the bound",
+                        CachingDiscoveryResolver.Setting.MIN_REFRESH_INTERVAL, TTL, GRACE, aboveBound, Duration.ZERO),
+                Arguments.of("negative jitter", CachingDiscoveryResolver.Setting.JITTER, TTL, GRACE, Duration.ZERO,
+                        Duration.ofSeconds(-1)),
+                Arguments.of("jitter not smaller than ttl", CachingDiscoveryResolver.Setting.JITTER, TTL, GRACE,
+                        Duration.ZERO, TTL));
+    }
+
+    static Stream<Arguments> durationsAtUpperBound() {
+        return Stream.of(
+                Arguments.of("ttl at the bound", UPPER_BOUND, Duration.ZERO, Duration.ZERO),
+                Arguments.of("grace at the bound", TTL, UPPER_BOUND, Duration.ZERO),
+                Arguments.of("min refresh interval at the bound", TTL, GRACE, UPPER_BOUND));
     }
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("invalidDurations")
     @DisplayName("Should refuse an invalid duration at construction")
-    void shouldRefuseInvalidDuration(String label, Duration ttl, Duration grace, Duration minRefreshInterval,
-            Duration jitter) {
+    void shouldRefuseInvalidDuration(String label, String parameter, Duration ttl, Duration grace,
+            Duration minRefreshInterval, Duration jitter) {
         var delegate = new DiscoveryResolver(configFor("https://issuer.example"));
 
         assertThrows(IllegalArgumentException.class,
                 () -> new CachingDiscoveryResolver(delegate, ttl, grace, minRefreshInterval, jitter, clock),
+                () -> label + " must be refused for " + parameter);
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("invalidDurations")
+    @DisplayName("Should name the offending parameter first in every checkSettings refusal")
+    void shouldNameParameterFirstInCheckSettings(String label, String parameter, Duration ttl, Duration grace,
+            Duration minRefreshInterval, Duration jitter) {
+        var refusal = assertThrows(IllegalArgumentException.class,
+                () -> CachingDiscoveryResolver.checkSettings(ttl, grace, minRefreshInterval, jitter),
                 () -> label + " must be refused");
+
+        assertTrue(refusal.getMessage().startsWith(parameter + " "),
+                () -> label + " must name " + parameter + " first: " + refusal.getMessage());
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("invalidSettings")
+    @DisplayName("Should name the offending setting structurally in every checkSettings refusal")
+    void shouldNameSettingInCheckSettingsRefusal(String label, CachingDiscoveryResolver.Setting expected,
+            Duration ttl, Duration grace, Duration minRefreshInterval, Duration jitter) {
+        var refusal = assertThrows(CachingDiscoveryResolver.InvalidSettingException.class,
+                () -> CachingDiscoveryResolver.checkSettings(ttl, grace, minRefreshInterval, jitter),
+                () -> label + " must be refused with an InvalidSettingException");
+
+        assertAll(label,
+                () -> assertEquals(expected, refusal.setting(), "the refusal names the offending setting"),
+                () -> assertTrue(refusal.getMessage().startsWith(expected.parameterName() + " "),
+                        () -> "the message must start with " + expected.parameterName() + ": "
+                                + refusal.getMessage()));
+    }
+
+    @Test
+    @DisplayName("Should cover every Setting with at least one invalid-value row")
+    void shouldCoverEverySettingWithInvalidRow() {
+        Set<CachingDiscoveryResolver.Setting> covered = invalidSettings()
+                .map(arguments -> (CachingDiscoveryResolver.Setting) arguments.get()[1])
+                .collect(Collectors.toCollection(() -> EnumSet.noneOf(CachingDiscoveryResolver.Setting.class)));
+
+        assertEquals(EnumSet.allOf(CachingDiscoveryResolver.Setting.class), covered,
+                "every Setting constant needs an invalid-value row in invalidSettings()");
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("durationsAtUpperBound")
+    @DisplayName("Should accept a duration of exactly 365 days")
+    void shouldAcceptDurationAtUpperBound(String label, Duration ttl, Duration grace, Duration minRefreshInterval) {
+        var delegate = new DiscoveryResolver(configFor("https://issuer.example"));
+
+        assertAll(label,
+                () -> assertDoesNotThrow(
+                        () -> CachingDiscoveryResolver.checkSettings(ttl, grace, minRefreshInterval, Duration.ZERO)),
+                () -> assertDoesNotThrow(
+                        () -> new CachingDiscoveryResolver(delegate, ttl, grace, minRefreshInterval, Duration.ZERO,
+                                clock)));
     }
 
     @Test
@@ -161,11 +252,18 @@ class CachingDiscoveryResolverTest {
         assertEquals(START.plus(TTL), resolver.status().lastSuccess(), "the refresh moves lastSuccess");
     }
 
+    /**
+     * Each instance draws its shortening uniformly below the 30-second jitter in milliseconds, so it
+     * leaves the window at the full TTL only with probability 1/30000; over {@value #JITTER_SAMPLES}
+     * instances at least one shortened window is practically certain, while an implementation that
+     * ignores the jitter never produces one.
+     */
     @Test
     @DisplayName("Should shorten the freshness window by less than the jitter, never more")
     void shouldBoundJitter(URIBuilder uriBuilder) {
         var jitter = Duration.ofSeconds(30);
-        for (int round = 0; round < 5; round++) {
+        int shortened = 0;
+        for (int sample = 0; sample < JITTER_SAMPLES; sample++) {
             now.set(START);
             moduleDispatcher.setCallCounter(0);
             var resolver = new CachingDiscoveryResolver(
@@ -174,12 +272,23 @@ class CachingDiscoveryResolverTest {
 
             now.set(START.plus(TTL).minus(jitter));
             resolver.resolve();
-            assertEquals(1, moduleDispatcher.getCallCounter(), "still fresh at ttl - jitter");
+            assertEquals(1, moduleDispatcher.getCallCounter(),
+                    "sample " + sample + ": still fresh at ttl - jitter, the window is never shortened by the jitter");
+
+            now.set(START.plus(TTL).minusMillis(1));
+            resolver.resolve();
+            if (moduleDispatcher.getCallCounter() == 2) {
+                shortened++;
+            }
 
             now.set(START.plus(TTL));
             resolver.resolve();
-            assertEquals(2, moduleDispatcher.getCallCounter(), "stale at the latest at ttl");
+            assertEquals(2, moduleDispatcher.getCallCounter(),
+                    "sample " + sample + ": stale at the latest at ttl, the window is never longer than the ttl");
         }
+
+        assertTrue(shortened > 0, "at least one of " + JITTER_SAMPLES
+                + " freshness windows must be shorter than the ttl, otherwise the jitter is not applied");
     }
 
     @Test

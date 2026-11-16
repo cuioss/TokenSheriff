@@ -17,14 +17,21 @@ package de.cuioss.sheriff.token.client.quarkus.deployment;
 
 import de.cuioss.sheriff.token.client.quarkus.ClientExceptionMapper;
 import de.cuioss.sheriff.token.client.quarkus.TokenSheriffClientProducer;
+import de.cuioss.sheriff.token.client.quarkus.TokenSheriffClientRecorder;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
+import io.quarkus.arc.deployment.ValidationPhaseBuildItem;
 import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.annotations.ExecutionTime;
+import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
+
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -67,5 +74,20 @@ class TokenSheriffClientProcessorTest {
         assertTrue(TokenSheriffClientProcessor.class.getDeclaredMethod("registerClientExceptionMapper")
                         .isAnnotationPresent(BuildStep.class),
                 "registerClientExceptionMapper must be a @BuildStep, otherwise Quarkus never invokes it");
+    }
+
+    @Test
+    @DisplayName("Should record the discovery cache injection check at runtime init")
+    void shouldRecordDiscoveryCacheInjectionCheckAtRuntimeInit() throws Exception {
+        Method buildStep = TokenSheriffClientProcessor.class.getDeclaredMethod("requireDiscoveryCacheForInjection",
+                ValidationPhaseBuildItem.class, TokenSheriffClientRecorder.class);
+        Record recording = buildStep.getAnnotation(Record.class);
+
+        assertAll("discovery cache injection check build step",
+                () -> assertTrue(buildStep.isAnnotationPresent(BuildStep.class),
+                        "requireDiscoveryCacheForInjection must be a @BuildStep, otherwise Quarkus never invokes it"),
+                () -> assertNotNull(recording, "the check must be recorded, because it reads runtime configuration"),
+                () -> assertEquals(ExecutionTime.RUNTIME_INIT, recording.value(),
+                        "the enabled property is runtime configuration, so the check runs at runtime init"));
     }
 }

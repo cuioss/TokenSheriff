@@ -455,7 +455,8 @@ cache every resolution fetches the discovery document.
 *Freshness.* A resolved document MUST be served from the cache for a caller-stated time to live,
 measured from the successful resolution. The TTL has no default and MUST be positive. An optional
 jitter, smaller than the TTL, shortens each freshness window by a random amount so clients sharing a
-TTL do not refresh at the same instant.
+TTL do not refresh at the same instant. The TTL, the grace period and the minimum refresh interval
+MUST each be at most 365 days; a value outside its rule MUST be refused before the cache is used.
 
 *Refresh.* A stale or never-resolved cache MUST refresh lazily, on the calling thread, through the
 plain resolver, so every check an uncached resolution performs (TLS, the `issuer` match, the endpoint
@@ -464,10 +465,13 @@ A refused document MUST NOT replace the cached one. Concurrent callers MUST shar
 cache MUST NOT start a background thread.
 
 *Bounded stale grace, then fail closed.* When a refresh fails, the last successfully resolved
-document MAY be served until `lastSuccess + ttl + gracePeriod`; the grace period defaults to zero.
-After that instant a resolution MUST fail closed with a `TransportException`. A cache that never
-resolved a document MUST propagate the refresh failure. After a failed refresh no further refresh is
-attempted before an optional minimum refresh interval has elapsed.
+document MAY be served until `lastSuccess + ttl + gracePeriod`. The Java constructor requires the
+grace period; only under Quarkus does it default to zero. After that instant a resolution MUST fail
+closed with a `TransportException`. A cache that never resolved a document MUST propagate the refresh
+failure. After a failed refresh no further refresh is attempted before an optional minimum refresh
+interval has elapsed; at its `PT0S` default it holds nothing back, and a failed refresh is retried on
+the next call. Every runtime exception of the plain resolver counts as a failed refresh; a refresh
+that fails while the calling thread is interrupted is aborted without recording a failure.
 
 *Isolation and status.* Every resolution MUST return an independent copy, so a caller's mutation never
 reaches the cache. The cache state MUST be readable without I/O as `DiscoveryCacheStatus` (state, last
@@ -476,9 +480,13 @@ success, class name of the last failure) and as a `LoaderStatus`.
 *Quarkus wiring.* Under Quarkus the cache is off by default and enabled by
 `sheriff.client.discovery-cache.enabled=true`, which requires `sheriff.client.discovery-cache.ttl`
 and makes a `CachingDiscoveryResolver` bean available beside the unchanged `DiscoveryResolver` bean.
-A `sheriff.client.discovery-cache.*` property set while the cache is not enabled, or an enabled cache
-without a TTL, MUST fail application startup with an error naming the property
+A `sheriff.client.discovery-cache.*` property set while the cache is not enabled, an enabled cache
+without a TTL, or an enabled cache with a value that does not parse as a duration or breaks a rule
+above, MUST fail application startup with an error naming the property
 (xref:../adr/0026-Orphaned_or_unresolvable_extension_configuration_fails_startup_instead_of_being_ignored.adoc[ADR-0026]).
+An application that injects `CachingDiscoveryResolver` while the cache is not enabled MUST fail the
+deployment, with an error naming `sheriff.client.discovery-cache.enabled`, instead of failing on the
+bean's first use.
 
 * Source: https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationValidation[OIDC Discovery 1.0 §4.3] (every document is validated), https://www.rfc-editor.org/rfc/rfc8414#section-3[RFC 8414 §3], xref:threat-model.adoc#T-DISCOVERY-STALE[T-DISCOVERY-STALE].
 

@@ -78,7 +78,9 @@ public final class ClientLogMessages {
         /**
          * A caching discovery resolver refreshed its document successfully after one or more failed
          * refresh attempts, ending a failure episode. Fires once per episode, on the first successful
-         * refresh after a failure; an ordinary successful refresh logs at {@code DEBUG} only.
+         * refresh after a failure. The cache logs no {@code INFO} record of its own for an ordinary
+         * successful refresh, but every refresh runs through the delegate, which logs
+         * {@link #DISCOVERY_RESOLVED} at {@code INFO} once per successful refresh, this one included.
          */
         public static final LogRecord DISCOVERY_CACHE_RECOVERED = LogRecordModel.builder()
                 .prefix(PREFIX)
