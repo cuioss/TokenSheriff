@@ -24,6 +24,7 @@ import org.eclipse.microprofile.config.Config;
 import java.time.Duration;
 import java.time.InstantSource;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -124,6 +125,20 @@ public final class ClientConfigMapper {
             ClientRuntimeConfig.DISCOVERY_CACHE_JITTER);
 
     /**
+     * Maps the parameter name that {@link CachingDiscoveryResolver#checkSettings} puts first in each
+     * refusal to the property that carries the value, so a refusal names the setting to fix. The
+     * rules themselves live only in {@code checkSettings}.
+     */
+    private static final Map<String, String> DISCOVERY_CACHE_PARAMETER_PROPERTIES = Map.of(
+            "ttl", ClientRuntimeConfig.DISCOVERY_CACHE_TTL,
+            "gracePeriod", ClientRuntimeConfig.DISCOVERY_CACHE_GRACE_PERIOD,
+            "minRefreshInterval", ClientRuntimeConfig.DISCOVERY_CACHE_MIN_REFRESH_INTERVAL,
+            "jitter", ClientRuntimeConfig.DISCOVERY_CACHE_JITTER);
+
+    /** Used for a refusal whose parameter name is not in the table; names the property family. */
+    private static final String DISCOVERY_CACHE_PROPERTIES = ClientRuntimeConfig.DISCOVERY_CACHE_PREFIX + ".*";
+
+    /**
      * The settings of an enabled discovery cache, in the shape of the
      * {@link CachingDiscoveryResolver} constructor arguments.
      *
@@ -163,17 +178,22 @@ public final class ClientConfigMapper {
     }
 
     /**
-     * Rejects an inconsistent discovery cache configuration (ADR-0026): a
+     * Rejects an inconsistent or invalid discovery cache configuration (ADR-0026). A
      * {@code sheriff.client.discovery-cache.*} property other than
      * {@link ClientRuntimeConfig#DISCOVERY_CACHE_ENABLED} that is set while the cache is not enabled
-     * would otherwise be silently ignored, and an enabled cache needs a
-     * {@link ClientRuntimeConfig#DISCOVERY_CACHE_TTL}. A configuration without any discovery cache
+     * would otherwise be silently ignored, so it is refused first, whatever its value. An enabled cache
+     * needs a {@link ClientRuntimeConfig#DISCOVERY_CACHE_TTL}; each of its four durations must then
+     * parse as a duration, and together they must satisfy
+     * {@link CachingDiscoveryResolver#checkSettings}, the single holder of the value rules (a positive
+     * TTL, no negative duration, at most 365 days for the TTL, the grace period and the minimum
+     * refresh interval, and a jitter smaller than the TTL). A configuration without any discovery cache
      * property passes.
      *
      * @param config the MicroProfile config to inspect; must not be {@code null}
      * @throws IllegalStateException naming the offending property and the fix, when a cache property
-     *                               is set while the cache is not enabled, or when the cache is
-     *                               enabled without a TTL
+     *                               is set while the cache is not enabled, when the cache is enabled
+     *                               without a TTL, when a value does not parse as a duration, or when
+     *                               a value breaks a rule of {@code checkSettings}
      */
     public static void validateDiscoveryCache(Config config) {
         if (!isDiscoveryCacheEnabled(config)) {
@@ -193,16 +213,50 @@ public final class ClientConfigMapper {
                     + " Set it to how long a resolved discovery document may be reused (for example PT5M),"
                     + " or disable the discovery cache.");
         }
+        Duration ttl = parsedDuration(config, ClientRuntimeConfig.DISCOVERY_CACHE_TTL);
+        Duration gracePeriod = parsedDuration(config, ClientRuntimeConfig.DISCOVERY_CACHE_GRACE_PERIOD);
+        Duration minRefreshInterval = parsedDuration(config, ClientRuntimeConfig.DISCOVERY_CACHE_MIN_REFRESH_INTERVAL);
+        Duration jitter = parsedDuration(config, ClientRuntimeConfig.DISCOVERY_CACHE_JITTER);
+        try {
+            CachingDiscoveryResolver.checkSettings(ttl, gracePeriod, minRefreshInterval, jitter);
+        } catch (IllegalArgumentException e) {
+            String refusal = e.getMessage();
+            String parameter = refusal.substring(0, refusal.indexOf(' '));
+            String property = DISCOVERY_CACHE_PARAMETER_PROPERTIES.getOrDefault(parameter, DISCOVERY_CACHE_PROPERTIES);
+            throw new IllegalStateException("Token-Sheriff client property '" + property + "' is invalid: "
+                    + refusal + ". Change '" + property + "' to a value the rule allows, or disable the"
+                    + " discovery cache.", e);
+        }
+    }
+
+    /**
+     * Requires an enabled discovery cache, for an application that uses {@link CachingDiscoveryResolver}.
+     * The deployment check that refuses the start when an injection point asks for the bean and the
+     * first-use guard of the producer both call this method, so both fail with the same message. Only
+     * the configuration is read; no client configuration is needed.
+     *
+     * @param config the MicroProfile config to inspect; must not be {@code null}
+     * @throws IllegalStateException naming {@link ClientRuntimeConfig#DISCOVERY_CACHE_ENABLED} and
+     *                               {@link ClientRuntimeConfig#DISCOVERY_CACHE_TTL}, when the cache is not
+     *                               enabled; or as {@link #validateDiscoveryCache(Config)}, when the
+     *                               configuration is inconsistent or invalid
+     */
+    public static void requireDiscoveryCacheEnabled(Config config) {
+        if (mapDiscoveryCache(config).isEmpty()) {
+            throw new IllegalStateException("The Token-Sheriff discovery cache is not enabled."
+                    + " Set '" + ClientRuntimeConfig.DISCOVERY_CACHE_ENABLED + "=true' and '"
+                    + ClientRuntimeConfig.DISCOVERY_CACHE_TTL + "' to inject a CachingDiscoveryResolver.");
+        }
     }
 
     /**
      * Maps the discovery cache properties, after {@link #validateDiscoveryCache(Config) validating}
-     * them.
+     * them, so the returned settings always satisfy {@link CachingDiscoveryResolver#checkSettings}.
      *
      * @param config the MicroProfile config to read; must not be {@code null}
      * @return the settings of the enabled cache, or {@link Optional#empty()} when the cache is not
      *         enabled
-     * @throws IllegalStateException when the configuration is inconsistent (see
+     * @throws IllegalStateException when the configuration is inconsistent or invalid (see
      *                               {@link #validateDiscoveryCache(Config)})
      */
     public static Optional<DiscoveryCacheSettings> mapDiscoveryCache(Config config) {
@@ -224,6 +278,15 @@ public final class ClientConfigMapper {
 
     private static Duration optionalDuration(Config config, String key) {
         return config.getOptionalValue(key, Duration.class).orElse(Duration.ZERO);
+    }
+
+    private static Duration parsedDuration(Config config, String key) {
+        try {
+            return optionalDuration(config, key);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("Token-Sheriff client property '" + key
+                    + "' is not a valid duration. Set it to an ISO-8601 duration such as PT5M.", e);
+        }
     }
 
     private static String requiredValue(Config config, String key) {
