@@ -30,6 +30,8 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -41,6 +43,7 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -263,6 +266,71 @@ class TokenSheriffClientDiscoveryCacheValidationTest {
                             ClientRuntimeConfig.DISCOVERY_CACHE_MIN_REFRESH_INTERVAL,
                             ClientRuntimeConfig.DISCOVERY_CACHE_JITTER), refused,
                     "the orphan check covers exactly the four duration properties of ClientRuntimeConfig");
+        }
+
+        /**
+         * Derives the expected properties from the declarations of {@link ClientRuntimeConfig}, not
+         * from {@link CachingDiscoveryResolver.Setting} or {@link #expectedProperty}, so a discovery
+         * cache property declared there but missing from {@code Setting} cannot pass unnoticed. A new
+         * {@code DISCOVERY_CACHE_*} constant must be added to {@link CachingDiscoveryResolver.Setting}
+         * and to the {@link ClientConfigMapper} registries, or this test fails naming it.
+         */
+        @Test
+        @DisplayName("Should refuse every discovery cache property ClientRuntimeConfig declares as an orphan")
+        void shouldRefuseEveryDeclaredDiscoveryCachePropertyAsOrphan() {
+            Set<String> declared = declaredDiscoveryCacheProperties();
+
+            Set<String> refused = new HashSet<>();
+            for (String property : declared) {
+                Config config = configOf(Map.of(property, "PT1M"));
+                IllegalStateException failure = assertThrows(IllegalStateException.class,
+                        () -> ClientConfigMapper.validateDiscoveryCache(config),
+                        property + " is declared by ClientRuntimeConfig but not refused on a disabled cache; "
+                                + "add it to CachingDiscoveryResolver.Setting and the ClientConfigMapper registries");
+                if (failure.getMessage().contains("'" + property + "' is set but")) {
+                    refused.add(property);
+                }
+            }
+
+            assertAll("orphan check derived from the ClientRuntimeConfig declarations",
+                    () -> assertFalse(declared.isEmpty(), "the reflection finds discovery cache properties"),
+                    () -> assertTrue(declared.containsAll(Set.of(ClientRuntimeConfig.DISCOVERY_CACHE_TTL,
+                                    ClientRuntimeConfig.DISCOVERY_CACHE_GRACE_PERIOD,
+                                    ClientRuntimeConfig.DISCOVERY_CACHE_MIN_REFRESH_INTERVAL,
+                                    ClientRuntimeConfig.DISCOVERY_CACHE_JITTER)),
+                            "the reflection finds the four known duration properties: " + declared),
+                    () -> assertEquals(declared, refused,
+                            "every declared discovery cache property must be refused as an orphan naming it; "
+                                    + "a missing one must be added to CachingDiscoveryResolver.Setting and the "
+                                    + "ClientConfigMapper registries"));
+        }
+    }
+
+    /**
+     * The values of the {@code public static final String} constants of {@link ClientRuntimeConfig}
+     * that name a discovery cache property, without {@link ClientRuntimeConfig#DISCOVERY_CACHE_ENABLED}.
+     */
+    private static Set<String> declaredDiscoveryCacheProperties() {
+        String prefix = ClientRuntimeConfig.DISCOVERY_CACHE_PREFIX + ".";
+        Set<String> properties = new HashSet<>();
+        for (Field field : ClientRuntimeConfig.class.getDeclaredFields()) {
+            int modifiers = field.getModifiers();
+            if (Modifier.isPublic(modifiers) && Modifier.isStatic(modifiers) && Modifier.isFinal(modifiers)
+                    && field.getType() == String.class) {
+                String value = constantValue(field);
+                if (value.startsWith(prefix) && !ClientRuntimeConfig.DISCOVERY_CACHE_ENABLED.equals(value)) {
+                    properties.add(value);
+                }
+            }
+        }
+        return properties;
+    }
+
+    private static String constantValue(Field field) {
+        try {
+            return (String) field.get(null);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError("ClientRuntimeConfig." + field.getName() + " must be a readable constant", e);
         }
     }
 
