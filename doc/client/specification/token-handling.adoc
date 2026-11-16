@@ -235,10 +235,13 @@ verifier. `StoredToken.subjectsMatch` is the binding inside the atomic store tra
 and the only bound-subject check on the `TokenLifecycleManager` path. Neither can replace the other,
 so both are kept.
 
-*Why the lifecycle manager passes `null`.* Passing the stored subject to the verifier would move the
-binding refusal out of the atomic store transform and in front of the rotation-family advance,
-which would change the observable disposition of a binding refusal that the lifecycle manager's
-refresh tests pin. The lifecycle manager therefore keeps calling
+*Why the lifecycle manager passes `null`.* The binding check already runs inside the atomic store
+transform, ahead of the rotation-family advance, so a refused binding never advances the family.
+Passing the stored subject to the verifier would move that check out of the transform, to a point
+before the update where the subject would be compared against a stored token read earlier rather
+than against the bundle that is actually replaced. That would reopen the check-then-act window the
+atomic update closes, and would change the observable disposition of a binding refusal that the
+lifecycle manager's refresh tests pin. The lifecycle manager therefore keeps calling
 `verify(rotation, idTokenValidationBridge, null)`.
 
 *Why the verifier lives in `flow`.* `ClientArchitectureTest` requires the packages under
