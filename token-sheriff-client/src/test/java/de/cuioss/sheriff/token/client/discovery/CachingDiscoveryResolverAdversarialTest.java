@@ -37,6 +37,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import javax.net.ssl.SSLContext;
+import java.lang.reflect.Field;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.InstantSource;
@@ -81,13 +82,15 @@ class CachingDiscoveryResolverAdversarialTest {
     private final RefreshDispatcher moduleDispatcher = new RefreshDispatcher();
 
     private final AtomicReference<Instant> now = new AtomicReference<>(START);
-    private final AtomicReference<@Nullable Runnable> beforeNextClockRead = new AtomicReference<>();
-    private final InstantSource clock = () -> {
-        Runnable hook = beforeNextClockRead.getAndSet(null);
+    private final InstantSource clock = now::get;
+
+    /** Runs once, on the next claim of the refresh slot, between the claim and the state re-read. */
+    private final AtomicReference<@Nullable Runnable> onNextClaim = new AtomicReference<>();
+    private final Runnable afterClaim = () -> {
+        Runnable hook = onNextClaim.getAndSet(null);
         if (hook != null) {
             hook.run();
         }
-        return now.get();
     };
 
     /** A hostile document served on refresh, each refused by a different {@link DiscoveryResolver} check. */
@@ -140,25 +143,32 @@ class CachingDiscoveryResolverAdversarialTest {
         var resolver = resolver(uriBuilder, sslContext);
         var good = resolver.resolve();
         advance(TTL);
+        var winner = new AtomicReference<@Nullable Thread>();
+        onNextClaim.set(() -> winner.set(Thread.currentThread()));
 
         var release = new CountDownLatch(1);
         moduleDispatcher.holdUntil(release);
         var start = new CountDownLatch(1);
-        var entered = new CountDownLatch(STAMPEDE_THREADS);
-        ExecutorService pool = Executors.newFixedThreadPool(STAMPEDE_THREADS);
+        List<Thread> callers = Collections.synchronizedList(new ArrayList<>());
+        ExecutorService pool = Executors.newFixedThreadPool(STAMPEDE_THREADS, task -> {
+            var thread = new Thread(task, "stampede-caller");
+            thread.setDaemon(true);
+            callers.add(thread);
+            return thread;
+        });
         List<ProviderMetadata> results = new ArrayList<>();
+        int joinedBeforeRelease;
         try {
             List<Future<ProviderMetadata>> futures = new ArrayList<>();
             for (int i = 0; i < STAMPEDE_THREADS; i++) {
                 futures.add(pool.submit(() -> {
                     start.await();
-                    entered.countDown();
                     return resolver.resolve();
                 }));
             }
             start.countDown();
-            assertTrue(entered.await(10, TimeUnit.SECONDS), "every caller must start");
             assertTrue(moduleDispatcher.awaitHeldRequest(), "the refresh must reach the server");
+            joinedBeforeRelease = awaitJoined(callers, winner, STAMPEDE_THREADS - 1);
             release.countDown();
             for (Future<ProviderMetadata> future : futures) {
                 results.add(future.get(10, TimeUnit.SECONDS));
@@ -170,7 +180,10 @@ class CachingDiscoveryResolverAdversarialTest {
 
         Set<ProviderMetadata> distinct = Collections.newSetFromMap(new IdentityHashMap<>());
         distinct.addAll(results);
+        int joined = joinedBeforeRelease;
         assertAll("single-flight refresh",
+                () -> assertEquals(STAMPEDE_THREADS - 1, joined,
+                        "every caller but the winner joined the in-flight refresh before it was released"),
                 () -> assertEquals(2, moduleDispatcher.requests(), "exactly one upstream refresh"),
                 () -> assertEquals(STAMPEDE_THREADS, results.size()),
                 () -> assertTrue(results.stream().allMatch(m -> m.getTokenEndpoint().equals(good.getTokenEndpoint())),
@@ -180,27 +193,109 @@ class CachingDiscoveryResolverAdversarialTest {
                 () -> assertEquals(START.plus(TTL), resolver.status().lastSuccess()));
     }
 
+    /**
+     * A competing caller's successful refresh is published after this caller read the stale state
+     * and claimed the slot, but before it re-reads the state; every further fetch would be refused.
+     * The competing entry is the state of a second cache resolved at {@code START + TTL}: no caller of
+     * the same cache can publish a success while this caller holds the slot, so the hook installs it
+     * directly, exactly in the window the {@code latest != current} guard covers.
+     */
     @Test
     @DisplayName("Should not replace a newer entry with a failure derived from a stale read")
     void shouldNotOverwriteNewerEntryFromStaleRead(URIBuilder uriBuilder, SSLContext sslContext) {
         var resolver = resolver(uriBuilder, sslContext);
         var good = resolver.resolve();
         advance(TTL);
-        // A competing caller finishes a successful refresh between this caller's read of the cache
-        // state and its claim of the in-flight slot; any further fetch would now be refused.
-        beforeNextClockRead.set(() -> {
-            resolver.resolve();
-            moduleDispatcher.serve(Attack.ISSUER_CHANGED.response::apply);
-        });
+        var competitor = resolver(uriBuilder, sslContext);
+        competitor.resolve();
+        moduleDispatcher.serve(Attack.ISSUER_CHANGED.response::apply);
+        onNextClaim.set(() -> stateOf(resolver).set(stateOf(competitor).get()));
 
         var served = resolver.resolve();
 
         assertAll("stale read does not clobber the newer entry",
-                () -> assertEquals(2, moduleDispatcher.requests(), "no second refresh against the outdated read"),
+                () -> assertEquals(2, moduleDispatcher.requests(), "no hostile refetch against the outdated read"),
                 () -> assertEquals(good.getTokenEndpoint(), served.getTokenEndpoint(), "the fresh document is served"),
                 () -> assertEquals(DiscoveryCacheStatus.State.RESOLVED, resolver.status().state()),
                 () -> assertEquals(START.plus(TTL), resolver.status().lastSuccess(),
                         "lastSuccess is the competing caller's refresh"));
+    }
+
+    @Test
+    @DisplayName("Control: should refresh against the read state when nothing is published after the claim")
+    void shouldRefreshWhenNothingIsPublishedAfterClaim(URIBuilder uriBuilder, SSLContext sslContext) {
+        var resolver = resolver(uriBuilder, sslContext);
+        var good = resolver.resolve();
+        advance(TTL);
+        var competitor = resolver(uriBuilder, sslContext);
+        competitor.resolve();
+        moduleDispatcher.serve(Attack.ISSUER_CHANGED.response::apply);
+        var hookRan = new AtomicReference<>(Boolean.FALSE);
+        onNextClaim.set(() -> hookRan.set(Boolean.TRUE));
+
+        var served = resolver.resolve();
+
+        assertAll("the refresh goes ahead",
+                () -> assertTrue(hookRan.get(), "the claim hook ran but published nothing"),
+                () -> assertEquals(3, moduleDispatcher.requests(), "the refresh fetched the hostile document"),
+                () -> assertEquals(good.getTokenEndpoint(), served.getTokenEndpoint(),
+                        "the refused refresh keeps serving the cached document within grace"),
+                () -> assertEquals(DiscoveryCacheStatus.State.FAILED, resolver.status().state()),
+                () -> assertEquals(START, resolver.status().lastSuccess(), "no newer entry was published"));
+    }
+
+    /**
+     * Reads the cache's private state holder, so a hook can publish another cache's entry into it.
+     */
+    @SuppressWarnings("unchecked")
+    private static AtomicReference<Object> stateOf(CachingDiscoveryResolver resolver) {
+        try {
+            Field field = CachingDiscoveryResolver.class.getDeclaredField("state");
+            field.setAccessible(true);
+            return (AtomicReference<Object>) field.get(resolver);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError("CachingDiscoveryResolver must hold its entry in a field named 'state'", e);
+        }
+    }
+
+    /**
+     * Waits until {@code expected} callers other than the winner are parked in
+     * {@code CachingDiscoveryResolver.join}, the wait on the in-flight refresh.
+     *
+     * @return the number of joined callers when the count was reached or the deadline passed
+     */
+    private static int awaitJoined(List<Thread> callers, AtomicReference<@Nullable Thread> winner, int expected) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        int joined = 0;
+        while (System.nanoTime() < deadline) {
+            Thread claimer = winner.get();
+            List<Thread> snapshot;
+            synchronized (callers) {
+                snapshot = List.copyOf(callers);
+            }
+            joined = (int) snapshot.stream()
+                    .filter(thread -> thread != claimer)
+                    .filter(CachingDiscoveryResolverAdversarialTest::isJoined)
+                    .count();
+            if (claimer != null && joined == expected) {
+                return joined;
+            }
+            Thread.onSpinWait();
+        }
+        return joined;
+    }
+
+    private static boolean isJoined(Thread thread) {
+        if (thread.getState() != Thread.State.WAITING) {
+            return false;
+        }
+        for (StackTraceElement frame : thread.getStackTrace()) {
+            if (CachingDiscoveryResolver.class.getName().equals(frame.getClassName())
+                    && "join".equals(frame.getMethodName())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private CachingDiscoveryResolver resolver(URIBuilder uriBuilder, SSLContext sslContext) {
@@ -213,7 +308,8 @@ class CachingDiscoveryResolverAdversarialTest {
                 .allowLoopbackEgress(true)
                 .discoveryDocumentMaxSize(MAX_DOCUMENT_SIZE)
                 .build();
-        return new CachingDiscoveryResolver(new DiscoveryResolver(configuration), TTL, GRACE, clock);
+        return new CachingDiscoveryResolver(new DiscoveryResolver(configuration), TTL, GRACE, Duration.ZERO,
+                Duration.ZERO, clock, afterClaim);
     }
 
     private void advance(Duration duration) {
