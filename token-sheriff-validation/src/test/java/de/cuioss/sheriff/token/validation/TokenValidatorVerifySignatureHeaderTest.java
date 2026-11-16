@@ -34,7 +34,8 @@ import java.util.List;
 import java.util.Optional;
 
 import static de.cuioss.sheriff.token.validation.TokenValidatorVerifySignatureTest.*;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * Tests the header handling of {@link TokenValidator#verifySignature(String)}: the header posture it enforces

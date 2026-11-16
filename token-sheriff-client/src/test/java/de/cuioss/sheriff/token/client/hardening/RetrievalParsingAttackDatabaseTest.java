@@ -42,9 +42,7 @@ import org.junit.jupiter.params.provider.ArgumentsSource;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.assertAll;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Hardening sweep — drives the full {@code http.security} attack corpora through the userinfo

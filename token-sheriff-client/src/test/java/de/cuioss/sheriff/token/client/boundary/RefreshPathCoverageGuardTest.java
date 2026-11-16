@@ -38,9 +38,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Guards the hand-maintained {@code <includes>} list of the {@code refresh-path-coverage-check}

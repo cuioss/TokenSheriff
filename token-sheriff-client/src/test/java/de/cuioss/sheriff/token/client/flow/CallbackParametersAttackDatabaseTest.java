@@ -30,9 +30,7 @@ import org.junit.jupiter.params.provider.ArgumentsSource;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
-import static org.junit.jupiter.api.Assertions.assertAll;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Drives the curated {@code http.security} attack corpora through the authorization-code callback

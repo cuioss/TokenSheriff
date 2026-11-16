@@ -29,10 +29,7 @@ import java.util.Random;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
-import static org.junit.jupiter.api.Assertions.assertAll;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Drift guard for the run-time initialization the client ships for GraalVM native image.

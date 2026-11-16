@@ -28,6 +28,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.security.Signature;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -271,7 +272,7 @@ class LogoutTokenValidatorNumericDateTest {
                 .collect(Collectors.joining(",", "{", "}"));
         String signingInput = base64Url(header) + "." + base64Url(payload);
         try {
-            java.security.Signature signer = java.security.Signature.getInstance("SHA256withRSA");
+            Signature signer = Signature.getInstance("SHA256withRSA");
             signer.initSign(InMemoryKeyMaterialHandler.getDefaultPrivateKey());
             signer.update(signingInput.getBytes(StandardCharsets.US_ASCII));
             return signingInput + "." + Base64.getUrlEncoder().withoutPadding().encodeToString(signer.sign());
