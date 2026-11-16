@@ -22,6 +22,7 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.InstantSource;
@@ -37,7 +38,9 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * A throwing {@code afterClaim} hook aborts the refresh like any other abort: the exception reaches
  * the caller that claimed the slot, no state is written, the claim is released, and a caller that
- * joined the claim re-evaluates instead of waiting forever. The delegate is a scripted
+ * joined the claim re-evaluates instead of waiting forever. A hook that publishes a newer entry
+ * aborts the claim as a superseded read, and a joined caller is never answered from that entry
+ * unless it is still fresh. The delegate is a scripted
  * {@link DiscoveryResolver} subclass and time is driven by an injected {@link InstantSource}; no case
  * sleeps, and every wait is bounded.
  */
@@ -50,6 +53,7 @@ class CachingDiscoveryResolverHookFailureTest {
     private static final Duration GRACE = Duration.ofMinutes(10);
     private static final String ISSUER = "https://issuer.example";
     private static final String TOKEN_ENDPOINT = ISSUER + "/token";
+    private static final String COMPETING_TOKEN_ENDPOINT = ISSUER + "/competing-token";
     private static final long AWAIT_SECONDS = 10;
 
     private final AtomicReference<Instant> now = new AtomicReference<>(START);
@@ -171,6 +175,100 @@ class CachingDiscoveryResolverHookFailureTest {
                 () -> assertEquals(DiscoveryCacheStatus.State.RESOLVED, resolver.status().state()));
     }
 
+    /**
+     * Pins the superseded read: once a joiner is parked on the claim, the hook publishes an already
+     * expired entry between the winner's read and its re-read, so the winner aborts its claim. The
+     * joined caller must re-evaluate and be
+     * answered by a refresh, never by the expired entry the superseded claim found. Before the fix the
+     * claim was completed with that entry and the joiner returned its competing token endpoint.
+     */
+    @Test
+    @DisplayName("Should not answer a joined caller from the expired entry a superseded claim found")
+    void shouldNotAnswerJoinerFromExpiredSupersedingEntry() throws Exception {
+        var competitor = new CachingDiscoveryResolver(new CountingDelegate(COMPETING_TOKEN_ENDPOINT), TTL, GRACE,
+                clock);
+        competitor.resolve();
+        resolver.resolve();
+        advance(TTL);
+        int callsBefore = delegate.calls();
+
+        var outcomes = runSupersededClaim(competitor);
+
+        assertAll("joiner re-evaluates instead of serving the expired entry",
+                () -> assertNull(outcomes[0].failure(), "the winner does not fail"),
+                () -> assertNull(outcomes[1].failure(), "the joiner does not fail"),
+                () -> assertEquals(TOKEN_ENDPOINT, outcomes[0].result().tokenEndpoint,
+                        "the winner is answered by the refresh"),
+                () -> assertEquals(TOKEN_ENDPOINT, outcomes[1].result().tokenEndpoint,
+                        "the joiner is answered by the refresh, not by the expired competing entry"),
+                () -> assertEquals(1, delegate.calls() - callsBefore, "exactly one refresh reached the delegate"),
+                () -> assertEquals(DiscoveryCacheStatus.State.RESOLVED, resolver.status().state()),
+                () -> assertEquals(START.plus(TTL), resolver.status().lastSuccess(),
+                        "the refresh ran at the advanced clock"));
+    }
+
+    @Test
+    @DisplayName("Control: should answer a joined caller from a fresh entry a superseded claim found, without a refresh")
+    void shouldAnswerJoinerFromFreshSupersedingEntryWithoutRefresh() throws Exception {
+        resolver.resolve();
+        advance(TTL);
+        var competitor = new CachingDiscoveryResolver(new CountingDelegate(COMPETING_TOKEN_ENDPOINT), TTL, GRACE,
+                clock);
+        competitor.resolve();
+        int callsBefore = delegate.calls();
+
+        var outcomes = runSupersededClaim(competitor);
+
+        assertAll("a fresh superseding entry is served without a refresh",
+                () -> assertNull(outcomes[0].failure(), "the winner does not fail"),
+                () -> assertNull(outcomes[1].failure(), "the joiner does not fail"),
+                () -> assertEquals(COMPETING_TOKEN_ENDPOINT, outcomes[0].result().tokenEndpoint,
+                        "the winner is answered from the fresh competing entry"),
+                () -> assertEquals(COMPETING_TOKEN_ENDPOINT, outcomes[1].result().tokenEndpoint,
+                        "the joiner is answered from the fresh competing entry"),
+                () -> assertEquals(0, delegate.calls() - callsBefore, "no refresh reached the delegate"),
+                () -> assertEquals(START.plus(TTL), resolver.status().lastSuccess(),
+                        "lastSuccess is the competing entry's resolution"));
+    }
+
+    /**
+     * Runs a winner whose claim hook holds the claim until a joiner, which read the same stale entry,
+     * is parked on it, and then publishes the competitor's entry before the winner re-reads the state.
+     *
+     * @return the winner's outcome at index 0 and the joiner's at index 1
+     */
+    private Outcome[] runSupersededClaim(CachingDiscoveryResolver competitor) throws Exception {
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        onNextClaim.set(() -> {
+            entered.countDown();
+            await(release);
+            stateOf(resolver).set(stateOf(competitor).get());
+        });
+
+        var winner = start(resolver::resolve);
+        assertTrue(entered.await(AWAIT_SECONDS, TimeUnit.SECONDS), "the winner must claim the slot");
+        var joiner = start(resolver::resolve);
+        awaitJoined(joiner.thread());
+        release.countDown();
+
+        return new Outcome[]{winner.outcome(), joiner.outcome()};
+    }
+
+    /**
+     * Reads the cache's private state holder, so a hook can publish another cache's entry into it.
+     */
+    @SuppressWarnings("unchecked")
+    private static AtomicReference<Object> stateOf(CachingDiscoveryResolver cache) {
+        try {
+            Field field = CachingDiscoveryResolver.class.getDeclaredField("state");
+            field.setAccessible(true);
+            return (AtomicReference<Object>) field.get(cache);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError("CachingDiscoveryResolver must hold its entry in a field named 'state'", e);
+        }
+    }
+
     private void advance(Duration duration) {
         now.set(now.get().plus(duration));
     }
@@ -245,14 +343,21 @@ class CachingDiscoveryResolverHookFailureTest {
     private static final class CountingDelegate extends DiscoveryResolver {
 
         private final AtomicInteger calls = new AtomicInteger();
+        private final String tokenEndpoint;
 
         CountingDelegate() {
+            this(TOKEN_ENDPOINT);
+        }
+
+        /** A delegate whose document names {@code tokenEndpoint}, so its entries are recognisable. */
+        CountingDelegate(String tokenEndpoint) {
             super(ClientConfiguration.builder()
                     .issuer(ISSUER)
                     .clientId("client")
                     .clientSecret("secret")
                     .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
                     .build());
+            this.tokenEndpoint = tokenEndpoint;
         }
 
         int calls() {
@@ -264,7 +369,7 @@ class CachingDiscoveryResolverHookFailureTest {
             calls.incrementAndGet();
             var metadata = new ProviderMetadata();
             metadata.issuer = ISSUER;
-            metadata.tokenEndpoint = TOKEN_ENDPOINT;
+            metadata.tokenEndpoint = tokenEndpoint;
             return metadata;
         }
     }
