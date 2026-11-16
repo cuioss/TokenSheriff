@@ -264,8 +264,9 @@ the slot is cleared. A caller that joins an in-flight refresh waits for the whol
 a stale document could be served; this bounds the upstream load to one request per refresh. A caller
 that claims the slot but finds that another caller published a newer state since its own read does
 not refresh: the claim is aborted, and that caller and every caller that joined it re-evaluate
-against the current state. None of them is answered from the newer state, because a different state
-is not necessarily a fresh one.
+against the current state. The aborted claim hands none of them the newer state, because a
+different state is not necessarily a fresh one: a newer state that is still fresh is then served
+without a refresh, and an expired one makes the first caller that claims the slot refresh it.
 
 *Every check runs again.* A refresh is an ordinary `DiscoveryResolver.resolve()`, so every check an
 uncached resolution performs — TLS, the `issuer` match, the endpoint schemes, the egress policy, the
