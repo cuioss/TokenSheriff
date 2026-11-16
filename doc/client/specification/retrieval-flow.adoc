@@ -244,17 +244,24 @@ plus the `InstantSource` it reads the time from.
 |===
 | Setting | Default | Rule
 
-| `ttl` | none (required) | How long a resolved document is served without a refresh, measured from the successful resolution. Must be positive.
-| `gracePeriod` | none (required); `PT0S` under Quarkus | How long past its TTL the last resolved document is still served while refreshes fail. Must not be negative. Zero fails closed as soon as the TTL has elapsed and a refresh fails.
-| `minRefreshInterval` | `PT0S` | The minimum time between a failed refresh and the next attempt. Must not be negative. Zero retries on the next call.
+| `ttl` | none (required) | How long a resolved document is served without a refresh, measured from the successful resolution. Must be positive and at most 365 days.
+| `gracePeriod` | none in Java (a required constructor argument); `PT0S` under Quarkus | How long past its TTL the last resolved document is still served while refreshes fail. Must not be negative and at most 365 days. Zero fails closed as soon as the TTL has elapsed and a refresh fails.
+| `minRefreshInterval` | `PT0S` | The minimum time between a failed refresh and the next attempt. Must not be negative and at most 365 days. At the `PT0S` default nothing is held back: a failed refresh is retried on the next call.
 | `jitter` | `PT0S` | The upper bound of a random amount by which each freshness window is shortened. Must not be negative and must be smaller than the TTL. Zero disables it.
 |===
+
+The constructor refuses a value that breaks its rule with an `IllegalArgumentException`.
+`CachingDiscoveryResolver.checkSettings(ttl, gracePeriod, minRefreshInterval, jitter)` applies the same
+rules without creating a cache, so a caller that reads the settings from configuration can refuse an
+invalid value before the first resolution; each refusal message starts with the name of the offending
+parameter. With every duration at most 365 days the instant arithmetic of the cache cannot overflow.
 
 *Lazy, single-flight refresh.* No background thread is started. The first `resolve()` call on a
 stale or never-resolved cache refreshes through `DiscoveryResolver.resolve()` on its own thread.
 Concurrent callers share that refresh: the first caller claims the in-flight slot with one atomic
 compare-and-set, every other caller joins its result, and the new cache entry is published before
-the slot is cleared.
+the slot is cleared. A caller that joins an in-flight refresh waits for the whole refresh, even when
+a stale document could be served; this bounds the upstream load to one request per refresh.
 
 *Every check runs again.* A refresh is an ordinary `DiscoveryResolver.resolve()`, so every check an
 uncached resolution performs — TLS, the `issuer` match, the endpoint schemes, the egress policy, the
@@ -267,6 +274,21 @@ throws a `TransportException` stating that the cached metadata expired and namin
 last failure, with the last failure as cause. A cache that has never resolved a document has nothing
 to serve and propagates the refresh failure itself. Within the minimum refresh interval after a
 failure no refresh is attempted, and the same stale policy answers from the cache.
+
+*Every runtime exception is a failed refresh.* Not only a `TransportException`: any runtime exception
+the delegate throws is recorded as `FAILED`, with its class name as the failure cause, and the minimum
+refresh interval and the stale policy apply to it exactly as to a transport failure. While nothing
+has been resolved, the recorded exception itself is rethrown — the same instance to the refreshing
+caller, to every caller that joined it, and to every caller answered from the record within the
+minimum refresh interval; the cache never mutates it. Past the grace period the fail-closed
+`TransportException` carries it as its cause.
+
+*An interrupted refresh is aborted, not recorded.* When the delegate's call fails while the calling
+thread's interrupt flag is set, the interrupt belongs to the caller and not to the authorization
+server: no state is written, so neither the status nor the retry backoff changes. The delegate's
+exception reaches the interrupted caller with its interrupt flag kept, and every caller that joined
+the aborted refresh re-evaluates, so one of them starts a fresh refresh. An `Error` thrown by the
+delegate aborts the refresh in the same way.
 
 *Defensive copy.* Every `resolve()` returns an independent copy (`ProviderMetadata.copy()`). The
 cache holds its own copy, so a caller that mutates the returned metadata never changes what the next
@@ -287,13 +309,21 @@ failed the most recent attempt — never its message or a response body.
 | `FAILED` | The most recent attempt failed and nothing can be served. | `ERROR`
 |===
 
-*Logging.* A successful refresh logs at `DEBUG`; the delegate's own discovery `INFO` line therefore
-appears at most once per TTL period. A failure episode is logged once, not per attempt:
+*Logging.* Every refresh runs through the delegate, which logs its discovery `INFO` line
+(`TokenSheriffClient-1`) on every successful refresh — so once per TTL period while refreshes
+succeed — and its own line for every failed attempt. With the default `minRefreshInterval` of `PT0S`
+a failed refresh is retried on the next call, so a failing provider produces one delegate line per
+call. The cache itself adds a `DEBUG` line per successful and per failed refresh, and three records
+that are logged once per failure episode, not per attempt:
 
 * entering it while a document is still servable logs `TokenSheriffClient-115` at `WARN`;
 * the end of the grace period, on the first resolution refused after it, logs
   `TokenSheriffClient-116` at `WARN`;
 * the first successful refresh after a failure logs `TokenSheriffClient-4` at `INFO`.
+
+The one accepted exception: a compare-and-set lost while recording the grace-period expiry, or a
+refresh that started from an older state, can log `TokenSheriffClient-116` more than once in one
+failure episode. This affects the log volume only, never an answer.
 
 A failure cause is logged as its exception class name. A failure message reaches the `DEBUG` log only
 through `LogSanitizer`, and no response body is logged
@@ -319,14 +349,25 @@ not also satisfy a `LoadingStatusProvider` injection point.
 | `sheriff.client.discovery-cache.jitter` | Duration | `PT0S`
 |===
 
-An inconsistent configuration fails application startup with an `IllegalStateException` naming the
-property and the fix
+An inconsistent or invalid configuration fails application startup with an `IllegalStateException`
+naming the property and the fix
 (xref:../../adr/0026-Orphaned_or_unresolvable_extension_configuration_fails_startup_instead_of_being_ignored.adoc[ADR-0026]):
 `ttl`, `grace-period`, `min-refresh-interval` or `jitter` set while `enabled` is not `true` would
-otherwise be silently ignored, and `enabled=true` without a `ttl` has no usable time to live. The
-check runs from a startup observer and reads the configuration only; every client bean stays lazy.
-Injecting `CachingDiscoveryResolver` while the cache is not enabled fails with an
-`IllegalStateException` naming `sheriff.client.discovery-cache.enabled`.
+otherwise be silently ignored, so it is refused first, whatever its value; `enabled=true` without a
+`ttl` has no usable time to live; and with the cache enabled, a value that does not parse as a
+duration, or that breaks a rule of the settings table above (including the 365-day bound), is refused
+before the first resolution. The check runs from a startup observer and reads the configuration only;
+every client bean stays lazy.
+
+Injecting `CachingDiscoveryResolver` while the cache is not enabled fails the deployment: the build
+records every injection point that asks for it — directly or through `Instance`, `Provider` or
+`InjectableInstance` — and a runtime-init check then refuses the start with an `IllegalStateException`
+naming `sheriff.client.discovery-cache.enabled`, before the application serves. An application that
+injects no `CachingDiscoveryResolver` gains no runtime work from this check. A dynamic lookup the
+build cannot see (`CDI.current().select(...)`, `Arc.container().instance(...)`) is not covered by
+it: under ArC's default removal of unused beans no injection point keeps the bean, so the lookup
+finds none, and where the bean is retained its first use fails with the same
+`IllegalStateException`.
 
 == Adversarial coverage
 

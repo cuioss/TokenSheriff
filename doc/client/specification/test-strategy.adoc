@@ -258,7 +258,11 @@ test asserts rejection:
 | `CachingDiscoveryResolverAdversarialTest` serves a hostile document on refresh — another issuer,
   a cleartext endpoint inside an `https` document, an oversized body, a non-JSON media type — and
   asserts each is refused by the unchanged discovery checks and never replaces the cached document;
-  a refresh stampede of concurrent callers after TTL expiry reaches the server exactly once.
+  a refresh stampede of concurrent callers after TTL expiry reaches the server exactly once, with
+  every caller but the winner observed waiting on the in-flight refresh before it is released; and a
+  newer entry published between a caller's claim of the refresh slot and its re-read of the state is
+  served instead of being replaced by a hostile refetch, against a matched control in which nothing
+  is published and the refresh goes ahead.
 
 | xref:../threat-model.adoc#T-CONSTRAINT-LOSS[T-CONSTRAINT-LOSS]
 | A DPoP / mTLS-bound token is asserted to keep its binding across storage and refresh.
@@ -564,17 +568,35 @@ an isolated-component or server-capability test alone does not qualify the row a
 | `RefreshProductionPathSpecIT`: refresh through the lifecycle manager against real Keycloak | all
 
 | xref:../requirements.adoc#CLIENT-29[CLIENT-29] | T-DISCOVERY-STALE, T-SSRF-ADVERTISED
-| `CachingDiscoveryResolverTest`: TTL freshness, defensive copies, jitter bounds, constructor
-  validation, the status snapshot and the `LoaderStatus` mapping;
+| `CachingDiscoveryResolverTest`: TTL freshness, defensive copies, jitter bounds (over 200 caches
+  at least one freshness window is shorter than the TTL and none is shorter than `ttl - jitter`),
+  constructor and `checkSettings` validation including the 365-day bound, the status snapshot and
+  the `LoaderStatus` mapping;
   `CachingDiscoveryResolverStalePolicyTest`: a failed refresh served stale until
   `lastSuccess + ttl + gracePeriod` and refused after it, a never-resolved cache propagating the
   failure, the minimum refresh interval, and the `TokenSheriffClient-115` / `-116` / `-4` records
-  each logged once per episode; `CachingDiscoveryResolverAdversarialTest`: the attack cases of
+  each logged once per episode; `CachingDiscoveryResolverFailureHandlingTest`: an unexpected runtime
+  exception recorded as `FAILED` with its class name only, under the backoff and the stale policy,
+  the same recorded instance handed to the winner and a joined caller, and an interrupted refresh
+  aborted without writing state, with the joined caller running its own refresh;
+  `CachingDiscoveryResolverRefreshRegressionTest`: a refreshed document with new token and userinfo
+  endpoints reaches the caller after the refresh and not before the TTL, a joined caller of a failed
+  refresh receives the `TransportException` with nothing resolved and the stale copy within grace,
+  an `Error` in the winner releases the slot and the joined caller re-evaluates, and the recovery
+  record is pinned as `TokenSheriffClient-4`;
+  `CachingDiscoveryResolverAdversarialTest`: the attack cases of
   xref:#_adversarial_coverage[]. `TokenSheriffClientDiscoveryCacheTest`: the cache is off by
   default and the `DiscoveryResolver` bean unchanged, an enabled cache produces a
   `CachingDiscoveryResolver` reporting `NOT_ATTEMPTED`, each orphaned property and an enabled cache
   without a `ttl` fail startup naming the property, and injection while disabled fails naming
-  `enabled`
+  `enabled`; `TokenSheriffClientDiscoveryCacheValidationTest`: every zero, negative, unparseable,
+  over-bound or jitter-not-below-TTL value fails startup naming its property, the same value on a
+  disabled cache fails as an orphan, values at the bound pass, and `requireDiscoveryCacheEnabled`
+  needs no client configuration; `DiscoveryCacheInjectionDeploymentTest`: a direct and an `Instance`
+  injection of `CachingDiscoveryResolver` while the cache is disabled fail the deployment naming
+  `sheriff.client.discovery-cache.enabled`, against the matched start controls
+  `DiscoveryCacheEnabledInjectionDeploymentTest` (the same injecting bean, cache enabled) and
+  `DiscoveryCacheDisabledNoInjectionDeploymentTest` (cache disabled, no injection point)
 | `DiscoverySpecIT`: two resolutions within the TTL against the real Keycloak realm return equal,
   independent copies, and the cache reports `RESOLVED` and `LoaderStatus.OK` | all
 |===
