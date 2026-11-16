@@ -75,7 +75,9 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p>
  * <strong>Bounds.</strong> {@code ttl}, {@code gracePeriod} and {@code minRefreshInterval} must each
  * be at most 365 days, and {@code jitter} must be smaller than {@code ttl}; {@link #checkSettings}
- * holds these rules for every caller that validates the settings before constructing a cache.
+ * holds these rules for every caller that validates the settings before constructing a cache. It
+ * refuses a value with an {@link InvalidSettingException} that names the offending {@link Setting},
+ * so a caller can map the refusal to its own configuration property without parsing the message.
  * <p>
  * <strong>Accepted behaviours.</strong> A caller that joins an in-flight refresh waits for the whole
  * refresh, even when a stale document could be served; this bounds the upstream load to one request
@@ -185,7 +187,11 @@ public class CachingDiscoveryResolver implements LoadingStatusProvider {
      * Creates a caching resolver with a hook that runs right after a caller has claimed the refresh
      * slot and before it re-reads the cache state, so a test can publish a competing state in exactly
      * that window.
-     *
+     * <p>
+     * The hook runs inside the claimed region: an exception it throws aborts the refresh like any
+     * other abort — no state is written, the claim is released, every joined caller re-evaluates, and
+     * the exception propagates to the caller that claimed the slot.
+     * <p>
      * The other parameters and every rule on them are those of
      * {@link #CachingDiscoveryResolver(DiscoveryResolver, Duration, Duration, Duration, Duration, InstantSource)}.
      *
@@ -209,9 +215,12 @@ public class CachingDiscoveryResolver implements LoadingStatusProvider {
      * cache. A caller that reads the settings from configuration can refuse an invalid value before
      * the first resolution.
      * <p>
-     * Every {@link IllegalArgumentException} message starts with the name of the offending parameter
-     * — {@code ttl}, {@code gracePeriod}, {@code minRefreshInterval} or {@code jitter} — followed by
-     * a space, so a caller can map the refusal to its own setting.
+     * Every refusal of a value is an {@link InvalidSettingException} whose {@link InvalidSettingException#setting()}
+     * names the offending {@link Setting}, so a caller can map the refusal to its own setting without
+     * reading the message. The rule that {@code jitter} must be smaller than {@code ttl} is attributed
+     * to {@link Setting#JITTER}. Every message starts with the offending setting's
+     * {@link Setting#parameterName()} — {@code ttl}, {@code gracePeriod}, {@code minRefreshInterval}
+     * or {@code jitter} — followed by a space.
      *
      * @param ttl                how long a resolved document is served without a refresh; must be
      *                           positive and at most 365 days
@@ -221,8 +230,8 @@ public class CachingDiscoveryResolver implements LoadingStatusProvider {
      *                           attempt; must not be negative and at most 365 days
      * @param jitter             the upper bound of the random shortening of each freshness window;
      *                           must not be negative and must be smaller than {@code ttl}
-     * @throws NullPointerException     if any argument is {@code null}
-     * @throws IllegalArgumentException if any argument breaks the rule stated for it
+     * @throws NullPointerException    if any argument is {@code null}
+     * @throws InvalidSettingException if any argument breaks the rule stated for it
      */
     public static void checkSettings(Duration ttl, Duration gracePeriod, Duration minRefreshInterval,
             Duration jitter) {
@@ -231,28 +240,31 @@ public class CachingDiscoveryResolver implements LoadingStatusProvider {
         Objects.requireNonNull(minRefreshInterval, "minRefreshInterval must not be null");
         Objects.requireNonNull(jitter, "jitter must not be null");
         if (ttl.isNegative() || ttl.isZero()) {
-            throw new IllegalArgumentException("ttl must be positive, was " + ttl);
+            throw new InvalidSettingException(Setting.TTL, "ttl must be positive, was " + ttl);
         }
-        requireAtMostMax(ttl, "ttl");
-        requireNonNegative(gracePeriod, "gracePeriod");
-        requireAtMostMax(gracePeriod, "gracePeriod");
-        requireNonNegative(minRefreshInterval, "minRefreshInterval");
-        requireAtMostMax(minRefreshInterval, "minRefreshInterval");
-        requireNonNegative(jitter, "jitter");
+        requireAtMostMax(ttl, Setting.TTL);
+        requireNonNegative(gracePeriod, Setting.GRACE_PERIOD);
+        requireAtMostMax(gracePeriod, Setting.GRACE_PERIOD);
+        requireNonNegative(minRefreshInterval, Setting.MIN_REFRESH_INTERVAL);
+        requireAtMostMax(minRefreshInterval, Setting.MIN_REFRESH_INTERVAL);
+        requireNonNegative(jitter, Setting.JITTER);
         if (jitter.compareTo(ttl) >= 0) {
-            throw new IllegalArgumentException("jitter must be smaller than ttl, was " + jitter + " for ttl " + ttl);
+            throw new InvalidSettingException(Setting.JITTER,
+                    "jitter must be smaller than ttl, was " + jitter + " for ttl " + ttl);
         }
     }
 
-    private static void requireNonNegative(Duration value, String name) {
+    private static void requireNonNegative(Duration value, Setting setting) {
         if (value.isNegative()) {
-            throw new IllegalArgumentException(name + " must not be negative, was " + value);
+            throw new InvalidSettingException(setting,
+                    setting.parameterName() + " must not be negative, was " + value);
         }
     }
 
-    private static void requireAtMostMax(Duration value, String name) {
+    private static void requireAtMostMax(Duration value, Setting setting) {
         if (value.compareTo(MAX_DURATION) > 0) {
-            throw new IllegalArgumentException(name + " must be at most 365 days, was " + value);
+            throw new InvalidSettingException(setting,
+                    setting.parameterName() + " must be at most 365 days, was " + value);
         }
     }
 
@@ -275,47 +287,64 @@ public class CachingDiscoveryResolver implements LoadingStatusProvider {
         while (true) {
             CacheState current = state.get();
             Instant now = clock.instant();
-            ProviderMetadata cached = current.metadata;
-            Instant fresh = current.freshUntil;
-            if (cached != null && fresh != null && now.isBefore(fresh)) {
-                return cached.copy();
+            ProviderMetadata fresh = freshCopy(current, now);
+            if (fresh != null) {
+                return fresh;
             }
             if (current.inRetryBackoff(now, minRefreshInterval)) {
                 return serveStaleOrFail(current, now);
             }
             CompletableFuture<CacheState> claim = new CompletableFuture<>();
-            if (inFlight.compareAndSet(null, claim)) {
-                afterClaim.run();
-                CacheState latest = state.get();
-                if (latest != current) {
-                    // Another caller published a newer state between the read above and the claim:
-                    // refreshing against the outdated read could replace that newer entry with a
-                    // failure derived from the old one. Hand the newer state to anyone already joined,
-                    // release the slot and re-evaluate against it.
-                    claim.complete(latest);
-                    inFlight.compareAndSet(claim, null);
-                    continue;
-                }
-                CacheState refreshed = refreshAsWinner(current, claim);
-                return answer(refreshed, clock.instant());
+            CacheState outcome = inFlight.compareAndSet(null, claim)
+                    ? refreshAsWinner(current, claim)
+                    : joinRunning();
+            if (outcome != null) {
+                return answer(outcome, clock.instant());
             }
-            CompletableFuture<CacheState> running = inFlight.get();
-            if (running != null) {
-                CacheState joined = join(running);
-                if (joined != null) {
-                    return answer(joined, clock.instant());
-                }
-                // The joined refresh was aborted and wrote no state: re-evaluate, so one of the
-                // joined callers claims a fresh refresh.
-            }
-            // Otherwise the winner cleared the slot between the failed claim and the read: its result
-            // is already published, so re-evaluate against the new state.
+            // No outcome to answer from: the winner found a newer state than the one it read, the
+            // joined refresh was aborted and wrote no state, or the winner cleared the slot between
+            // the failed claim and the read. In every case re-evaluate against the current state, so
+            // one caller claims a fresh refresh when one is still needed.
         }
     }
 
-    private CacheState refreshAsWinner(CacheState previous, CompletableFuture<CacheState> claim) {
+    /**
+     * Returns a copy of the cached document while it is fresh.
+     *
+     * @return an independent copy of the cached document, or {@code null} if there is none or it is
+     *         no longer fresh at {@code now}
+     */
+    private static @Nullable ProviderMetadata freshCopy(CacheState current, Instant now) {
+        ProviderMetadata cached = current.metadata;
+        Instant fresh = current.freshUntil;
+        if (cached != null && fresh != null && now.isBefore(fresh)) {
+            return cached.copy();
+        }
+        return null;
+    }
+
+    /**
+     * Runs the claimed region of the caller that won the refresh slot: the test hook, the re-read of
+     * the cache state and the refresh itself. Every exit — a normal refresh, a superseded read, a
+     * throwing hook, an interrupt or an {@link Error} — completes the claim and releases the slot.
+     *
+     * @return the state the refresh published, or {@code null} if another caller published a newer
+     *         state between the caller's read and its claim
+     */
+    private @Nullable CacheState refreshAsWinner(CacheState previous, CompletableFuture<CacheState> claim) {
         boolean completed = false;
         try {
+            afterClaim.run();
+            CacheState latest = state.get();
+            if (latest != previous) {
+                // Another caller published a newer state between the read and the claim: refreshing
+                // against the outdated read could replace that newer entry with a failure derived from
+                // the old one. Hand the newer state to anyone already joined, release the slot and let
+                // the caller re-evaluate against it.
+                claim.complete(latest);
+                completed = true;
+                return null;
+            }
             CacheState refreshed = refresh(previous);
             // Publish the new cache entry before the slot is cleared, so a caller that finds the slot
             // empty always sees the result of the refresh that just ended.
@@ -326,12 +355,24 @@ public class CachingDiscoveryResolver implements LoadingStatusProvider {
         } finally {
             if (!completed) {
                 // refresh() records every runtime failure of the delegate, so only an interrupted
-                // refresh or an Error gets here. No state is written; the joined callers must not wait
-                // forever on the aborted refresh, so they are told to re-evaluate.
+                // refresh, an Error or a throwing test hook gets here. No state is written; the joined
+                // callers must not wait forever on the aborted refresh, so they are told to
+                // re-evaluate.
                 claim.completeExceptionally(REFRESH_ABORTED);
             }
             inFlight.compareAndSet(claim, null);
         }
+    }
+
+    /**
+     * Waits for the refresh another caller has claimed.
+     *
+     * @return the state the refresh published, or {@code null} if it was aborted or the winner had
+     *         already cleared the slot
+     */
+    private @Nullable CacheState joinRunning() {
+        CompletableFuture<CacheState> running = inFlight.get();
+        return running == null ? null : join(running);
     }
 
     /**
@@ -462,6 +503,71 @@ public class CachingDiscoveryResolver implements LoadingStatusProvider {
                     ? LoaderStatus.UNDEFINED
                     : LoaderStatus.ERROR;
         };
+    }
+
+    /**
+     * The cache settings {@link #checkSettings} validates, each identified by the name of its
+     * parameter.
+     *
+     * @since 1.0
+     */
+    public enum Setting {
+
+        /** The time to live of a resolved document, parameter {@code ttl}. */
+        TTL("ttl"),
+
+        /** The grace period past the time to live, parameter {@code gracePeriod}. */
+        GRACE_PERIOD("gracePeriod"),
+
+        /** The minimum interval between a failed refresh and the next one, parameter {@code minRefreshInterval}. */
+        MIN_REFRESH_INTERVAL("minRefreshInterval"),
+
+        /** The upper bound of the freshness-window jitter, parameter {@code jitter}. */
+        JITTER("jitter");
+
+        private final String parameterName;
+
+        Setting(String parameterName) {
+            this.parameterName = parameterName;
+        }
+
+        /**
+         * Returns the name of the parameter this setting is passed as.
+         *
+         * @return the parameter name, for example {@code minRefreshInterval}; never {@code null}
+         */
+        public String parameterName() {
+            return parameterName;
+        }
+    }
+
+    /**
+     * The refusal of a cache setting by {@link #checkSettings}: it names the offending
+     * {@link Setting} structurally, so a caller can map the refusal to its own configuration property
+     * without reading the message. The message starts with the setting's
+     * {@link Setting#parameterName()} followed by a space.
+     *
+     * @since 1.0
+     */
+    public static final class InvalidSettingException extends IllegalArgumentException {
+
+        private static final long serialVersionUID = 1L;
+
+        private final Setting setting;
+
+        private InvalidSettingException(Setting setting, String message) {
+            super(message);
+            this.setting = setting;
+        }
+
+        /**
+         * Returns the setting whose value was refused.
+         *
+         * @return the offending setting; never {@code null}
+         */
+        public Setting setting() {
+            return setting;
+        }
     }
 
     /**
