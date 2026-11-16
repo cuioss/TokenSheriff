@@ -227,6 +227,11 @@ class CachingDiscoveryResolverTest {
             if (moduleDispatcher.getCallCounter() == 2) {
                 shortened++;
             }
+
+            now.set(START.plus(TTL));
+            resolver.resolve();
+            assertEquals(2, moduleDispatcher.getCallCounter(),
+                    "sample " + sample + ": stale at the latest at ttl, the window is never longer than the ttl");
         }
 
         assertTrue(shortened > 0, "at least one of " + JITTER_SAMPLES

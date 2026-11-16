@@ -317,7 +317,7 @@ class CachingDiscoveryResolverFailureHandlingTest {
             try {
                 return new Outcome(call.call(), null, Thread.currentThread().isInterrupted());
             }
-            /*TODO: Catch specific not RuntimeException. Suppress: // cui-rewrite:disable InvalidExceptionUsageRecipe*/
+            // cui-rewrite:disable InvalidExceptionUsageRecipe
             catch (RuntimeException e) {
                 return new Outcome(null, e, Thread.currentThread().isInterrupted());
             }
