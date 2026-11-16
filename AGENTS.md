@@ -318,7 +318,10 @@ its broad catch is deliberate, and these are all the forms the tree holds:
   sources (CDI resolution, configuration access) are an open set of unchecked exceptions as a fixed
   status; an `Error` still propagates. `HttpJwksLoader` catches `Exception` around a background
   refresh cycle and logs it, because the `ScheduledExecutorService` cancels the refresh task on an
-  uncaught exception; an `Error` is not caught there either.
+  uncaught exception; an `Error` is not caught there either. `CachingDiscoveryResolver` catches
+  `RuntimeException` around its delegate's `DiscoveryResolver.resolve()`, which is public on a
+  non-final class, so a subclass can throw any unchecked exception; each one is recorded as a failed
+  refresh instead of escaping with no state written, and an `Error` still propagates.
 - **Release steps that must all run.** `TokenValidator` catches `Throwable` around the `Runnable`
   release steps of `close()`, so every step runs after any failure, and rethrows the last failure
   unwrapped once they have run, with each earlier distinct failure attached as suppressed. An earlier
