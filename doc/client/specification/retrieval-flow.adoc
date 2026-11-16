@@ -311,9 +311,11 @@ failed the most recent attempt — never its message or a response body.
 
 *Logging.* Every refresh runs through the delegate, which logs its discovery `INFO` line
 (`TokenSheriffClient-1`) on every successful refresh — so once per TTL period while refreshes
-succeed — and its own line for every failed attempt. With the default `minRefreshInterval` of `PT0S`
-a failed refresh is retried on the next call, so a failing provider produces one delegate line per
-call. The cache itself adds a `DEBUG` line per successful and per failed refresh, and three records
+succeed — and its own line for most failed attempts (an unexpected HTTP status, an I/O failure, an
+unparseable body, an issuer mismatch, a non-TLS issuer); a wrong content type, an empty or oversized
+body, an interrupt and a missing or non-https endpoint are thrown without a delegate line. With the
+default `minRefreshInterval` of `PT0S` a failed refresh is retried on the next call, so a failing
+provider usually produces one delegate line per call. The cache itself adds a `DEBUG` line per successful and per failed refresh, and three records
 that are logged once per failure episode, not per attempt:
 
 * entering it while a document is still servable logs `TokenSheriffClient-115` at `WARN`;

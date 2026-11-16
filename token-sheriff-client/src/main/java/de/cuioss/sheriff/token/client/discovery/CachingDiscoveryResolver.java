@@ -89,8 +89,10 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p>
  * <strong>Logging.</strong> Every refresh runs through the delegate, which logs
  * {@link ClientLogMessages.INFO#DISCOVERY_RESOLVED} at {@code INFO} on every successful refresh and
- * its own line for every failed attempt, such as {@link ClientLogMessages.WARN#DISCOVERY_STATUS} or
- * {@link ClientLogMessages.ERROR#DISCOVERY_FAILED}. The cache adds a {@code DEBUG} line per successful
+ * its own line for most failed attempts, such as {@link ClientLogMessages.WARN#DISCOVERY_STATUS} or
+ * {@link ClientLogMessages.ERROR#DISCOVERY_FAILED}; a failure the delegate throws without logging (an
+ * unexpected content type, an empty or oversized body, an interrupt, a missing or non-https endpoint)
+ * leaves only the cache's own {@code DEBUG} line. The cache adds a {@code DEBUG} line per successful
  * and per failed refresh, plus three records per failure episode: entering a failure episode while a
  * document is still servable logs {@link ClientLogMessages.WARN#DISCOVERY_REFRESH_FAILED_SERVING_STALE};
  * the end of the grace period logs {@link ClientLogMessages.WARN#DISCOVERY_CACHE_EXPIRED_FAILING_CLOSED};
