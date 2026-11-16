@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.client.quarkus;
 
+import de.cuioss.sheriff.token.client.discovery.CachingDiscoveryResolver;
 import de.cuioss.sheriff.token.client.quarkus.config.ClientConfigMapper;
 import de.cuioss.sheriff.token.client.quarkus.config.ClientRuntimeConfig;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
@@ -26,11 +27,15 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
@@ -174,6 +179,90 @@ class TokenSheriffClientDiscoveryCacheValidationTest {
                             "the checkSettings refusal is kept as the cause"),
                     () -> assertTrue(failure.getMessage().contains("minRefreshInterval must be at most 365 days"),
                             "the failure carries the rule that was broken: " + failure.getMessage()));
+        }
+    }
+
+    /** The property that carries a setting, as the configuration documents it. */
+    private static String expectedProperty(CachingDiscoveryResolver.Setting setting) {
+        return switch (setting) {
+            case TTL -> ClientRuntimeConfig.DISCOVERY_CACHE_TTL;
+            case GRACE_PERIOD -> ClientRuntimeConfig.DISCOVERY_CACHE_GRACE_PERIOD;
+            case MIN_REFRESH_INTERVAL -> ClientRuntimeConfig.DISCOVERY_CACHE_MIN_REFRESH_INTERVAL;
+            case JITTER -> ClientRuntimeConfig.DISCOVERY_CACHE_JITTER;
+        };
+    }
+
+    /** A value that breaks exactly one rule of the setting on an otherwise valid enabled cache. */
+    private static String invalidValueOf(CachingDiscoveryResolver.Setting setting) {
+        return switch (setting) {
+            case TTL -> "PT0S";
+            case GRACE_PERIOD -> NEGATIVE;
+            case MIN_REFRESH_INTERVAL -> ABOVE_BOUND;
+            case JITTER -> VALID_TTL;
+        };
+    }
+
+    @Nested
+    @DisplayName("Setting mapping")
+    class SettingMapping {
+
+        @ParameterizedTest(name = "{0}")
+        @EnumSource(CachingDiscoveryResolver.Setting.class)
+        @DisplayName("Should name exactly the property of the setting that checkSettings refused")
+        void shouldNameExactlyTheRefusedSettingsProperty(CachingDiscoveryResolver.Setting setting) {
+            String property = expectedProperty(setting);
+            Config config = configOf(enabledWith(property, invalidValueOf(setting)));
+
+            IllegalStateException failure = assertThrows(IllegalStateException.class,
+                    () -> ClientConfigMapper.validateDiscoveryCache(config),
+                    "an invalid " + setting + " must fail the validation");
+            CachingDiscoveryResolver.InvalidSettingException refusal = assertInstanceOf(
+                    CachingDiscoveryResolver.InvalidSettingException.class, failure.getCause(),
+                    "the checkSettings refusal is kept as the cause");
+            assertAll(setting + " refusal",
+                    () -> assertEquals(setting, refusal.setting(), "checkSettings names the offending setting"),
+                    () -> assertTrue(failure.getMessage().contains("'" + property + "'"),
+                            "the failure names " + property + ": " + failure.getMessage()),
+                    () -> assertTrue(Arrays.stream(CachingDiscoveryResolver.Setting.values())
+                                    .filter(other -> other != setting)
+                                    .map(TokenSheriffClientDiscoveryCacheValidationTest::expectedProperty)
+                                    .noneMatch(other -> failure.getMessage().contains("'" + other + "'")),
+                            "the failure names no other cache property: " + failure.getMessage()));
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @EnumSource(CachingDiscoveryResolver.Setting.class)
+        @DisplayName("Should refuse the property of every setting as an orphan while the cache is disabled")
+        void shouldRefuseEverySettingsPropertyAsOrphan(CachingDiscoveryResolver.Setting setting) {
+            String property = expectedProperty(setting);
+            Config config = configOf(Map.of(property, "PT1M"));
+
+            IllegalStateException failure = assertThrows(IllegalStateException.class,
+                    () -> ClientConfigMapper.validateDiscoveryCache(config),
+                    property + " on a disabled cache must be refused as an orphan");
+            assertTrue(failure.getMessage().contains("'" + property + "' is set but"),
+                    "the orphan check names " + property + ": " + failure.getMessage());
+        }
+
+        @Test
+        @DisplayName("Should cover exactly the four discovery cache duration properties in the orphan check")
+        void shouldCoverExactlyTheDurationPropertiesInOrphanCheck() {
+            Set<String> refused = new HashSet<>();
+            for (CachingDiscoveryResolver.Setting setting : CachingDiscoveryResolver.Setting.values()) {
+                String property = expectedProperty(setting);
+                Config config = configOf(Map.of(property, "PT1M"));
+                IllegalStateException failure = assertThrows(IllegalStateException.class,
+                        () -> ClientConfigMapper.validateDiscoveryCache(config));
+                if (failure.getMessage().contains("'" + property + "' is set but")) {
+                    refused.add(property);
+                }
+            }
+
+            assertEquals(Set.of(ClientRuntimeConfig.DISCOVERY_CACHE_TTL,
+                            ClientRuntimeConfig.DISCOVERY_CACHE_GRACE_PERIOD,
+                            ClientRuntimeConfig.DISCOVERY_CACHE_MIN_REFRESH_INTERVAL,
+                            ClientRuntimeConfig.DISCOVERY_CACHE_JITTER), refused,
+                    "the orphan check covers exactly the four duration properties of ClientRuntimeConfig");
         }
     }
 
