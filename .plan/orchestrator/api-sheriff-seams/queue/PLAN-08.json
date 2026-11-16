@@ -1,0 +1,11 @@
+{
+  "id": "PLAN-08",
+  "slug": "discovery-cache-and-verifier-hardening",
+  "workstream": "WS-01",
+  "status": "running",
+  "lane": "plan-marshall",
+  "plan_marshall_plan_id": "",
+  "pr": "",
+  "landing": "",
+  "seq": 8
+}

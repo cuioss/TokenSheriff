@@ -23,7 +23,9 @@ hygiene plan: every deliverable is additive, any change to TokenSheriff's own de
 and decided at outline, and the bounded-body deliverable may be dropped at outline. Target release 0.9.10.
 API Sheriff's matching deletions are a separate API Sheriff plan and are not part of this plan.
 A sixth deliverable, folded in after PLAN-05 shipped, hardens the back-channel logout validator PLAN-05 added
-(a resource-exhaustion defect in `numericDate` and four minor residuals).
+(a resource-exhaustion defect in `numericDate` and four minor residuals). A seventh, folded in after PLAN-06
+shipped, hardens the unknown-`kid` refresh and initial-load retry PLAN-06 added to `HttpJwksLoader` (an
+availability defect in the claim path's hand-off and the lane's residuals).
 
 ## Deliverables
 
@@ -229,6 +231,61 @@ change it does not want.
    `doc/validation/security-reference.adoc` and ADR-0029 (both already touched by deliverable 5), and the operator chose
    the fold. The outline may split it back out if it grows.
 
+7. **Unknown-`kid` refresh and initial-load retry hardening (folded from the PLAN-06 landing analysis; code, tests and
+   the documents that state the wrong bound).** PLAN-06 shipped `HttpJwksLoader`'s opt-in unknown-`kid` refresh and
+   initial-load retry (`#906`, merge `fbd531d8`); the landing's three-layer read found an availability defect in the claim
+   path and a set of minor residuals. The operator decided (2026-11-15) to fold them here rather than stage a separate
+   plan. The facts below are OBSERVED at `fbd531d8` from a reading; nothing was run, so each is re-verified at outline (a
+   refutation loops back to re-scope this deliverable). The new settings stay opt-in and default behaviour with both unset
+   stays unchanged, proven by the existing `HttpJwksLoaderDefaultBehaviourUnchangedTest`, which passes unedited.
+   Consumer-visible criteria, one each:
+   - **A hand-off failure leaves the in-flight guard set for good.** `scheduleUnknownKidRefresh` sets `fetchInFlight`
+     (`HttpJwksLoader:865`) and then catches only `RejectedExecutionException` around `execute(...)` (`:870-876`); the
+     release lives only in `fetchForUnknownKid`'s `finally` (`:951-953`). A caller-supplied `ScheduledExecutorService`
+     that throws any other `RuntimeException` from `execute`, or that discards the task silently, leaves the guard
+     `true`: `performBackgroundRefresh` then skips every cycle (`:1461-1464`) uncounted, so the loader never refreshes
+     again and the opt-in `maxStaleness` degradation never fires; a thrown exception also reaches the request thread,
+     against the Javadoc "never throws on the caller" (`:848-849`). The default loader-owned executor is not affected
+     (it rejects with `RejectedExecutionException`). Criteria: any failure of the hand-off releases the guard and
+     surfaces nothing on the calling thread, asserted with an executor that throws another `RuntimeException` and a
+     later periodic cycle and a later claim both still fetch; the silently discarded task, which no `catch` can see, is
+     decided at outline (a guard that expires after a bound the loader owns, or a stated requirement on a caller-supplied
+     executor recorded in ADR-0030 and the config Javadoc) and the chosen behaviour is asserted.
+   - **The window is consumed before the in-flight guard is tried** (`:861` then `:865`). A miss while a periodic cycle
+     or a retry holds the guard burns the window with no fetch. ADR-0030 does not say so. Criterion: the order is
+     changed so a lost guard does not consume the window, or the behaviour is recorded in ADR-0030 with its bound;
+     whichever is chosen is asserted.
+   - **A catch-all in new code** (`:948`, `catch (RuntimeException e)` under a `cui-rewrite:disable
+     InvalidExceptionUsageRecipe` directive with comment lines between the directive and the catch), where the PLAN-06
+     spec said the refresh-cycle catch-all is not copied. Criterion: narrow catches against the declared throwers, or an
+     explicit ADR-0030 note on why the safety net is needed, with the directive placement `AGENTS.md:373-383` asks for.
+   - **Four spec test cases and a few related ones were never written** (the lane's "functional review D2.R1: three
+     change-note test cases not written"): a fetched key set with changed material for an existing `kid`; a second window
+     elapsing while a fetch is in flight, and an unknown-`kid` fetch overlapping a periodic cycle; repeated legitimate
+     rotations staying within `maxRetiredKeySets` through the on-demand path; an unknown-`kid` failure not driving
+     well-known re-discovery, and an unknown-`kid` test in well-known mode; a sustained spray across more than one window.
+     Criterion: each has a test that can fail, in a new class, each negative paired with a positive control.
+   - **Two test classes over the 500-line guideline:** `HttpJwksLoaderInitialRetryTest` (571, created) and
+     `HttpJwksLoaderConfigTest` (1080, grown from 905). Criterion: split along their existing seams with no test lost
+     (the count of test methods is asserted equal before and after).
+   - **Wrong or stale statements in the documents.** (a) `quarkus-config-doc.adoc:69-70` documents a `10` s HTTP connect
+     and read timeout where the loader defaults are 2 s and 3 s (`HttpJwksLoaderConfig:83,89`; the resolver sets a timeout
+     only when present, `IssuerConfigResolver:715-722`); the outline reads what the Quarkus path really applies and fixes
+     the table. (b) `openid-discovery.adoc:233-236` tells operators to "choose the refresh interval as the longest delay you
+     accept for picking up a rotated key under attack", and `:248` says attempts "never overlap the periodic refresh or an
+     unknown key ID fetch"; ADR-0030 `:144-146` says an overlapping unknown-`kid` fetch makes a periodic cycle skip, so the
+     worst case is one further interval; `api-reference.adoc:231` says "never overlap another fetch" although the initial
+     fetch is not under the guard (`HttpJwksLoader:501`). Criterion: all three say what ADR-0030 says.
+   - **Two smaller points, decided at outline:** an out-of-range window or the refresh-0 combination fails startup with a
+     message naming the builder method, not the Quarkus key (`IssuerConfigResolver:567-630`; a non-positive or unparseable
+     value does name the key); and the benign outcome "JWKS unchanged" is logged at `WARN` (`DISCARD_UNCHANGED`, pinned by
+     a test), which is one `WARN` per window per issuer under a flood. Criterion: each is changed or recorded as intended.
+   Scope-bloat note: this brings the plan to seven deliverables. It is kept whole on a recorded rationale: the item is one
+   class (`HttpJwksLoader`) with its config, tests and the JWKS documents, it shares no code file with deliverables 1 to 6,
+   the shared files are `doc/developer/test-impl-mapping.adoc` and ADR-0030's neighbourhood (ADR-0030 is amended, not
+   re-decided), and the operator chose the fold. Deliverables 6 and 7 are the two defect folds and sit in different
+   modules; the outline should split either back out into its own plan if it scopes above about six tasks.
+
 ## Standing Constraints
 
 - Build and gate: Maven through the wrapper only (`./mvnw`). Before any commit that touches build inputs:
@@ -349,11 +406,25 @@ change it does not want.
 - OBSERVED: `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/TokenValidatorVerifySignatureTest.java` — `553 lines, split (deliverable 6)`
 - HYPOTHESIS: `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/test/java/de/cuioss/sheriff/token/quarkus/health/JwksEndpointHealthCheckIssuerStatusFailureTest.java` — `new test class for the fromIssuerStatus catch, to be created (deliverable 6)` (verify-at-outline)
 - HYPOTHESIS: `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/logout/LogoutTokenValidatorNumericDateTest.java` — `new test class for the out-of-range numericDate branch and the freshnessWindow limit, to be created (deliverable 6)` (verify-at-outline)
+- OBSERVED: `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoader.java`:865 — `scheduleUnknownKidRefresh`, the guard set before a hand-off that catches only `RejectedExecutionException`, and the window claim at :861 (deliverable 7; folded from inbox/landing jwks-loader-gateway-needs, PLAN-06 shipped as #906)
+- OBSERVED: `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoader.java`:948 — `fetchForUnknownKid` catch-all (deliverable 7)
+- OBSERVED: `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoader.java`:1460 — `performBackgroundRefresh`, the cycle that skips while the guard is held (deliverable 7)
+- OBSERVED: `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/commons/transport/HttpJwksLoaderConfig.java`:921 — `unknownKidRefreshWindow` Javadoc and the executor requirement if one is added (deliverable 7)
+- OBSERVED: `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/java/de/cuioss/sheriff/token/quarkus/config/IssuerConfigResolver.java`:567 — `configureUnknownKidRefreshWindow`, the failure-message surface (deliverable 7)
+- OBSERVED: `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/resources/META-INF/quarkus-config-doc.adoc`:69 — `the 10 s timeout rows` (deliverable 7)
+- OBSERVED: `token-sheriff-validation/doc/configuration/openid-discovery.adoc`:233 — `the rotation-delay wording and the "never overlap" statement` (deliverable 7)
+- OBSERVED: `token-sheriff-validation/doc/api-reference.adoc`:231 — `"never overlap another fetch"` (deliverable 7)
+- OBSERVED: `doc/adr/0030-An_opt-in_unknown-kid_refresh_claims_one_window_per_loader_and_installs_only_a_key_set_holding_the_kid.adoc`:160 — `Risks, amended for the hand-off guard and the burned window (deliverable 7)`
+- OBSERVED: `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoaderInitialRetryTest.java` — `571 lines, split (deliverable 7)`
+- OBSERVED: `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/commons/transport/HttpJwksLoaderConfigTest.java` — `1080 lines, split (deliverable 7)`
+- OBSERVED: `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoaderDefaultBehaviourUnchangedTest.java`:127 — `default-off proof, must stay unedited (deliverable 7)`
+- HYPOTHESIS: `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoaderExecutorHandOffTest.java` — `new test class for the hand-off failure and the burned window, to be created (deliverable 7)` (verify-at-outline)
+- HYPOTHESIS: `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/validation/jwks/http/HttpJwksLoaderUnknownKidGapsTest.java` — `new test class for the spec cases PLAN-06 never wrote, to be created (deliverable 7)` (verify-at-outline)
 
 ## Dependencies and Sequencing
 
 - Depends on: none.
-- Overlaps with: PLAN-03 (touches `token-sheriff-validation` commons transport `EgressPolicy`; this plan touches `commons/transport` too, only if OD-5 proceeds, in `BoundedBodyHandlers.java`, `JwksHttpContentConverter.java` and `WellKnownConfigurationConverter.java`, which PLAN-03 does not edit; the `commons/transport` package is shared, so the second plan re-reads it before editing). PLAN-01 to PLAN-04 (all in `token-sheriff-client`; this plan touches `token-sheriff-client` only in deliverable 4: `internal/BoundedContentBodyHandler.java`, `internal/BackChannelHttp.java`, `internal/package-info.java`; PLAN-01 to PLAN-04 may edit `BackChannelHttp.java`, so deliverable 4 re-reads it at that state or is dropped at outline). PLAN-05 (both touch `token-sheriff-validation` and its shared documents `doc/validation/requirements.adoc`, `doc/developer/test-impl-mapping.adoc`; no code file in common). PLAN-06 (shares `doc/developer/test-impl-mapping.adoc` and `doc/LogMessages.adoc` only).
+- Overlaps with: PLAN-03 (touches `token-sheriff-validation` commons transport `EgressPolicy`; this plan touches `commons/transport` too, only if OD-5 proceeds, in `BoundedBodyHandlers.java`, `JwksHttpContentConverter.java` and `WellKnownConfigurationConverter.java`, which PLAN-03 does not edit; the `commons/transport` package is shared, so the second plan re-reads it before editing). PLAN-01 to PLAN-04 (all in `token-sheriff-client`; this plan touches `token-sheriff-client` only in deliverable 4: `internal/BoundedContentBodyHandler.java`, `internal/BackChannelHttp.java`, `internal/package-info.java`; PLAN-01 to PLAN-04 may edit `BackChannelHttp.java`, so deliverable 4 re-reads it at that state or is dropped at outline). PLAN-05 (both touch `token-sheriff-validation` and its shared documents `doc/validation/requirements.adoc`, `doc/developer/test-impl-mapping.adoc`; no code file in common). PLAN-06 has shipped (#906); deliverable 7 edits its code (`HttpJwksLoader`, its tests and its documents) and the two shared documents `doc/developer/test-impl-mapping.adoc` and `doc/LogMessages.adoc` now carry its rows, which the outline re-reads at HEAD.
 - Adjacent to: the producer's HTTP status choice for a scope violation (401 versus 403), which this plan deliberately leaves alone; the client `LogSanitizer`, `FormEncoder` and `JsonEscaper` in `client/internal`, which are separate concerns; `InboundErrorNormalizer`, a second user of `ErrorTextSanitizer`, which the new mode does not touch. API Sheriff's matching deletions (`extractBearerToken`, the string-built challenge, `renderForMessage`, `CappedByteArrayBodySubscriber`) are a separate API Sheriff plan (AS PLAN-34) that waits for a released 0.9.10 and is not part of this spec.
 - Release and sequencing: target release 0.9.10 (repository at 0.9.10-SNAPSHOT). `parallelization_scope` is 1: plans in this epic run sequentially. This is the lowest-priority plan; it runs last in WS-02 (PLAN-05, PLAN-06, PLAN-07), and deliverable 4 may be dropped at outline.
 
