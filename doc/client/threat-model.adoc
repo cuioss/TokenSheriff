@@ -242,12 +242,16 @@ The client engine:
   check an uncached resolution does (TLS, the `issuer` match, the endpoint schemes, the egress
   policy, the media type, the size bound), and a refused document never replaces the cached one.
   Staleness is bounded: the last good document is served only until `lastSuccess + ttl +
-  gracePeriod`, after which resolution fails closed; the grace period defaults to zero. Refresh
-  load is bounded: concurrent callers share one in-flight refresh, a failed refresh is not retried
-  before the minimum refresh interval has elapsed, and an optional jitter spreads the refreshes of
-  clients that share a TTL. No background thread runs, every caller gets an independent copy, and
-  the cache state is readable without I/O. The cache is off by default; an orphaned cache property
-  fails startup rather than being ignored. Within the grace period the client may still use an
+  gracePeriod`, after which resolution fails closed; the Java constructor requires the grace period,
+  and only under Quarkus does it default to zero. The TTL, the grace period and the minimum refresh
+  interval are each at most 365 days. Refresh load is bounded: concurrent callers share one in-flight
+  refresh, and an optional jitter spreads the refreshes of clients that share a TTL. A failed refresh
+  is not retried before the minimum refresh interval has elapsed, but at its `PT0S` default that
+  interval holds nothing back: a failed refresh is retried on the next call, so a deployment that
+  must cap the retry rate against a failing provider sets it. No background thread runs, every caller
+  gets an independent copy, and the cache state is readable without I/O. The cache is off by default;
+  an orphaned or invalid cache property fails startup rather than being ignored, and so does an
+  injection of `CachingDiscoveryResolver` while the cache is not enabled. Within the grace period the client may still use an
   endpoint the authorization server has since withdrawn — that window is the deployment's choice,
   and a zero grace period closes it.
 | https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationValidation[OIDC Discovery 1.0 §4.3], https://www.rfc-editor.org/rfc/rfc9700#section-2.6[RFC 9700 §2.6]
@@ -356,7 +360,10 @@ cost: the engine does not guess how to read a response that does not follow its 
   rotated successor and a clear are attempted only when the authorization server rotated the
   refresh token, and otherwise nothing is revoked or cleared. The original refusal reaches the
   caller unchanged unless that cleanup throws an uncaught exception (from a revocation call or the
-  store removal), which replaces it.
+  store removal), which replaces it. An unbound session whose refreshed access token carries no
+  `sub` adopts no subject and its ID token's `sub` is compared with nothing — accepted, because
+  nothing is bound and there is no principal to protect; with a bound subject the gap cannot occur
+  (xref:specification/token-handling.adoc#_refresh_result_verifier[refresh-result verifier]).
 | https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse[OIDC Core §12.2]
 | xref:requirements.adoc#CLIENT-15[CLIENT-15], xref:requirements.adoc#CLIENT-17[CLIENT-17], xref:requirements.adoc#CLIENT-28[CLIENT-28]
 

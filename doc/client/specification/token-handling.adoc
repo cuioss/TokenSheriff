@@ -220,6 +220,27 @@ refusal the lifecycle manager quarantines the session when the refresh token rot
 above, and then rethrows the refusal the carrier wraps — the `TokenValidationException` or the
 `IllegalStateException` — so its callers see the same exception types as before.
 
+*Decision: an unbound session with an access token without `sub`.* When no subject is bound and the
+refreshed access token carries no `sub`, the §12.2 step has nothing to compare the refreshed ID
+token's `sub` with, and the subject binding is skipped, so the session adopts no subject. This is
+accepted: nothing is bound, so there is no principal the refresh could re-point. With a bound
+subject the gap cannot occur — an access token without a `sub` is refused at the binding step, and
+one with a `sub` must equal the bound subject and, through the §12.2 step, the ID token's `sub` as
+well. `RefreshResultVerifierTest.shouldPassConsistencyWhenAccessTokenHasNoSubject` pins this
+behaviour.
+
+*Why there are two constant-time subject compares.* `RefreshResultVerifier.subjectMatches` serves a
+gateway that drives `RefreshFlow` without a `StoredToken` and names its bound subject to the
+verifier. `StoredToken.subjectsMatch` is the binding inside the atomic store transform (ADR-0007),
+and the only bound-subject check on the `TokenLifecycleManager` path. Neither can replace the other,
+so both are kept.
+
+*Why the lifecycle manager passes `null`.* Passing the stored subject to the verifier would move the
+binding refusal out of the atomic store transform and in front of the rotation-family advance,
+which would change the observable disposition of a binding refusal that the lifecycle manager's
+refresh tests pin. The lifecycle manager therefore keeps calling
+`verify(rotation, idTokenValidationBridge, null)`.
+
 *Why the verifier lives in `flow`.* `ClientArchitectureTest` requires the packages under
 `de.cuioss.sheriff.token.client` to be free of cycles. `flow` already depends on `token`
 (`RefreshFlow` returns `RotationResult`), and no production class in `token` depends on `flow`. The
