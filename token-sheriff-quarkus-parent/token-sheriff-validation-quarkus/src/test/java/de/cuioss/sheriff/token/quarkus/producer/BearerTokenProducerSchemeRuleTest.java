@@ -37,7 +37,7 @@ import java.util.Set;
 
 import static de.cuioss.test.juli.LogAsserts.assertSingleLogMessagePresentContaining;
 import static org.easymock.EasyMock.*;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Pins the {@code Authorization} scheme rules {@link BearerTokenProducer} adopted with
