@@ -24,7 +24,6 @@ import org.eclipse.microprofile.config.Config;
 import java.time.Duration;
 import java.time.InstantSource;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -115,28 +114,23 @@ public final class ClientConfigMapper {
     }
 
     /**
-     * The discovery cache properties that are meaningful only while
-     * {@link ClientRuntimeConfig#DISCOVERY_CACHE_ENABLED} is {@code true}.
+     * Returns the property that carries a discovery cache setting. It is the single mapping between
+     * the {@link CachingDiscoveryResolver.Setting settings} that
+     * {@link CachingDiscoveryResolver#checkSettings} names and the configuration: the switch is
+     * exhaustive, so a new setting does not compile until it is mapped here. The rules themselves live
+     * only in {@code checkSettings}.
+     *
+     * @param setting the discovery cache setting
+     * @return the {@link ClientRuntimeConfig} property that carries its value
      */
-    private static final List<String> DISCOVERY_CACHE_SETTINGS = List.of(
-            ClientRuntimeConfig.DISCOVERY_CACHE_TTL,
-            ClientRuntimeConfig.DISCOVERY_CACHE_GRACE_PERIOD,
-            ClientRuntimeConfig.DISCOVERY_CACHE_MIN_REFRESH_INTERVAL,
-            ClientRuntimeConfig.DISCOVERY_CACHE_JITTER);
-
-    /**
-     * Maps the parameter name that {@link CachingDiscoveryResolver#checkSettings} puts first in each
-     * refusal to the property that carries the value, so a refusal names the setting to fix. The
-     * rules themselves live only in {@code checkSettings}.
-     */
-    private static final Map<String, String> DISCOVERY_CACHE_PARAMETER_PROPERTIES = Map.of(
-            "ttl", ClientRuntimeConfig.DISCOVERY_CACHE_TTL,
-            "gracePeriod", ClientRuntimeConfig.DISCOVERY_CACHE_GRACE_PERIOD,
-            "minRefreshInterval", ClientRuntimeConfig.DISCOVERY_CACHE_MIN_REFRESH_INTERVAL,
-            "jitter", ClientRuntimeConfig.DISCOVERY_CACHE_JITTER);
-
-    /** Used for a refusal whose parameter name is not in the table; names the property family. */
-    private static final String DISCOVERY_CACHE_PROPERTIES = ClientRuntimeConfig.DISCOVERY_CACHE_PREFIX + ".*";
+    private static String propertyOf(CachingDiscoveryResolver.Setting setting) {
+        return switch (setting) {
+            case TTL -> ClientRuntimeConfig.DISCOVERY_CACHE_TTL;
+            case GRACE_PERIOD -> ClientRuntimeConfig.DISCOVERY_CACHE_GRACE_PERIOD;
+            case MIN_REFRESH_INTERVAL -> ClientRuntimeConfig.DISCOVERY_CACHE_MIN_REFRESH_INTERVAL;
+            case JITTER -> ClientRuntimeConfig.DISCOVERY_CACHE_JITTER;
+        };
+    }
 
     /**
      * The settings of an enabled discovery cache, in the shape of the
@@ -188,6 +182,12 @@ public final class ClientConfigMapper {
      * TTL, no negative duration, at most 365 days for the TTL, the grace period and the minimum
      * refresh interval, and a jitter smaller than the TTL). A configuration without any discovery cache
      * property passes.
+     * <p>
+     * The properties checked, both for orphaned values and for the value rules, are those of the
+     * {@link CachingDiscoveryResolver.Setting settings}, in their declaration order. A refusal by
+     * {@code checkSettings} is mapped to its property through the
+     * {@link CachingDiscoveryResolver.InvalidSettingException#setting() setting} it names, never by
+     * reading its message.
      *
      * @param config the MicroProfile config to inspect; must not be {@code null}
      * @throws IllegalStateException naming the offending property and the fix, when a cache property
@@ -197,7 +197,8 @@ public final class ClientConfigMapper {
      */
     public static void validateDiscoveryCache(Config config) {
         if (!isDiscoveryCacheEnabled(config)) {
-            for (String key : DISCOVERY_CACHE_SETTINGS) {
+            for (CachingDiscoveryResolver.Setting setting : CachingDiscoveryResolver.Setting.values()) {
+                String key = propertyOf(setting);
                 if (config.getOptionalValue(key, String.class).isPresent()) {
                     throw new IllegalStateException("Token-Sheriff client property '" + key + "' is set but '"
                             + ClientRuntimeConfig.DISCOVERY_CACHE_ENABLED + "' is not true, so it would be ignored."
@@ -213,18 +214,17 @@ public final class ClientConfigMapper {
                     + " Set it to how long a resolved discovery document may be reused (for example PT5M),"
                     + " or disable the discovery cache.");
         }
-        Duration ttl = parsedDuration(config, ClientRuntimeConfig.DISCOVERY_CACHE_TTL);
-        Duration gracePeriod = parsedDuration(config, ClientRuntimeConfig.DISCOVERY_CACHE_GRACE_PERIOD);
-        Duration minRefreshInterval = parsedDuration(config, ClientRuntimeConfig.DISCOVERY_CACHE_MIN_REFRESH_INTERVAL);
-        Duration jitter = parsedDuration(config, ClientRuntimeConfig.DISCOVERY_CACHE_JITTER);
+        Duration ttl = parsedDuration(config, propertyOf(CachingDiscoveryResolver.Setting.TTL));
+        Duration gracePeriod = parsedDuration(config, propertyOf(CachingDiscoveryResolver.Setting.GRACE_PERIOD));
+        Duration minRefreshInterval = parsedDuration(config,
+                propertyOf(CachingDiscoveryResolver.Setting.MIN_REFRESH_INTERVAL));
+        Duration jitter = parsedDuration(config, propertyOf(CachingDiscoveryResolver.Setting.JITTER));
         try {
             CachingDiscoveryResolver.checkSettings(ttl, gracePeriod, minRefreshInterval, jitter);
-        } catch (IllegalArgumentException e) {
-            String refusal = e.getMessage();
-            String parameter = refusal.substring(0, refusal.indexOf(' '));
-            String property = DISCOVERY_CACHE_PARAMETER_PROPERTIES.getOrDefault(parameter, DISCOVERY_CACHE_PROPERTIES);
+        } catch (CachingDiscoveryResolver.InvalidSettingException e) {
+            String property = propertyOf(e.setting());
             throw new IllegalStateException("Token-Sheriff client property '" + property + "' is invalid: "
-                    + refusal + ". Change '" + property + "' to a value the rule allows, or disable the"
+                    + e.getMessage() + ". Change '" + property + "' to a value the rule allows, or disable the"
                     + " discovery cache.", e);
         }
     }
