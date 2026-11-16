@@ -71,7 +71,10 @@ import java.util.concurrent.atomic.AtomicReference;
  * the authorization server. No state is written, so neither the status nor the retry backoff changes;
  * the delegate's exception propagates to the interrupted caller with its interrupt flag kept, and
  * every caller that joined the aborted refresh re-evaluates, so one of them starts a fresh refresh.
- * An {@link Error} thrown by the delegate aborts the refresh in the same way.
+ * An {@link Error} thrown by the delegate aborts the refresh in the same way, and so does a superseded
+ * read: a caller that claims the slot but finds that another caller published a newer state since its
+ * read does not call the delegate, and no joined caller is handed that newer state, because a different
+ * state is not necessarily a fresh one.
  * <p>
  * <strong>Bounds.</strong> {@code ttl}, {@code gracePeriod} and {@code minRefreshInterval} must each
  * be at most 365 days, and {@code jitter} must be smaller than {@code ttl}; {@link #checkSettings}
@@ -117,8 +120,10 @@ public class CachingDiscoveryResolver implements LoadingStatusProvider {
     private static final Duration MAX_DURATION = Duration.ofDays(365);
 
     /**
-     * The completion of a claim whose refresh was aborted; a joined caller that sees it re-evaluates
-     * instead of failing. It is the only exceptional completion a claim ever receives.
+     * The completion of a claim whose refresh was aborted — by a superseded read, an interrupt, an
+     * {@link Error} or a throwing test hook; a joined caller that sees it re-evaluates instead of
+     * failing. It is the only exceptional completion a claim ever receives, and a claim only ever
+     * completes normally with the state its refresh published.
      */
     private static final RuntimeException REFRESH_ABORTED = new AbortedRefreshMarker();
 
@@ -301,10 +306,11 @@ public class CachingDiscoveryResolver implements LoadingStatusProvider {
             if (outcome != null) {
                 return answer(outcome, clock.instant());
             }
-            // No outcome to answer from: the winner found a newer state than the one it read, the
-            // joined refresh was aborted and wrote no state, or the winner cleared the slot between
-            // the failed claim and the read. In every case re-evaluate against the current state, so
-            // one caller claims a fresh refresh when one is still needed.
+            // No outcome to answer from: the claimed or the joined refresh was aborted — among other
+            // causes because its winner found a newer state than the one it read — and wrote no
+            // state, or the winner cleared the slot between the failed claim and the read. In every
+            // case re-evaluate against the current state, so one caller claims a fresh refresh when
+            // one is still needed.
         }
     }
 
@@ -325,24 +331,23 @@ public class CachingDiscoveryResolver implements LoadingStatusProvider {
 
     /**
      * Runs the claimed region of the caller that won the refresh slot: the test hook, the re-read of
-     * the cache state and the refresh itself. Every exit — a normal refresh, a superseded read, a
-     * throwing hook, an interrupt or an {@link Error} — completes the claim and releases the slot.
+     * the cache state and the refresh itself. A normal refresh completes the claim with the state it
+     * published; every other exit — a superseded read, a throwing hook, an interrupt or an
+     * {@link Error} — aborts it, so every joined caller re-evaluates. Every exit releases the slot.
      *
-     * @return the state the refresh published, or {@code null} if another caller published a newer
-     *         state between the caller's read and its claim
+     * @return the state the refresh published, or {@code null} if the refresh was aborted because
+     *         another caller published a newer state between the caller's read and its claim
      */
     private @Nullable CacheState refreshAsWinner(CacheState previous, CompletableFuture<CacheState> claim) {
         boolean completed = false;
         try {
             afterClaim.run();
-            CacheState latest = state.get();
-            if (latest != previous) {
+            if (state.get() != previous) {
                 // Another caller published a newer state between the read and the claim: refreshing
                 // against the outdated read could replace that newer entry with a failure derived from
-                // the old one. Hand the newer state to anyone already joined, release the slot and let
-                // the caller re-evaluate against it.
-                claim.complete(latest);
-                completed = true;
+                // the old one. A different state is not necessarily a fresh one, so the newer state is
+                // not handed to anyone: the claim is aborted, and the caller and every joined caller
+                // re-evaluate against the current state.
                 return null;
             }
             CacheState refreshed = refresh(previous);
@@ -354,10 +359,10 @@ public class CachingDiscoveryResolver implements LoadingStatusProvider {
             return refreshed;
         } finally {
             if (!completed) {
-                // refresh() records every runtime failure of the delegate, so only an interrupted
-                // refresh, an Error or a throwing test hook gets here. No state is written; the joined
-                // callers must not wait forever on the aborted refresh, so they are told to
-                // re-evaluate.
+                // refresh() records every runtime failure of the delegate, so only a superseded read,
+                // an interrupted refresh, an Error or a throwing test hook gets here. No state is
+                // written; the joined callers must not wait forever on the aborted refresh, so they
+                // are told to re-evaluate.
                 claim.completeExceptionally(REFRESH_ABORTED);
             }
             inFlight.compareAndSet(claim, null);
@@ -367,8 +372,8 @@ public class CachingDiscoveryResolver implements LoadingStatusProvider {
     /**
      * Waits for the refresh another caller has claimed.
      *
-     * @return the state the refresh published, or {@code null} if it was aborted or the winner had
-     *         already cleared the slot
+     * @return the state the refresh published, or {@code null} if it was aborted — including a
+     *         superseded read — or the winner had already cleared the slot
      */
     private @Nullable CacheState joinRunning() {
         CompletableFuture<CacheState> running = inFlight.get();
