@@ -166,7 +166,7 @@ class InsufficientScopeChallengeRoundTripTest {
         assertTrue(parser.parse("Bearer error=\"insufficient_scope\", scope=\"" + String.join(" ", overBound) + "\"")
                 .isEmpty(), "the parser refuses 65 scopes");
         assertEquals(BearerChallenge.MAX_SCOPE_TOKENS, parser.parse(BearerChallenge.insufficientScope()
-                .scopes(atBound).build()).orElseThrow().scopes().size(),
+                        .scopes(atBound).build()).orElseThrow().scopes().size(),
                 "control: 64 scopes round-trip");
     }
 }

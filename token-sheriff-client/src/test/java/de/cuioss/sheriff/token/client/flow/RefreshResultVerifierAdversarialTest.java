@@ -46,11 +46,7 @@ import java.util.Base64;
 import java.util.function.BiFunction;
 import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.assertAll;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Adversarial refreshed ID tokens against {@link RefreshResultVerifier}: forged, tampered, unsigned,

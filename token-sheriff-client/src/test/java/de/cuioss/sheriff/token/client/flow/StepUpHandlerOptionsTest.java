@@ -37,10 +37,7 @@ import java.util.stream.Stream;
 
 import static de.cuioss.sheriff.token.client.flow.AuthorizationCodeFlowOptionsTest.normalized;
 import static de.cuioss.sheriff.token.client.flow.AuthorizationRequestBuilderParametersTest.wireParameters;
-import static org.junit.jupiter.api.Assertions.assertAll;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Verifies the per-call {@link AuthorizationRequestOptions} overload of {@link StepUpHandler#initiate}:

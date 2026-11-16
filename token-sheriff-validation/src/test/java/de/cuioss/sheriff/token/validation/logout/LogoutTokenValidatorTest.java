@@ -31,7 +31,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import static de.cuioss.sheriff.token.validation.logout.LogoutTokenValidatorSupport.*;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests {@link LogoutTokenValidator}: one test per check of OpenID Connect Back-Channel Logout 1.0 section 2.6,
