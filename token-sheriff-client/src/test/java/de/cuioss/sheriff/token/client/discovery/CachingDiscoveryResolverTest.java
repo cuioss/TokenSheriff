@@ -38,7 +38,10 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.InstantSource;
+import java.util.EnumSet;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -105,6 +108,29 @@ class CachingDiscoveryResolverTest {
                 Arguments.of("jitter above ttl", "jitter", TTL, GRACE, Duration.ZERO, TTL.plusSeconds(1)));
     }
 
+    static Stream<Arguments> invalidSettings() {
+        Duration aboveBound = UPPER_BOUND.plusNanos(1);
+        return Stream.of(
+                Arguments.of("zero ttl", CachingDiscoveryResolver.Setting.TTL, Duration.ZERO, Duration.ZERO,
+                        Duration.ZERO, Duration.ZERO),
+                Arguments.of("negative ttl", CachingDiscoveryResolver.Setting.TTL, Duration.ofSeconds(-1),
+                        Duration.ZERO, Duration.ZERO, Duration.ZERO),
+                Arguments.of("ttl above the bound", CachingDiscoveryResolver.Setting.TTL, aboveBound, Duration.ZERO,
+                        Duration.ZERO, Duration.ZERO),
+                Arguments.of("negative grace", CachingDiscoveryResolver.Setting.GRACE_PERIOD, TTL,
+                        Duration.ofSeconds(-1), Duration.ZERO, Duration.ZERO),
+                Arguments.of("grace above the bound", CachingDiscoveryResolver.Setting.GRACE_PERIOD, TTL, aboveBound,
+                        Duration.ZERO, Duration.ZERO),
+                Arguments.of("negative min refresh interval", CachingDiscoveryResolver.Setting.MIN_REFRESH_INTERVAL,
+                        TTL, GRACE, Duration.ofSeconds(-1), Duration.ZERO),
+                Arguments.of("min refresh interval above the bound",
+                        CachingDiscoveryResolver.Setting.MIN_REFRESH_INTERVAL, TTL, GRACE, aboveBound, Duration.ZERO),
+                Arguments.of("negative jitter", CachingDiscoveryResolver.Setting.JITTER, TTL, GRACE, Duration.ZERO,
+                        Duration.ofSeconds(-1)),
+                Arguments.of("jitter not smaller than ttl", CachingDiscoveryResolver.Setting.JITTER, TTL, GRACE,
+                        Duration.ZERO, TTL));
+    }
+
     static Stream<Arguments> durationsAtUpperBound() {
         return Stream.of(
                 Arguments.of("ttl at the bound", UPPER_BOUND, Duration.ZERO, Duration.ZERO),
@@ -135,6 +161,33 @@ class CachingDiscoveryResolverTest {
 
         assertTrue(refusal.getMessage().startsWith(parameter + " "),
                 () -> label + " must name " + parameter + " first: " + refusal.getMessage());
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("invalidSettings")
+    @DisplayName("Should name the offending setting structurally in every checkSettings refusal")
+    void shouldNameSettingInCheckSettingsRefusal(String label, CachingDiscoveryResolver.Setting expected,
+            Duration ttl, Duration grace, Duration minRefreshInterval, Duration jitter) {
+        var refusal = assertThrows(CachingDiscoveryResolver.InvalidSettingException.class,
+                () -> CachingDiscoveryResolver.checkSettings(ttl, grace, minRefreshInterval, jitter),
+                () -> label + " must be refused with an InvalidSettingException");
+
+        assertAll(label,
+                () -> assertEquals(expected, refusal.setting(), "the refusal names the offending setting"),
+                () -> assertTrue(refusal.getMessage().startsWith(expected.parameterName() + " "),
+                        () -> "the message must start with " + expected.parameterName() + ": "
+                                + refusal.getMessage()));
+    }
+
+    @Test
+    @DisplayName("Should cover every Setting with at least one invalid-value row")
+    void shouldCoverEverySettingWithInvalidRow() {
+        Set<CachingDiscoveryResolver.Setting> covered = invalidSettings()
+                .map(arguments -> (CachingDiscoveryResolver.Setting) arguments.get()[1])
+                .collect(Collectors.toCollection(() -> EnumSet.noneOf(CachingDiscoveryResolver.Setting.class)));
+
+        assertEquals(EnumSet.allOf(CachingDiscoveryResolver.Setting.class), covered,
+                "every Setting constant needs an invalid-value row in invalidSettings()");
     }
 
     @ParameterizedTest(name = "{0}")
