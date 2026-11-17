@@ -32,6 +32,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Golden regression test pinning the RFC 7638 {@code jkt} thumbprints {@link DpopProofGenerator}
@@ -91,14 +92,18 @@ class DpopProofGeneratorJktGoldenTest {
                 "the golden EC key must keep a leading zero byte in x, or it no longer pins the padding");
     }
 
+    /**
+     * One case per algorithm the generator admits, so a newly admitted algorithm is pinned too. The
+     * fixture is chosen by the algorithm's JWK key type; a key type without a fixture fails the test.
+     */
     static Stream<Arguments> goldenThumbprints() {
-        return Stream.of(
-                Arguments.of("RSA", RSA_2048_X509, "RS256", RSA_JKT),
-                Arguments.of("RSA", RSA_2048_X509, "RS384", RSA_JKT),
-                Arguments.of("RSA", RSA_2048_X509, "RS512", RSA_JKT),
-                Arguments.of("RSA", RSA_2048_X509, "PS256", RSA_JKT),
-                Arguments.of("EC", EC_P256_PADDED_X_X509, "ES256", EC_JKT),
-                Arguments.of("Ed25519", ED25519_X509, "EdDSA", ED25519_JKT));
+        return DpopProofGenerator.SUPPORTED_ALGORITHMS.stream().map(algorithm -> switch (algorithm.getKeyType()) {
+            case "RSA" -> Arguments.of("RSA", RSA_2048_X509, algorithm.getJwaName(), RSA_JKT);
+            case "EC" -> Arguments.of("EC", EC_P256_PADDED_X_X509, algorithm.getJwaName(), EC_JKT);
+            case "OKP" -> Arguments.of("Ed25519", ED25519_X509, algorithm.getJwaName(), ED25519_JKT);
+            default -> fail("no golden jkt fixture for key type %s of %s".formatted(
+                    algorithm.getKeyType(), algorithm.getJwaName()));
+        });
     }
 
     private static PublicKey decodePublicKey(String keyAlgorithm, String x509) throws GeneralSecurityException {

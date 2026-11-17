@@ -213,7 +213,10 @@ class BackChannelEgressPolicyTest {
         var loopbackV6 = URI.create("http://[::1]:8080" + TOKEN_PATH);
         var refusing = baseBuilder(PUBLIC_ISSUER).build().getEgressPolicy();
         var allowing = baseBuilder(PUBLIC_ISSUER).allowedEgressHost("::1").build().getEgressPolicy();
-        var allowingUpperCase = baseBuilder(PUBLIC_ISSUER).allowedEgressHost("2001:DB8::1").build()
+        // fd00::abcd is IPv6 unique-local, which the address checks refuse, so only the allow-list
+        // entry can admit it: the case-insensitive assertion fails if the entry stops matching.
+        var uniqueLocalV6 = URI.create("https://[fd00::abcd]" + TOKEN_PATH);
+        var allowingUpperCase = baseBuilder(PUBLIC_ISSUER).allowedEgressHost("FD00::ABCD").build()
                 .getEgressPolicy();
 
         assertAll("URI.getHost() reports an IPv6 host bracketed; the bare entry must still match it",
@@ -221,7 +224,9 @@ class BackChannelEgressPolicyTest {
                         "without the entry the IPv6 loopback address is refused"),
                 () -> assertDoesNotThrow(() -> allowing.check(loopbackV6),
                         "the bare entry ::1 must admit http://[::1]"),
-                () -> assertDoesNotThrow(() -> allowingUpperCase.check(URI.create("https://[2001:db8::1]/token")),
+                () -> assertThrows(TransportException.class, () -> refusing.check(uniqueLocalV6),
+                        "without the entry the IPv6 unique-local address is refused"),
+                () -> assertDoesNotThrow(() -> allowingUpperCase.check(uniqueLocalV6),
                         "the match stays case-insensitive for an IPv6 literal"));
     }
 
