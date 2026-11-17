@@ -180,6 +180,50 @@ class BearerScopeValidationBuildStepTest {
     }
 
     @Test
+    @DisplayName("Should not merge a subclass that overrides the method, refusing one that inherits it")
+    void shouldSkipOverridingSubclass() throws Exception {
+        List<String> overridden = TokenSheriffProcessor
+                .findScopeViolations(Index.of(LengthBase.class, OverridingSubclass.class));
+        List<String> inherited = TokenSheriffProcessor
+                .findScopeViolations(Index.of(LengthBase.class, InheritingSubclass.class));
+
+        assertEquals(List.of(), overridden, "an overriding subclass never runs the annotated method");
+        assertMergedOverLength(inherited, InheritingSubclass.class);
+    }
+
+    @Test
+    @DisplayName("Should not merge an abstract subclass, refusing a concrete one that inherits the method")
+    void shouldSkipAbstractSubclass() throws Exception {
+        List<String> abstractSubclass = TokenSheriffProcessor
+                .findScopeViolations(Index.of(LengthBase.class, AbstractInheritingSubclass.class));
+        List<String> concreteSubclass = TokenSheriffProcessor
+                .findScopeViolations(Index.of(LengthBase.class, InheritingSubclass.class));
+
+        assertEquals(List.of(), abstractSubclass, "an abstract subclass is no bean class");
+        assertMergedOverLength(concreteSubclass, InheritingSubclass.class);
+    }
+
+    @Test
+    @DisplayName("Should merge a grandchild that inherits the method unchanged, not one below an override")
+    void shouldResolveGrandchildBeanClasses() throws Exception {
+        List<String> belowOverride = TokenSheriffProcessor.findScopeViolations(
+                Index.of(LengthBase.class, OverridingSubclass.class, GrandchildBelowOverride.class));
+        List<String> belowPlainClass = TokenSheriffProcessor.findScopeViolations(
+                Index.of(LengthBase.class, PlainMiddle.class, GrandchildBelowPlainClass.class));
+
+        assertEquals(List.of(), belowOverride, "a class between the grandchild and the declaring class overrides it");
+        assertMergedOverLength(belowPlainClass, GrandchildBelowPlainClass.class);
+    }
+
+    private static void assertMergedOverLength(List<String> violations, Class<?> beanClass) {
+        assertEquals(1, violations.size(), "exactly the merge in " + beanClass.getName() + ": " + violations);
+        assertTrue(violations.getFirst().startsWith("@BearerAuth on method " + LengthBase.class.getName()
+                + "#endpoint together with the class-level @BearerAuth of bean class " + beanClass.getName() + " "),
+                violations.getFirst());
+        assertTrue(violations.getFirst().contains(OVER_LENGTH), violations.getFirst());
+    }
+
+    @Test
     @DisplayName("Should report a bad class-level scope at the class, not at its methods")
     void shouldReportBadClassLevelScopeAtTheClassOnly() throws Exception {
         List<String> violations = TokenSheriffProcessor
@@ -367,6 +411,51 @@ class BearerScopeValidationBuildStepTest {
      * The bean class running {@link AbstractDeclaringBase#endpoint()}, without a class-level annotation.
      */
     static class PlainSubclass extends AbstractDeclaringBase {
+    }
+
+    /**
+     * Declares a method-level scope that fits on its own but not merged with {@link #OVER_LENGTH_B}.
+     */
+    static class LengthBase {
+
+        @BearerAuth(requiredScopes = OVER_LENGTH_A)
+        public String endpoint() {
+            return "base";
+        }
+    }
+
+    /** Overrides the annotated method, so its class-level scope is never merged with it. */
+    @BearerAuth(requiredScopes = OVER_LENGTH_B)
+    static class OverridingSubclass extends LengthBase {
+
+        @Override
+        public String endpoint() {
+            return "override";
+        }
+    }
+
+    /** Inherits the annotated method unchanged: the merged challenge is over the length bound. */
+    @BearerAuth(requiredScopes = OVER_LENGTH_B)
+    static class InheritingSubclass extends LengthBase {
+    }
+
+    /** Inherits the annotated method but is abstract, so it is no bean class. */
+    @BearerAuth(requiredScopes = OVER_LENGTH_B)
+    abstract static class AbstractInheritingSubclass extends LengthBase {
+    }
+
+    /** Inherits the annotated method below a class that overrides it. */
+    @BearerAuth(requiredScopes = OVER_LENGTH_B)
+    static class GrandchildBelowOverride extends OverridingSubclass {
+    }
+
+    /** Inherits the annotated method unchanged and carries no class-level annotation. */
+    static class PlainMiddle extends LengthBase {
+    }
+
+    /** Inherits the annotated method unchanged through {@link PlainMiddle}. */
+    @BearerAuth(requiredScopes = OVER_LENGTH_B)
+    static class GrandchildBelowPlainClass extends PlainMiddle {
     }
 
     /**

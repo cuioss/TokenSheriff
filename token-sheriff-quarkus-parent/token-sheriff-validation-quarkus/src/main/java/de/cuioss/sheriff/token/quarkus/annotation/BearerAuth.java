@@ -164,6 +164,15 @@ public @interface BearerAuth {
      * hold at most 64 distinct scopes, and the {@code insufficient_scope} challenge sent for it, realm and
      * {@code error_description} included, may be at most 8192 characters long; these are the bounds of the
      * challenge. A violation of any of the three rules fails the deployment.
+     * <p>
+     * The deployment check has two known limits, accepted as such: it checks a method-level annotation on an
+     * interface default method on its own, although the interceptor merges it with the class-level annotation
+     * of the implementing bean class, so a merged set over the bounds passes the deployment; and it does not
+     * recognise a concrete-typed override of a generic method as an override, so it may merge the base
+     * method's scopes into a subclass whose override carries no {@code @BearerAuth} and refuse a deployment that
+     * is valid at run time. A set the check misses never surfaces as an unhandled exception: the request is
+     * answered with 500 (Internal Server Error) without a {@code WWW-Authenticate} header, and the
+     * misconfiguration is logged at ERROR ({@code TokenSheriff_Q-201}).
      *
      * @return array of required scope names
      */

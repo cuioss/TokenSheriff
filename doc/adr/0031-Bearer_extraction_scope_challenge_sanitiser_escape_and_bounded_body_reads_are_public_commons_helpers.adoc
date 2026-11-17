@@ -268,6 +268,24 @@ received buffer and let an unparsable `Content-Length` escape as a `NumberFormat
   only, never as a scope its methods declare. The scope value is rendered through `ErrorTextSanitizer`
   (ADR-0022), not echoed raw. A direct call of the producer's challenge build with such a set is still
   refused with `IllegalArgumentException`.
+* **Known limits of the deployment check, accepted by the operator.** Two cases are not covered. A
+  method-level `@BearerAuth` on an interface default method is checked on its own, although ArC intercepts
+  the default method and the interceptor merges its scopes with the class-level `@BearerAuth` of the
+  implementing bean class, so a merged set over the bounds passes the deployment. And an override is found by
+  name and parameter types only, so a concrete-typed override of a generic base method is not recognised:
+  the base method's scopes are merged into a subclass whose override carries no `@BearerAuth`, and a
+  deployment that is valid at run time may be refused. Closing either case would need the deployment check
+  to model ArC's interception and Java's bridge-method resolution in full; the operator chose to accept both
+  as documented limits instead.
+* **A set the check misses gets a defined response on the request path.** `BearerTokenResult.createErrorResponse()`
+  — which the interceptor and a `@BearerToken` caller both use — catches the builder's
+  `IllegalArgumentException` and answers 500 (Internal Server Error) with a generic body, the usual cache
+  headers and no `WWW-Authenticate` header, because the cause is a server-side misconfiguration that no
+  client can step up from. It logs `TokenSheriff_Q-201` once per such response at ERROR, naming the scope
+  count, the sorted scopes and the refusal reason, each through `ErrorTextSanitizer` (ADR-0022); no token is
+  logged. The package-private `createResponse` path keeps refusing with `IllegalArgumentException`, so the
+  `QuoteEscaping` expectations of `BearerTokenResponseFactoryTest` are unchanged, and a valid set is still
+  answered with the 401 `insufficient_scope` challenge.
 * **OD-D: the `error_description` grammar is kept.** `realm` and `error_description` stay RFC 9110 §5.6.4
   quoted strings that escape `"` and `\` and refuse CR, LF, NUL, the other C0 controls and DEL. The builder's
   output is unchanged, and the round trip of builder and client parser stays pinned by test.
@@ -283,7 +301,9 @@ received buffer and let an unparsable `Content-Length` escape as a `NumberFormat
 === Consequences
 
 * A misconfigured required scope is found when the application is built, with the member that declares it,
-  and never reaches a request. This matches the fail-at-startup stance of ADR-0019 and ADR-0026.
+  in every case the check covers. This matches the fail-at-startup stance of ADR-0019 and ADR-0026. In the
+  two accepted uncovered cases the misconfiguration reaches a request, where it is answered with a 500 and
+  logged as `TokenSheriff_Q-201` instead of escaping as an unhandled exception.
 * The work and memory of the challenge builder are bounded by `MAX_SCOPE_TOKENS + 1` scopes and
   `MAX_LENGTH` characters whatever the caller feeds it; the body handler's byte bound of COMMONS-17 is
   unchanged and its object count no longer grows with the buffer count.
