@@ -159,10 +159,11 @@ ceiling into the assembled body, and offers two policies:
   bytes with an explicit truncation signal.
 
 The handler bounds its own work as well as the bytes: the body read so far is kept in one array that
-grows by doubling and never beyond the ceiling, so the objects a body costs grow with the logarithm of its
-size, not with the number of buffers it arrives in, and an empty buffer costs nothing. During a growth
-step the old and the new array are both live, so the memory held while the body streams peaks below twice
-the ceiling plus the one chunk in flight; assembling and, for the string variant, decoding the result at
+grows by doubling, so the objects a body costs grow with the logarithm of its size, not with the number of
+buffers it arrives in, and an empty buffer costs nothing. The array never exceeds the ceiling and is at most
+twice the bytes received, or the first allocation when that is larger. During a growth step the old and the
+new array are both live, so the memory held while the body streams peaks below twice the ceiling plus the
+one chunk in flight; assembling and, for the string variant, decoding the result at
 completion peaks at a small constant multiple of the ceiling. Under the fail policy, when the handler
 observes a `Content-Length` header that is not a valid number, it cancels the subscription without
 requesting a byte, and the body future fails with an `IOException` carrying a fixed message that does not

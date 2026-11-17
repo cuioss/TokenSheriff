@@ -295,10 +295,15 @@ received buffer, and its own read of an unparsable `Content-Length` threw a `Num
   text before copying it, the scope text's length being computed without joining it. The refusal point and
   its messages stay at `build()`.
 * **The body handler bounds its own work.** The bytes read so far are kept in one array that grows by
-  doubling and never beyond the ceiling, so the object count grows with the logarithm of the body size, not
-  with the number of buffers. During a growth step the old and the new array are both live, so the memory
-  held while streaming peaks below twice the ceiling plus the one chunk in flight; the byte ceiling on the
-  assembled body is unchanged (see COMMONS-17). Under `FAIL`, when the handler observes a `Content-Length`
+  doubling, so the object count grows with the logarithm of the body size, not with the number of buffers.
+  The array never exceeds the ceiling and is at most twice the bytes received, or the first allocation when
+  that is larger. During a growth step the old and the new array are both live, so the memory held while
+  streaming peaks below twice the ceiling plus the one chunk in flight; this is the one memory bound of the
+  handler, stated identically in COMMONS-17 and the transport specification and pinned by a capacity test.
+  The byte ceiling on the assembled body and the `OverLimitPolicy` behaviour are unchanged. The cost of the
+  decision is that the worst-case streaming peak of a read of a remote response is about twice what one
+  array of the ceiling costs. It conflicts with the PLAN-09 specification, which kept COMMONS-17's bound of
+  the ceiling plus one in-flight chunk; this decision replaces that bound. Under `FAIL`, when the handler observes a `Content-Length`
   that is not a valid number, it cancels the subscription without requesting a byte and fails the body
   future with an `IOException` carrying a fixed message that does not echo the header value. That guarantee
   is the handler's own; whether the surrounding client reaches the handler, and whether it parses the header
@@ -322,7 +327,7 @@ received buffer, and its own read of an unparsable `Content-Length` threw a `Num
   retained names are the caller's own strings, of any length, held until `build()` refuses them for their
   joined length. The body handler's byte bound of COMMONS-17 is unchanged, its object count no longer grows
   with the buffer count, and the price of the one growable array is a streaming peak below twice the ceiling
-  while a growth step copies it.
+  plus the one chunk in flight while a growth step copies it.
 * A control character in a `realm` or `error_description` past `MAX_LENGTH` characters is not reported by
   the setter; the value is refused by `build()` for its length instead.
 * The client's own parse of a malformed `Content-Length` can still surface its own exception: the JDK

@@ -54,9 +54,10 @@ import java.util.concurrent.Flow;
  * The bytes read so far are kept in one array that grows by doubling and never beyond the ceiling, so
  * the number of objects a body costs grows with the logarithm of its size, not with the number of
  * buffers it arrives in: a body delivered as many one-byte buffers costs no more than the same bytes in
- * one buffer, and an empty buffer costs nothing. The assembled body never holds more than the ceiling, but
- * during a growth step the old and the new array are both live, so under either policy the memory held
- * while reading peaks below twice the ceiling plus the one in-flight chunk.
+ * one buffer, and an empty buffer costs nothing. The array never exceeds the ceiling and is at most twice
+ * the bytes received, or the first allocation when that is larger. During a growth step the old and the
+ * new array are both live, so under either policy the memory held while streaming peaks below twice the
+ * ceiling plus the one chunk in flight.
  * <p>
  * Under {@link OverLimitPolicy#FAIL} a {@code Content-Length} header that is not a valid number is a
  * normal failure as well, when the handler observes it: the subscription is cancelled without requesting
@@ -285,8 +286,9 @@ public final class BoundedBodyHandler {
     /**
      * Accumulates the streamed body up to the ceiling and applies the policy at the first crossing:
      * cancel the subscription, release or complete with the buffered bytes, ignore every later chunk.
+     * Package-visible so a test can read the capacity of its array through {@link #capacity()}.
      */
-    private static final class BoundedSubscriber implements HttpResponse.BodySubscriber<BoundedBody> {
+    static final class BoundedSubscriber implements HttpResponse.BodySubscriber<BoundedBody> {
 
         private static final byte[] EMPTY = new byte[0];
 
@@ -299,9 +301,11 @@ public final class BoundedBodyHandler {
         private final CompletableFuture<BoundedBody> result = new CompletableFuture<>();
 
         /**
-         * The bytes read so far, in {@code content[0..total)}. Grown by doubling, never beyond
-         * {@link #maxBytes}, so the number of arrays allocated grows with the logarithm of the body size
-         * and not with the number of buffers it arrives in.
+         * The bytes read so far, in {@code content[0..total)}. Grown by doubling, so the number of arrays
+         * allocated grows with the logarithm of the body size and not with the number of buffers it
+         * arrives in. The array never exceeds {@link #maxBytes} and is at most twice the bytes received,
+         * or the first allocation when that is larger; while streaming, the memory held peaks below twice
+         * the ceiling plus the one chunk in flight.
          */
         private byte[] content = EMPTY;
         private long total;
@@ -371,6 +375,14 @@ public final class BoundedBodyHandler {
             }
             buffer.get(content, position, length);
             total = required;
+        }
+
+        /**
+         * @return the capacity of the array that holds the bytes read so far; {@code 0} before the first
+         * byte and after the body completed or failed
+         */
+        int capacity() {
+            return content.length;
         }
 
         private byte[] assemble() {
