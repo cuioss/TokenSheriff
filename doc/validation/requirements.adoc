@@ -668,9 +668,10 @@ Key requirements:
 * `realm` and `error_description` escape `"` and `\`; a value holding CR, LF, NUL, another C0 control or DEL is refused
 * At most 64 distinct scope tokens and 8192 characters, the bounds the client's challenge parser reads, so the parser accepts every built value and reads back the same scope set
 * The builder bounds its own work on hostile input: it keeps at most 65 distinct scopes (every further name is still checked against the grammar), scans at most 8192 characters of a `realm` or `error_description`, and refuses an over-long value at `build()` before copying it
-* The Quarkus extension checks the required scopes of every `@BearerAuth` and `@BearerToken` against these rules at deployment, so an invalid scope name or a merged set of more than 64 scopes fails the build instead of a request
+* The Quarkus extension checks the required scopes of every `@BearerAuth` and `@BearerToken` against these rules at deployment: for the annotated methods it resolves, an invalid scope name, a merged set of more than 64 distinct scopes or a challenge longer than 8192 characters fails the build instead of a request. Two known limits are accepted: a method-level `@BearerAuth` on an interface default method is checked on its own, and a concrete-typed override of a generic method is not recognised as an override
+* For any set the deployment check does not refuse, the request path answers with the defined 500 `SERVER_MISCONFIGURATION` response (no `WWW-Authenticate` header, one `TokenSheriff_Q-201` ERROR log with sanitised scopes) instead of an unhandled exception
 
-_See specification: xref:../adr/0031-Bearer_extraction_scope_challenge_sanitiser_escape_and_bounded_body_reads_are_public_commons_helpers.adoc[ADR-0031]_
+_See specification: xref:../adr/0031-Bearer_extraction_scope_challenge_sanitiser_escape_and_bounded_body_reads_are_public_commons_helpers.adoc[ADR-0031] (amendment: an invalid annotation scope fails the deployment)_
 
 == Non-Functional Requirements
 

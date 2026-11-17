@@ -255,6 +255,7 @@ Error responses created via `BearerTokenResult.createErrorResponse()` follow RFC
 |Malformed bearer token (e.g. empty) |`400` |`invalid_request`
 |Missing required scopes |`401` |`insufficient_scope` (deviation, see below)
 |Missing required roles/groups |`403` |`insufficient_privileges`
+|Required scope set the challenge cannot represent (invalid scope name, more than 64 distinct scopes or a challenge over 8192 characters) |`500` |— (no `WWW-Authenticate` header; generic `SERVER_MISCONFIGURATION` body, one `TokenSheriff_Q-201` ERROR log)
 |===
 
 *Deviation from RFC 6750:* RFC 6750 Section 3.1 specifies `403 Forbidden` for
