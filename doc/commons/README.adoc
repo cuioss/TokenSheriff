@@ -16,7 +16,7 @@ re-packaging and the ArchUnit boundary live inside `token-sheriff-validation`.
 
 == Scope at a glance
 
-Commons gathers the four cross-cutting concerns every capability needs, and *nothing that
+Commons gathers the cross-cutting concerns every capability needs, and *nothing that
 interprets trust*:
 
 * *Transport* (`commons.transport`) — the validation-side outbound IdP HTTP (discovery, JWKS)
@@ -26,6 +26,11 @@ interprets trust*:
   and no discovery cache; it applies an `EgressPolicy` instance of its own on the URL actually
   contacted, secure by default, and validates endpoint paths and schemes. End-session is a
   front-channel redirect, and no component implements introspection.
+* *HTTP authentication helpers* (`commons.http`) — the framework-neutral RFC 6750 `Bearer`
+  handling of an HTTP edge: `BearerCredentials` extracts the credentials of an `Authorization`
+  value, `BearerChallenge` builds the `insufficient_scope` challenge. They return plain values
+  and never decide an HTTP status
+  (xref:../adr/0031-Bearer_extraction_scope_challenge_sanitiser_escape_and_bounded_body_reads_are_public_commons_helpers.adoc[ADR-0031]).
 * *Error model* (`commons.error`) — the typed-exception hierarchy libraries throw, which the
   HTTP edges render as RFC 9457 problem+json; inbound IdP errors are normalized, not passed
   through.
@@ -50,7 +55,7 @@ xref:architecture.adoc[Architecture]).
 | Document | Purpose
 
 | xref:requirements.adoc[Requirements]
-| `COMMONS-1`–`COMMONS-15`, grouped by concern (transport / error model / events / metrics); each sourced.
+| `COMMONS-1`–`COMMONS-17`, grouped by concern (transport / error model / events / metrics); each sourced.
 
 | xref:architecture.adoc[Architecture]
 | The `commons` base layer, its sub-packages, and the ArchUnit rules that keep it from depending on validation.
@@ -62,10 +67,10 @@ xref:architecture.adoc[Architecture]).
 | Bibliography — transport / error-model standards new to commons, and those reused (cited, not restated) from the validation set.
 
 | xref:specification/transport.adoc[Spec — Transport]
-| The IdP endpoints, TLS / SSRF / resilience controls, caching, and the MockWebServer dispatcher artifact (`COMMONS-1`–`COMMONS-8`).
+| The IdP endpoints, TLS / SSRF / resilience controls, caching, the bounded response-body handler, and the MockWebServer dispatcher artifact (`COMMONS-1`–`COMMONS-8`, `COMMONS-17`).
 
 | xref:specification/error-model.adoc[Spec — Error model]
-| Typed exceptions → RFC 9457 at every HTTP edge; inbound IdP error normalization (`COMMONS-9`–`COMMONS-12`).
+| Typed exceptions → RFC 9457 at every HTTP edge; inbound IdP error normalization; the printable-ASCII escape (`COMMONS-9`–`COMMONS-12`, `COMMONS-16`).
 
 | xref:specification/observability.adoc[Spec — Observability]
 | The security-event surface and the metric identifiers (`COMMONS-13`–`COMMONS-15`).

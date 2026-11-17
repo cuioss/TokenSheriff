@@ -667,6 +667,8 @@ Key requirements:
 * A scope name outside the RFC 6749 §3.3 `scope-token` grammar is refused with `IllegalArgumentException`, never escaped
 * `realm` and `error_description` escape `"` and `\`; a value holding CR, LF, NUL, another C0 control or DEL is refused
 * At most 64 distinct scope tokens and 8192 characters, the bounds the client's challenge parser reads, so the parser accepts every built value and reads back the same scope set
+* The builder bounds its own work on hostile input: it keeps at most 65 distinct scopes (every further name is still checked against the grammar), scans at most 8192 characters of a `realm` or `error_description`, and refuses an over-long value at `build()` before copying it
+* The Quarkus extension checks the required scopes of every `@BearerAuth` and `@BearerToken` against these rules at deployment, so an invalid scope name or a merged set of more than 64 scopes fails the build instead of a request
 
 _See specification: xref:../adr/0031-Bearer_extraction_scope_challenge_sanitiser_escape_and_bounded_body_reads_are_public_commons_helpers.adoc[ADR-0031]_
 

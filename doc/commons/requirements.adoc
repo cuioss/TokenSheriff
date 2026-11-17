@@ -159,6 +159,12 @@ result at completion peaks at a small constant multiple of the ceiling), and off
 * *Truncate* — the body is read up to the ceiling and the result carries exactly the first ceiling
   bytes with an explicit truncation signal.
 
+The handler bounds its own work as well as the bytes: the body read so far is kept in one array that
+grows by doubling and never beyond the ceiling, so the objects a body costs grow with the logarithm of its
+size, not with the number of buffers it arrives in, and an empty buffer costs nothing. Under the fail
+policy, a `Content-Length` header that is not a valid number is a normal failure of the read: no byte of
+the body is read, and the `IOException` carries a fixed message that does not echo the header value.
+
 The ceiling is accepted from 0 to `Integer.MAX_VALUE - 8` bytes; any other value is refused when the
 handler is created. The handler logs nothing. See
 xref:specification/transport.adoc#bounded_response_body[Transport specification] and

@@ -6,7 +6,7 @@
 :source-highlighter: highlight.js
 
 // adr-metadata
-// summary: The RFC 6750 Bearer credential extractor and insufficient_scope challenge builder become public classes in commons.http, ErrorTextSanitizer gains a printable-ASCII escape form, and one public BoundedBodyHandler with a fail or truncate policy replaces the validation and client body handlers; the Quarkus producer adopts the RFC rules, which changes several default behaviours that are itemised here
+// summary: The RFC 6750 Bearer credential extractor and insufficient_scope challenge builder become public classes in commons.http, ErrorTextSanitizer gains a printable-ASCII escape form, and one public BoundedBodyHandler with a fail or truncate policy replaces the validation and client body handlers; the Quarkus producer adopts the RFC rules, which changes several default behaviours that are itemised here; an amendment moves the refusal of an invalid annotation scope to deployment, keeps the error_description grammar, and bounds the helpers' own work on hostile input
 // tags: commons, http, rfc6750, cwe-117, denial-of-service, api-surface
 // affects: token-sheriff-validation, token-sheriff-validation-quarkus, token-sheriff-client
 // supersedes:
@@ -164,8 +164,11 @@ Each change below alters what an existing deployment observes:
   configured). A token holding an internal space or a control character is now answered 400
   `INVALID_REQUEST` and the cookie is not consulted; before, it reached the validator and was answered 401
   `PARSING_ERROR`.
-* **OD-3** — a required scope whose name is outside the `scope-token` grammar is now refused with
-  `IllegalArgumentException` when the challenge is built, instead of being escaped into the header. A
+* **OD-3** — a required scope of a `@BearerAuth` or `@BearerToken` whose name is outside the `scope-token`
+  grammar, or a merged required-scope set of more than 64 distinct scopes, now fails the deployment: the
+  extension checks every annotation at build time and names the declaring class and member (see the
+  amendment below). Before, such a name was escaped into the header. A direct call of the challenge builder
+  with such a scope set is still refused with `IllegalArgumentException`. A
   backslash in a role or group name of the `insufficient_privileges` header is now written as `\\`. The
   `QuoteEscaping` expectations of `BearerTokenResponseFactoryTest` changed accordingly: a scope name holding
   `"` is refused, scope names holding a backslash, a space or a non-ASCII letter are refused, and a backslash
@@ -200,8 +203,8 @@ Each change below alters what an existing deployment observes:
 
 * The itemised default changes can turn a request a deployment answered before into a different answer: a
   lower-case scheme is now validated, and a token with an internal space is now a 400.
-* A scope name outside the grammar now fails the response instead of producing a header; a deployment that
-  configured such a name must rename it.
+* A scope name outside the grammar, or a merged set of more than 64 scopes, now fails the deployment instead
+  of producing a header; an application that declared such a name must rename it before it builds.
 * The public API of the validation module grows by three classes and one method.
 
 === Risks
@@ -230,6 +233,53 @@ new dependency, and two aligned copies drift again.
 
 The rejected options share one flaw: each keeps an HTTP-edge security rule in more than one place, where the
 places have already been shown to disagree.
+
+== Amendment: an invalid annotation scope fails the deployment, and the helpers bound their own work
+
+=== Context
+
+The decision above refuses a scope name outside the `scope-token` grammar when the challenge is built. For
+the Quarkus producer that point is the first request that misses a required scope: nothing checked the
+`requiredScopes` of `@BearerAuth` and `@BearerToken` earlier, so a misconfigured annotation surfaced as an
+unhandled `IllegalArgumentException` on the request path instead of a startup failure. Two further points
+were left open. The decision did not say whether `error_description` keeps the RFC 9110 quoted-string
+grammar or moves to the narrower RFC 6750 §3 character set. And the helpers refused hostile input only at
+the end of their work: the challenge builder kept every distinct scope and scanned and copied a `realm` or
+`error_description` of any length before `build()` refused it, and the body handler kept one array per
+received buffer and let an unparsable `Content-Length` escape as a `NumberFormatException`.
+
+=== Decision
+
+* **Annotation scopes are checked at deployment.** A build step of the validation extension reads the
+  combined Jandex index and collects the required scopes of every `@BearerAuth` on a class and on a method
+  — for a method of an annotated class, the union of the class-level and the method-level scopes of the
+  bean class, as ADR-0024 merges them at run time — and of every `@BearerToken` injection point. It checks
+  each set by building a challenge from it, so the rule is the builder's own and no new public API is
+  added. A refusal fails the build with an error that names the declaring class and member and the reason
+  (grammar or count); the scope value is rendered through `ErrorTextSanitizer` (ADR-0022), not echoed raw.
+  The producer's challenge build is unchanged: a direct call with such a set is still refused with
+  `IllegalArgumentException`.
+* **OD-D: the `error_description` grammar is kept.** `realm` and `error_description` stay RFC 9110 §5.6.4
+  quoted strings that escape `"` and `\` and refuse CR, LF, NUL, the other C0 controls and DEL. The builder's
+  output is unchanged, and the round trip of builder and client parser stays pinned by test.
+* **The builder bounds its own work.** It holds at most `MAX_SCOPE_TOKENS + 1` distinct scopes, still
+  checking every further name against the grammar, and scans at most `MAX_LENGTH` characters of a `realm`
+  or `error_description`; `build()` refuses an over-long value before copying it. The refusal point and its
+  messages stay at `build()`.
+* **The body handler bounds its own work.** The bytes read so far are kept in one array that grows by
+  doubling and never beyond the ceiling, so the object count grows with the logarithm of the body size, not
+  with the number of buffers. Under `FAIL`, a `Content-Length` that is not a valid number fails the body
+  future with an `IOException` carrying a fixed message that does not echo the header value.
+
+=== Consequences
+
+* A misconfigured required scope is found when the application is built, with the member that declares it,
+  and never reaches a request. This matches the fail-at-startup stance of ADR-0019 and ADR-0026.
+* The work and memory of the challenge builder are bounded by `MAX_SCOPE_TOKENS + 1` scopes and
+  `MAX_LENGTH` characters whatever the caller feeds it; the body handler's byte bound of COMMONS-17 is
+  unchanged and its object count no longer grows with the buffer count.
+* A control character in a `realm` or `error_description` past `MAX_LENGTH` characters is not reported by
+  the setter; the value is refused by `build()` for its length instead.
 
 == References
 
