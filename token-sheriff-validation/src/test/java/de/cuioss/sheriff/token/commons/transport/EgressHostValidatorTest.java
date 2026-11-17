@@ -23,6 +23,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.net.URI;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -36,6 +37,10 @@ class EgressHostValidatorTest {
                 Arguments.of("keycloak", "keycloak"),
                 Arguments.of("idp.internal", "idp.internal"),
                 Arguments.of("Keycloak.Example.COM", "keycloak.example.com"),
+                Arguments.of("idp.example.com.", "idp.example.com."),
+                Arguments.of("IdP.Example.COM.", "idp.example.com."),
+                Arguments.of("idp.1example.com", "idp.1example.com"),
+                Arguments.of("1example", "1example"),
                 Arguments.of("10.0.0.1", "10.0.0.1"),
                 Arguments.of("::1", "[::1]"),
                 Arguments.of("2001:db8::1", "[2001:db8::1]"),
@@ -70,6 +75,12 @@ class EgressHostValidatorTest {
                 Arguments.of("idp_internal", EgressHostValidator.INVALID_HOST),
                 Arguments.of("256.0.0.1", EgressHostValidator.INVALID_HOST),
                 Arguments.of("10.0.0", EgressHostValidator.INVALID_HOST),
+                Arguments.of("10.0.0.1.", EgressHostValidator.INVALID_HOST),
+                Arguments.of(".", EgressHostValidator.INVALID_HOST),
+                Arguments.of("idp.example.com..", EgressHostValidator.INVALID_HOST),
+                Arguments.of("idp.123", EgressHostValidator.INVALID_HOST),
+                Arguments.of("idp.1example", EgressHostValidator.INVALID_HOST),
+                Arguments.of("idp.1example.", EgressHostValidator.INVALID_HOST),
                 Arguments.of("a".repeat(64) + ".example", EgressHostValidator.INVALID_HOST),
                 Arguments.of("a.".repeat(127) + "ab", EgressHostValidator.INVALID_HOST));
     }
@@ -86,6 +97,8 @@ class EgressHostValidatorTest {
                     "a bare host must carry no refusal");
             assertEquals(canonical, EgressHostValidator.requireBareHost(entry),
                     "the canonical form is lower-case with an IPv6 literal bracketed");
+            assertEquals(canonical, URI.create("https://" + canonical + "/token").getHost(),
+                    "the canonical form must be the host URI reports, or the entry can never match");
         }
 
         @Test
@@ -95,6 +108,16 @@ class EgressHostValidatorTest {
 
             assertEquals(253, maximal.length(), "fixture must sit exactly on the length bound");
             assertEquals(Optional.empty(), EgressHostValidator.refusal(maximal));
+        }
+
+        @Test
+        @DisplayName("Should keep a terminal dot exactly as URI reports the host")
+        void shouldKeepTerminalDotAsUriReportsIt() {
+            String host = URI.create("https://idp.example.com./token").getHost();
+
+            assertEquals("idp.example.com.", host, "URI reports a trailing-dot host with its dot");
+            assertEquals(host, EgressHostValidator.requireBareHost("idp.example.com."),
+                    "the canonical form must match the host URI reports");
         }
     }
 
@@ -130,6 +153,15 @@ class EgressHostValidatorTest {
                     () -> EgressHostValidator.requireBareHost(entry));
             assertEquals(expectedRefusal, exception.getMessage());
             assertNull(exception.getCause(), "the refusal carries no cause that could echo the entry");
+        }
+
+        @ParameterizedTest(name = "URI reports no host for [{0}]")
+        @ValueSource(strings = {"idp.123", "idp.1example"})
+        @DisplayName("Should refuse a dotted host name URI cannot report because its final label starts with a digit")
+        void shouldRefuseHostNameUriReportsNoHostFor(String entry) {
+            assertNull(URI.create("https://" + entry + "/token").getHost(),
+                    "URI must report no host, so every URL to it is refused before the allow-list lookup");
+            assertEquals(Optional.of(EgressHostValidator.INVALID_HOST), EgressHostValidator.refusal(entry));
         }
 
         @ParameterizedTest(name = "does not echo [{0}]")

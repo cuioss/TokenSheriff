@@ -115,7 +115,9 @@ limit).
 
 *Allow-list entries are bare hosts, refused fail-closed.* Every egress allow-list entry, on either
 side, MUST be a bare host as `URI.getHost()` reports it: an ASCII host name of letter-digit-hyphen
-labels, a dotted IPv4 literal, or an IPv6 literal, bare or bracketed. A `null` or blank entry, an
+labels whose final label, when there is more than one, starts with a letter, optionally ending in
+one terminal root dot, a dotted
+IPv4 literal, or an IPv6 literal, bare or bracketed. A `null` or blank entry, an
 entry carrying a port (`keycloak:8080`, `[::1]:443`), whitespace, a control or non-ASCII character,
 or a URL syntax character (`/`, `@`, `?`, `#`, `%`) MUST be refused when the configuration is built —
 never stored, never silently ignored — with a fixed text that does not contain the entry. The one rule

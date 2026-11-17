@@ -915,6 +915,22 @@ class ClientConfigurationTest {
         }
 
         @Test
+        @DisplayName("Should admit a trailing-dot host as URI reports it and refuse a host URI cannot report")
+        void shouldAdmitTrailingDotHostAndRefuseUnreportableHost() {
+            EgressPolicy.HostResolver toSiteLocal = host -> new InetAddress[]{InetAddress.getByName("10.0.0.1")};
+            var config = minimalBuilder().allowedEgressHost("idp.example.com.").egressHostResolver(toSiteLocal).build();
+            var policy = config.getEgressPolicy();
+            var unreportable = minimalBuilder().allowedEgressHost("idp.123");
+
+            assertAll("the allow-list follows the host URI.getHost() reports",
+                    () -> assertEquals(List.of("idp.example.com."), config.getAllowedEgressHosts()),
+                    () -> assertDoesNotThrow(() -> policy.check(URI.create("https://idp.example.com./token")),
+                            "the trailing-dot entry must match the trailing-dot host and bypass the range check"),
+                    () -> assertThrows(IllegalArgumentException.class, unreportable::build,
+                            "URI reports no host for idp.123, so the entry must fail at configuration time"));
+        }
+
+        @Test
         @DisplayName("Should consult an injected host resolver for the egress check")
         void shouldUseInjectedResolver() {
             EgressPolicy.HostResolver toMetadata = host -> new InetAddress[]{InetAddress.getByName("169.254.169.254")};

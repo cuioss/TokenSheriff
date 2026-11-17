@@ -33,8 +33,11 @@ import java.util.Optional;
  * admits:
  * <ul>
  *   <li>an ASCII host name of dot-separated letter-digit-hyphen labels (each 1 to 63 characters, not
- *       starting or ending with {@code -}, at most 253 characters in total);</li>
- *   <li>a dotted IPv4 literal ({@code 10.0.0.5});</li>
+ *       starting or ending with {@code -}, at most 253 characters in total), whose final label starts
+ *       with a letter when there is more than one label — {@link URI} reports no host for
+ *       {@code idp.123} or {@code idp.1example} — and which may end in one terminal root dot
+ *       ({@code idp.example.com.}), kept as {@link URI#getHost()} reports it;</li>
+ *   <li>a dotted IPv4 literal ({@code 10.0.0.5}), without a terminal dot;</li>
  *   <li>a bare IPv6 literal — two or more colons, validated without DNS by parsing it inside brackets
  *       through {@link URI} ({@code ::1});</li>
  *   <li>a bracketed IPv6 literal ({@code [::1]}).</li>
@@ -187,10 +190,13 @@ public final class EgressHostValidator {
     }
 
     private static boolean isHostNameOrIpv4(String entry) {
-        if (entry.length() > MAX_HOST_NAME_LENGTH) {
+        // URI.getHost() reports a host with one terminal root dot unchanged, so one is admitted.
+        boolean terminalDot = entry.endsWith(".");
+        String name = terminalDot ? entry.substring(0, entry.length() - 1) : entry;
+        if (name.length() > MAX_HOST_NAME_LENGTH) {
             return false;
         }
-        String[] labels = entry.split("\\.", -1);
+        String[] labels = name.split("\\.", -1);
         boolean allNumeric = true;
         for (String label : labels) {
             if (!isLdhLabel(label)) {
@@ -198,7 +204,16 @@ public final class EgressHostValidator {
             }
             allNumeric &= label.chars().allMatch(Character::isDigit);
         }
-        return !allNumeric || isIpv4Literal(labels);
+        if (allNumeric) {
+            return !terminalDot && isIpv4Literal(labels);
+        }
+        // URI requires the final label of a dotted host name to start with a letter; otherwise
+        // getHost() is null. A single-label name such as "1example" is reported as it stands.
+        return labels.length == 1 || isAsciiLetter(labels[labels.length - 1].charAt(0));
+    }
+
+    private static boolean isAsciiLetter(char c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
     }
 
     private static boolean isLdhLabel(String label) {
