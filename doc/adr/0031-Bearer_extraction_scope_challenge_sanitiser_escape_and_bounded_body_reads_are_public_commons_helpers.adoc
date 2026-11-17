@@ -248,7 +248,7 @@ were left open. The decision did not say whether `error_description` keeps the R
 grammar or moves to the narrower RFC 6750 §3 character set. And the helpers refused hostile input only at
 the end of their work: the challenge builder kept every distinct scope and scanned and copied a `realm` or
 `error_description` of any length before `build()` refused it, and the body handler kept one array per
-received buffer and let an unparsable `Content-Length` escape as a `NumberFormatException`.
+received buffer, and its own read of an unparsable `Content-Length` threw a `NumberFormatException`.
 
 === Decision
 
@@ -298,8 +298,11 @@ received buffer and let an unparsable `Content-Length` escape as a `NumberFormat
   doubling and never beyond the ceiling, so the object count grows with the logarithm of the body size, not
   with the number of buffers. During a growth step the old and the new array are both live, so the memory
   held while streaming peaks below twice the ceiling plus the one chunk in flight; the byte ceiling on the
-  assembled body is unchanged (see COMMONS-17). Under `FAIL`, a `Content-Length` that is not a valid number
-  fails the body future with an `IOException` carrying a fixed message that does not echo the header value.
+  assembled body is unchanged (see COMMONS-17). Under `FAIL`, when the handler observes a `Content-Length`
+  that is not a valid number, it cancels the subscription without requesting a byte and fails the body
+  future with an `IOException` carrying a fixed message that does not echo the header value. That guarantee
+  is the handler's own; whether the surrounding client reaches the handler, and whether it parses the header
+  itself first, is the client's behaviour (see COMMONS-17).
 
 === Consequences
 
@@ -313,6 +316,11 @@ received buffer and let an unparsable `Content-Length` escape as a `NumberFormat
   array is a streaming peak below twice the ceiling while a growth step copies it.
 * A control character in a `realm` or `error_description` past `MAX_LENGTH` characters is not reported by
   the setter; the value is refused by `build()` for its length instead.
+* The client's own parse of a malformed `Content-Length` can still surface its own exception: the JDK
+  HTTP/1.1 client (observed on JDK 25) parses the header itself after the handler returned, so the caller of
+  `HttpClient.send` receives the JDK's `IllegalArgumentException` (cause `NumberFormatException`) carrying
+  the raw header value, not the handler's fixed message; a caller treats the message of any exception out
+  of an HTTP exchange as remote content and sanitises it before logging.
 
 == References
 

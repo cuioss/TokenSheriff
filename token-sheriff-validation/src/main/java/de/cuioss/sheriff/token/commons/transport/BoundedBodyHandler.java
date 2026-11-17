@@ -59,8 +59,16 @@ import java.util.concurrent.Flow;
  * while reading peaks below twice the ceiling plus the one in-flight chunk.
  * <p>
  * Under {@link OverLimitPolicy#FAIL} a {@code Content-Length} header that is not a valid number is a
- * normal failure as well: the subscription is cancelled without reading a byte and the body future completes exceptionally with an {@link IOException} reading
- * {@code Response Content-Length header is not a valid number}; the header value is not echoed.
+ * normal failure as well, when the handler observes it: the subscription is cancelled without requesting
+ * a byte and the body future completes exceptionally with an {@link IOException} reading
+ * {@code Response Content-Length header is not a valid number}; the header value is not echoed. That
+ * guarantee is the handler's own. Whether the surrounding client reaches the handler, and whether it
+ * parses the header itself first, is the client's behaviour: the JDK HTTP/1.1 client (observed on JDK 25)
+ * parses {@code Content-Length} itself after the handler returned, so there the caller of
+ * {@code HttpClient.send} receives the JDK's own {@link IllegalArgumentException} (cause
+ * {@link NumberFormatException}) carrying the raw header value, and the fixed message is not delivered. A
+ * caller therefore treats the message of any exception out of an HTTP exchange as remote content and
+ * sanitises it before logging.
  * <p>
  * The ceiling is accepted from {@code 0} to {@link #MAX_CEILING} inclusive, the largest array the result
  * can hold; a negative or larger ceiling is refused with an {@link IllegalArgumentException} when the
