@@ -33,7 +33,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoaderInitialRetryTest.*;
@@ -98,7 +97,7 @@ class HttpJwksLoaderInitialRetryGuardOrderTest {
 
     @Test
     @DisplayName("A periodic cycle that reaches the terminal ERROR before the claim leaves the attempt without a discovery")
-    void shouldNotRediscoverWhenPeriodicCycleReachedErrorBeforeClaim() throws IOException {
+    void shouldNotRediscoverWhenPeriodicCycleReachedErrorBeforeClaim() throws Exception {
         DiscoveryDispatcher dispatcher = new DiscoveryDispatcher();
         try (MockWebServer server = new MockWebServer()) {
             server.setDispatcher(dispatcher);
