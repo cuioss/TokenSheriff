@@ -245,10 +245,14 @@ total would exceed the ceiling, so the full body is never materialised first.
   `truncated()` `true`. A body of exactly the ceiling is not truncated.
 
 | Memory bound
-| While the body streams, both policies hold at most the ceiling plus the one chunk in flight, and ignore
-  every chunk that arrives after the first crossing. Completion is not covered by that bound: the held
-  chunks are assembled into one array and, for the string variant, decoded into a string before they are
-  released, so the transient peak there is a small constant multiple of the ceiling.
+| While the body streams, both policies keep the bytes read so far in one array that grows by doubling
+  and never beyond the ceiling, and ignore every chunk that arrives after the first crossing. The
+  assembled body never holds more than the ceiling, but during a growth step the old and the new array are
+  both live, so the memory held while streaming peaks below twice the ceiling plus the one chunk in
+  flight; the object count grows with the logarithm of the body size. Completion is not covered by that
+  bound: the held bytes are assembled into the result and, for the string variant, decoded into a string
+  before they are released, so the transient peak there is a small constant multiple of the ceiling (see
+  xref:../requirements.adoc#COMMONS-17[COMMONS-17]).
 
 | Failure message
 | The read completes exceptionally with an `IOException` reading

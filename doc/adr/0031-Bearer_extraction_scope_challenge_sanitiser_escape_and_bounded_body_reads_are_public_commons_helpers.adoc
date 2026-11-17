@@ -292,12 +292,14 @@ received buffer and let an unparsable `Content-Length` escape as a `NumberFormat
 * **The builder bounds its own work.** It holds at most `MAX_SCOPE_TOKENS + 1` distinct scopes, still
   checking every further name against the grammar, and scans at most `MAX_LENGTH` characters of a `realm`
   or `error_description`; `build()` refuses an over-long `realm`, `error_description` or space-joined scope
-  text before copying it, the scope text's length being computed without joining it. The refusal point and its
-  messages stay at `build()`.
+  text before copying it, the scope text's length being computed without joining it. The refusal point and
+  its messages stay at `build()`.
 * **The body handler bounds its own work.** The bytes read so far are kept in one array that grows by
   doubling and never beyond the ceiling, so the object count grows with the logarithm of the body size, not
-  with the number of buffers. Under `FAIL`, a `Content-Length` that is not a valid number fails the body
-  future with an `IOException` carrying a fixed message that does not echo the header value.
+  with the number of buffers. During a growth step the old and the new array are both live, so the memory
+  held while streaming peaks below twice the ceiling plus the one chunk in flight; the byte ceiling on the
+  assembled body is unchanged (see COMMONS-17). Under `FAIL`, a `Content-Length` that is not a valid number
+  fails the body future with an `IOException` carrying a fixed message that does not echo the header value.
 
 === Consequences
 
@@ -307,7 +309,8 @@ received buffer and let an unparsable `Content-Length` escape as a `NumberFormat
   logged as `TokenSheriff_Q-201` instead of escaping as an unhandled exception.
 * The work and memory of the challenge builder are bounded by `MAX_SCOPE_TOKENS + 1` scopes and
   `MAX_LENGTH` characters whatever the caller feeds it; the body handler's byte bound of COMMONS-17 is
-  unchanged and its object count no longer grows with the buffer count.
+  unchanged, its object count no longer grows with the buffer count, and the price of the one growable
+  array is a streaming peak below twice the ceiling while a growth step copies it.
 * A control character in a `realm` or `error_description` past `MAX_LENGTH` characters is not reported by
   the setter; the value is refused by `build()` for its length instead.
 

@@ -46,8 +46,7 @@ import java.util.concurrent.Flow;
  *   <li>{@link OverLimitPolicy#TRUNCATE} — keep the prefix. The advertised {@code Content-Length} is not
  *       checked; the body is read up to the ceiling, the subscription is cancelled at the first crossing,
  *       and the result holds exactly the first {@code maxBytes} bytes with
- *       {@link BoundedBody#truncated()} {@code true}. No byte past the ceiling is delivered; at most the
- *       ceiling plus the one in-flight chunk is held while reading.</li>
+ *       {@link BoundedBody#truncated()} {@code true}. No byte past the ceiling is delivered.</li>
  * </ul>
  * Chunks that arrive after the first crossing are ignored under both policies. The handlers log
  * nothing; an over-limit body never becomes an {@code OutOfMemoryError}.
@@ -55,9 +54,12 @@ import java.util.concurrent.Flow;
  * The bytes read so far are kept in one array that grows by doubling and never beyond the ceiling, so
  * the number of objects a body costs grows with the logarithm of its size, not with the number of
  * buffers it arrives in: a body delivered as many one-byte buffers costs no more than the same bytes in
- * one buffer, and an empty buffer costs nothing. Under {@link OverLimitPolicy#FAIL} a {@code Content-Length}
- * header that is not a valid number is a normal failure as well: the subscription is cancelled without
- * reading a byte and the body future completes exceptionally with an {@link IOException} reading
+ * one buffer, and an empty buffer costs nothing. The assembled body never holds more than the ceiling, but
+ * during a growth step the old and the new array are both live, so under either policy the memory held
+ * while reading peaks below twice the ceiling plus the one in-flight chunk.
+ * <p>
+ * Under {@link OverLimitPolicy#FAIL} a {@code Content-Length} header that is not a valid number is a
+ * normal failure as well: the subscription is cancelled without reading a byte and the body future completes exceptionally with an {@link IOException} reading
  * {@code Response Content-Length header is not a valid number}; the header value is not echoed.
  * <p>
  * The ceiling is accepted from {@code 0} to {@link #MAX_CEILING} inclusive, the largest array the result

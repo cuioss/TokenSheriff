@@ -149,9 +149,8 @@ exhaust memory or block a caller indefinitely.
 
 The response-size limit of xref:#COMMONS-4[COMMONS-4] MUST be enforced by one public handler,
 `commons.transport.BoundedBodyHandler`, for the validation-side discovery and JWKS reads and for the
-client's back-channel reads alike. It counts bytes while the body streams, never buffers more than the
-ceiling plus the one chunk in flight while it streams (assembling and, for the string variant, decoding the
-result at completion peaks at a small constant multiple of the ceiling), and offers two policies:
+client's back-channel reads alike. It counts bytes while the body streams, never accepts more than the
+ceiling into the assembled body, and offers two policies:
 
 * *Fail* — a response advertising a `Content-Length` above the ceiling is refused before a byte of its
   body is read; a body crossing the ceiling while streaming is refused at the crossing. Both fail the
@@ -161,9 +160,12 @@ result at completion peaks at a small constant multiple of the ceiling), and off
 
 The handler bounds its own work as well as the bytes: the body read so far is kept in one array that
 grows by doubling and never beyond the ceiling, so the objects a body costs grow with the logarithm of its
-size, not with the number of buffers it arrives in, and an empty buffer costs nothing. Under the fail
-policy, a `Content-Length` header that is not a valid number is a normal failure of the read: no byte of
-the body is read, and the `IOException` carries a fixed message that does not echo the header value.
+size, not with the number of buffers it arrives in, and an empty buffer costs nothing. During a growth
+step the old and the new array are both live, so the memory held while the body streams peaks below twice
+the ceiling plus the one chunk in flight; assembling and, for the string variant, decoding the result at
+completion peaks at a small constant multiple of the ceiling. Under the fail policy, a `Content-Length`
+header that is not a valid number is a normal failure of the read: no byte of the body is read, and the
+`IOException` carries a fixed message that does not echo the header value.
 
 The ceiling is accepted from 0 to `Integer.MAX_VALUE - 8` bytes; any other value is refused when the
 handler is created. The handler logs nothing. See
