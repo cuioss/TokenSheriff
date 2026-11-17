@@ -334,25 +334,35 @@ class JwtPropertyKeysTest {
     class DpopSubPropertyList {
 
         @Test
-        @DisplayName("should hold the four dpop sub-properties in declaration order")
-        void shouldHoldTheFourSubPropertiesInDeclarationOrder() {
-            assertEquals(
-                    JwtPropertyKeys.ISSUERS.DPOP_SUB_PROPERTIES, List.of(
-                            JwtPropertyKeys.ISSUERS.DPOP_REQUIRED,
-                            JwtPropertyKeys.ISSUERS.DPOP_PROOF_MAX_AGE_SECONDS,
-                            JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_SIZE,
-                            JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_TTL_SECONDS),
-                    "existing callers see the same list as before the derivation");
+        @DisplayName("should hold exactly the four dpop sub-properties, sorted and each once")
+        void shouldHoldExactlyTheFourSubPropertiesSorted() {
+            List<String> subProperties = JwtPropertyKeys.ISSUERS.DPOP_SUB_PROPERTIES;
+            List<String> sorted = new ArrayList<>(subProperties);
+            Collections.sort(sorted);
+
+            assertAll("DPoP sub-property list",
+                    () -> assertEquals(Set.of(
+                                    JwtPropertyKeys.ISSUERS.DPOP_REQUIRED,
+                                    JwtPropertyKeys.ISSUERS.DPOP_PROOF_MAX_AGE_SECONDS,
+                                    JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_SIZE,
+                                    JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_TTL_SECONDS),
+                            Set.copyOf(subProperties),
+                            "existing callers see the same keys as before the derivation"),
+                    () -> assertEquals(subProperties.size(), Set.copyOf(subProperties).size(),
+                            "the list must not repeat a key: " + subProperties),
+                    () -> assertEquals(sorted, subProperties,
+                            "the list must be sorted in natural String order: " + subProperties));
         }
 
         @Test
-        @DisplayName("should pick up a new dpop key and no key outside the dpop base")
+        @DisplayName("should pick up a new dpop key and no key outside the dpop base, sorted")
         void shouldPickUpNewDpopKeyOnly() {
             List<String> derived = JwtPropertyKeys.declaredKeysUnder(DpopKeyFixture.class, DpopKeyFixture.BASE,
                     Set.of(DpopKeyFixture.ENABLED));
 
-            assertEquals(List.of(DpopKeyFixture.FIRST, DpopKeyFixture.EXTRA), derived,
-                    "the extra dpop key is derived, the outside key and the non-constant field are not");
+            assertEquals(List.of(DpopKeyFixture.EXTRA, DpopKeyFixture.FIRST), derived,
+                    "the extra dpop key is derived, the outside key and the non-constant field are not, "
+                            + "and the keys are sorted ('extra-setting' before 'required')");
         }
 
         @Test

@@ -52,13 +52,16 @@ public final class JwtPropertyKeys {
     /**
      * Derives the keys declared under a base: the values of the {@code public static final String}
      * fields of {@code declaringClass} that start with {@code base}, without {@code base} itself and
-     * without {@code excluded}, in the order {@link Class#getDeclaredFields()} returns the fields, which
-     * is their declaration order.
+     * without {@code excluded}, sorted in natural {@link String} order.
+     * <p>
+     * The order is the sort, not the source order of the fields: {@link Class#getDeclaredFields()}
+     * returns the fields in no particular order, so the result is sorted to stay the same on every JVM.
+     * </p>
      *
      * @param declaringClass the class whose key definitions are read
      * @param base           the prefix the derived keys share
      * @param excluded       the keys under {@code base} that are not part of the result
-     * @return the derived keys, as an unmodifiable list
+     * @return the derived keys, sorted in natural {@link String} order, as an unmodifiable list
      * @throws IllegalStateException if a matching field cannot be read
      */
     static List<String> declaredKeysUnder(Class<?> declaringClass, String base, Set<String> excluded) {
@@ -73,6 +76,7 @@ public final class JwtPropertyKeys {
                 }
             }
         }
+        Collections.sort(keys);
         return List.copyOf(keys);
     }
 
@@ -385,7 +389,7 @@ public final class JwtPropertyKeys {
 
         /**
          * The {@code dpop.*} sub-property templates that only take effect while {@link #DPOP_ENABLED} is
-         * {@code true}, in declaration order, as an unmodifiable list.
+         * {@code true}, sorted in natural {@link String} order, as an unmodifiable list.
          * <p>
          * The list is derived once, when this class is initialized, from the {@code dpop.*} key
          * definitions of this class: every {@code public static final String} whose value starts with
