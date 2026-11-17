@@ -76,11 +76,16 @@ class PemKeyPairLoaderTest {
         ed25519 = KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
     }
 
+    /**
+     * One case per {@link KeyType}: the exhaustive switch fails compilation when a key type is added
+     * without a fixture, so no admitted type can drop out of the loading tests unnoticed.
+     */
     static Stream<Arguments> supportedKeyPairs() {
-        return Stream.of(
-                Arguments.of("RSA 2048", rsa2048),
-                Arguments.of("EC P-256", ecP256),
-                Arguments.of("Ed25519", ed25519));
+        return Stream.of(KeyType.values()).map(keyType -> switch (keyType) {
+            case RSA -> Arguments.of("RSA 2048", rsa2048);
+            case EC_P256 -> Arguments.of("EC P-256", ecP256);
+            case ED25519 -> Arguments.of("Ed25519", ed25519);
+        });
     }
 
     @ParameterizedTest(name = "{0}")
@@ -217,12 +222,13 @@ class PemKeyPairLoaderTest {
         KeyPairPolicy policy = new KeyPairPolicy(keyTypes, KeyPairPolicy.MINIMUM_RSA_MODULUS_BITS);
 
         keyTypes.add(KeyType.ED25519);
+        Set<KeyType> admitted = policy.allowedKeyTypes();
 
         assertAll("immutable copy",
                 () -> assertFalse(policy.allows(KeyType.ED25519),
                         "a later change to the caller's set must not widen the policy"),
                 () -> assertThrows(UnsupportedOperationException.class,
-                        () -> policy.allowedKeyTypes().add(KeyType.EC_P256),
+                        () -> admitted.add(KeyType.EC_P256),
                         "the admitted key types must not be modifiable"));
     }
 
