@@ -126,8 +126,10 @@ is `commons.transport.EgressHostValidator`; `EgressPolicy.EgressPolicyBuilder.al
 bracketed form, so a bare IPv6 entry matches the bracketed host of an IPv6 URL; matching stays
 case-insensitive. Under
 Quarkus a port-carrying element of `sheriff.token.issuers.<name>.jwks.http.allowed-egress-hosts`
-fails startup naming the property, and blank CSV elements are dropped before the rule runs; a blank or
-port-carrying element of `sheriff.client.allowed-egress-hosts` fails the client mapping.
+fails startup naming the property, and blank CSV elements are dropped before the rule runs; a
+port-carrying element, or one with surrounding whitespace (the client mapping does not trim entries), of
+`sheriff.client.allowed-egress-hosts` fails the client mapping, while the configuration reader drops empty
+CSV elements there before the rule runs.
 
 * Source: https://owasp.org/www-community/attacks/Server_Side_Request_Forgery[OWASP SSRF], https://github.com/advisories/GHSA-7vw6-5q2f-7w5r[CVE-2026-1180], https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4.10].
 

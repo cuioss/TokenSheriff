@@ -51,7 +51,8 @@ import java.util.Objects;
  *       that bound is read — it never buffers more;</li>
  *   <li>requires printable US-ASCII content;</li>
  *   <li>refuses text outside a block, unknown or repeated labels, mismatched {@code BEGIN}/{@code END}
- *       labels, boundary lines inside a body, non-canonical base64, and the encrypted PKCS#8
+ *       labels, boundary lines inside a body, base64 the JDK decoder rejects (characters outside the
+ *       base64 alphabet or invalid padding; the decoder is lenient about omitted padding), and the encrypted PKCS#8
  *       ({@code ENCRYPTED PRIVATE KEY}), PKCS#1 ({@code RSA PRIVATE KEY}) and SEC1
  *       ({@code EC PRIVATE KEY}) encodings;</li>
  *   <li>decodes the blocks with the JDK {@link KeyFactory} for the key types the

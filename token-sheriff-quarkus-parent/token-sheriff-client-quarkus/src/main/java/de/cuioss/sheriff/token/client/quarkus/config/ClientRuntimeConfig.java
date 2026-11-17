@@ -162,9 +162,10 @@ public final class ClientRuntimeConfig {
      * <p>
      * Each entry is a bare host name exactly as the URL host reads — an ASCII host name, a dotted IPv4
      * literal, or an IPv6 literal, bare ({@code ::1}) or bracketed ({@code [::1]}) — never with a port. A
-     * blank entry or one carrying a port ({@code keycloak:8080}, {@code [::1]:443}) is refused when the
-     * client configuration is built, with an {@link IllegalArgumentException} that names the entry index
-     * but not the entry.
+     * entry carrying a port ({@code keycloak:8080}, {@code [::1]:443}) or surrounding whitespace is refused
+     * when the client configuration is built, with an {@link IllegalArgumentException} that names the entry
+     * index but not the entry. Entries are not trimmed, and empty CSV elements are dropped by the
+     * configuration reader before the rule runs.
      *
      * @see de.cuioss.sheriff.token.client.config.ClientConfiguration#getAllowedEgressHosts()
      */
