@@ -18,14 +18,11 @@ package de.cuioss.sheriff.token.commons.transport;
 import de.cuioss.http.client.adapter.RetryConfig;
 import de.cuioss.http.client.handler.HttpHandler;
 import de.cuioss.http.client.handler.SecureSSLContextProvider;
-import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import javax.net.ssl.SSLContext;
 import java.net.URI;
@@ -35,9 +32,10 @@ import java.util.concurrent.ScheduledExecutorService;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests the endpoint settings of {@link HttpJwksLoaderConfig}: the cleartext opt-in, the egress
- * allow-list, the defaults and the refresh executor, the mutual exclusivity of the endpoint methods,
- * {@code toString}/{@code equals} and the parser configuration. The timeout and TLS settings are covered by
+ * Tests the endpoint settings of {@link HttpJwksLoaderConfig}: the cleartext opt-in, the defaults and
+ * the refresh executor, the mutual exclusivity of the endpoint methods, {@code toString}/{@code equals}
+ * and the parser configuration. The egress allow-list is covered by
+ * {@link HttpJwksLoaderConfigEgressHostTest}, the timeout and TLS settings by
  * {@link HttpJwksLoaderConfigTransportTest}, the opt-in loader settings and the issuer copy by
  * {@link HttpJwksLoaderConfigUnknownKidTest}.
  */
@@ -127,80 +125,6 @@ class HttpJwksLoaderConfigTest {
                 "Discovered http:// JWKS URL is allowed when insecure HTTP is explicitly enabled");
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN,
                 TransportLogMessages.WARN.INSECURE_HTTP_JWKS.resolveIdentifierString());
-    }
-
-    @Test
-    @DisplayName("Should reject a JWKS host resolving to a blocked range when no egress opt-in is set")
-    void shouldRejectBlockedHostWithoutEgressOptIn() {
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
-                .jwksUrl(VALID_URL)
-                .issuerIdentifier("test-issuer")
-                .build();
-        // "localhost" resolves to a loopback address, which the secure-default egress guard blocks.
-        assertThrows(TransportException.class,
-                () -> config.getEgressPolicy().check(URI.create("https://localhost:8443/certs")),
-                "A loopback-resolving host must be blocked when no egress opt-in is configured");
-    }
-
-    @Test
-    @DisplayName("Should permit a JWKS host that is on the explicit egress allow-list")
-    void shouldPermitAllowedEgressHost() {
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
-                .jwksUrl(VALID_URL)
-                .issuerIdentifier("test-issuer")
-                .allowedEgressHost("localhost")
-                .build();
-        // The allow-list bypasses the address-range checks entirely, so the otherwise-blocked
-        // loopback resolution of "localhost" is permitted.
-        assertDoesNotThrow(
-                () -> config.getEgressPolicy().check(URI.create("https://localhost:8443/certs")),
-                "An allow-listed host must bypass the egress address-range checks");
-    }
-
-    @Test
-    @DisplayName("Should refuse a null egress allow-list entry at the setter")
-    void shouldRefuseNullAllowedEgressHost() {
-        var builder = HttpJwksLoaderConfig.builder()
-                .jwksUrl(VALID_URL)
-                .issuerIdentifier("test-issuer");
-
-        var exception = assertThrows(IllegalArgumentException.class, () -> builder.allowedEgressHost(null),
-                "a null entry must be refused at the setter instead of being ignored");
-        assertEquals(EgressHostValidator.NULL_ENTRY, exception.getMessage());
-    }
-
-    @ParameterizedTest(name = "refuses [{0}]")
-    @ValueSource(strings = {"", "   ", "localhost:8443", "[::1]:8443"})
-    @DisplayName("Should refuse a blank or port-carrying egress allow-list entry at the setter")
-    void shouldRefuseMalformedAllowedEgressHost(String entry) {
-        var builder = HttpJwksLoaderConfig.builder()
-                .jwksUrl(VALID_URL)
-                .issuerIdentifier("test-issuer");
-
-        var exception = assertThrows(IllegalArgumentException.class, () -> builder.allowedEgressHost(entry),
-                "a malformed entry must be refused at the setter, before build()");
-        assertEquals(EgressHostValidator.refusal(entry).orElseThrow(), exception.getMessage());
-        if (!entry.isBlank()) {
-            for (Throwable current = exception; current != null; current = current.getCause()) {
-                String message = current.getMessage();
-                assertFalse(message != null && message.contains(entry),
-                        "no exception in the cause chain may echo the entry, but found: " + message);
-            }
-        }
-    }
-
-    @Test
-    @DisplayName("Should store a bare IPv6 egress allow-list entry so it matches the bracketed URL host")
-    void shouldMatchBareIpv6AllowedEgressHost() {
-        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
-                .jwksUrl(VALID_URL)
-                .issuerIdentifier("test-issuer")
-                .allowedEgressHost("::1")
-                .build();
-
-        assertDoesNotThrow(
-                () -> config.getEgressPolicy().check(URI.create("https://[::1]:8443/certs")),
-                "a bare ::1 entry must match the [::1] host URI.getHost() reports");
     }
 
     @Test

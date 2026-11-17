@@ -106,11 +106,15 @@ ever reached. Relaxing hostname matching alone would leave the fetch blocked at 
 certificate's name must match*. Both are development-only opt-ins, and neither implies the other.
 An `allowedEgressHost` entry is a *bare host* — a host name, an IPv4 literal or an IPv6 literal, bare
 or in brackets — never a URL and never `host:port`: the egress policy compares it with the host of the
-URL alone. A `null`, blank or port-carrying entry (`keycloak:8443`), or one carrying
-whitespace, a control or non-ASCII character or a URL syntax character, makes the setter throw an
-`IllegalArgumentException` whose message does not contain the entry, so a misconfigured allow-list
-fails the builder instead of being silently ignored. `WellKnownConfig.builder().allowedEgressHost(...)`
-applies the same rule.
+URL alone. A `null`, blank or port-carrying entry (`keycloak:8443`), one carrying whitespace, a
+control or non-ASCII character, an underscore or a URL syntax character (`/`, `@`, `?`, `#`, `%` — the
+`%` rule also refuses a zoned IPv6 literal such as `[fe80::1%eth0]`), a dotted name whose final label
+does not start with a letter (`idp.123`), or a malformed IPv6 literal makes the setter throw an
+`IllegalArgumentException` whose fixed message does not contain the entry, so a misconfigured
+allow-list fails the builder instead of being silently ignored.
+`WellKnownConfig.builder().allowedEgressHost(...)` applies the same rule. The complete list of refused
+classes is
+xref:../../../doc/commons/requirements.adoc#COMMONS-3[COMMONS-3].
 
 WARNING: `verifyHostname` defaults to `true`. Setting it to `false` relaxes *hostname matching only* —
 certificate chain trust, expiry, and algorithm constraints all remain fully enforced, so an untrusted

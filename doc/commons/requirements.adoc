@@ -117,10 +117,25 @@ limit).
 side, MUST be a bare host as `URI.getHost()` reports it: an ASCII host name of letter-digit-hyphen
 labels whose final label, when there is more than one, starts with a letter, optionally ending in
 one terminal root dot, a dotted
-IPv4 literal, or an IPv6 literal, bare or bracketed. A `null` or blank entry, an
-entry carrying a port (`keycloak:8080`, `[::1]:443`), whitespace, a control or non-ASCII character,
-or a URL syntax character (`/`, `@`, `?`, `#`, `%`) MUST be refused when the configuration is built —
-never stored, never silently ignored — with a fixed text that does not contain the entry. The one rule
+IPv4 literal, or an IPv6 literal, bare or bracketed. Every other entry MUST be refused when the
+configuration is built — never stored, never silently ignored — with a fixed text that does not
+contain the entry. The refused classes are:
+
+* `null`, and a blank entry;
+* a port in any form (`keycloak:8080`, `[::1]:443`, any other single-colon form);
+* a scheme or other URL syntax: `/`, `@`, `?` or `#` (`https://keycloak`, `user@keycloak`);
+* a name with `%`, which includes a zoned IPv6 literal (`[fe80::1%eth0]`, `fe80::1%eth0`): for
+  `http://[fe80::1%eth0]/` `URI.getHost()` reports `[fe80::1%eth0]`, but the zone id names an
+  interface of the local machine and an allow-list entry bypasses the link-local refusal, so `%` is
+  refused in every entry;
+* whitespace, and a control character;
+* a non-ASCII character;
+* an underscore, or any other character outside letter-digit-hyphen labels (`idp_internal`);
+* a dotted name whose final label does not start with a letter (`idp.123`, `idp.1example`), for
+  which `URI.getHost()` reports no host;
+* a malformed IPv6 literal (`::g`, `[::1`, `[10.0.0.1]`).
+
+The one rule
 is `commons.transport.EgressHostValidator`; `EgressPolicy.EgressPolicyBuilder.allowedHost`,
 `WellKnownConfig.WellKnownConfigBuilder.allowedEgressHost`,
 `HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder.allowedEgressHost` and the client's
@@ -128,10 +143,11 @@ is `commons.transport.EgressHostValidator`; `EgressPolicy.EgressPolicyBuilder.al
 bracketed form, so a bare IPv6 entry matches the bracketed host of an IPv6 URL; matching stays
 case-insensitive. Under
 Quarkus a port-carrying element of `sheriff.token.issuers.<name>.jwks.http.allowed-egress-hosts`
-fails startup naming the property, and blank CSV elements are dropped before the rule runs; a
-port-carrying element, or one with surrounding whitespace (the client mapping does not trim entries), of
-`sheriff.client.allowed-egress-hosts` fails the client mapping, while the configuration reader drops empty
-CSV elements there before the rule runs.
+fails startup naming the property; on this issuer path blank CSV elements are dropped and the
+whitespace around an element is trimmed before the rule runs, so `keycloak, dex` admits both hosts. The
+client path does not trim: a port-carrying element, or one with surrounding whitespace, of
+`sheriff.client.allowed-egress-hosts` fails the client mapping, so `keycloak, dex` fails it there, while
+the configuration reader drops empty CSV elements before the rule runs.
 
 * Source: https://owasp.org/www-community/attacks/Server_Side_Request_Forgery[OWASP SSRF], https://github.com/advisories/GHSA-7vw6-5q2f-7w5r[CVE-2026-1180], https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4.10].
 

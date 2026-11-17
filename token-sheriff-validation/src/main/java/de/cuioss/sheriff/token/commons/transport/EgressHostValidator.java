@@ -47,6 +47,13 @@ import java.util.Optional;
  * characters, and the URL syntax characters {@code /}, {@code @}, {@code ?}, {@code #} and
  * {@code %}. A refusal is one of the fixed texts declared here; none echoes the entry.
  * <p>
+ * A zoned IPv6 literal ({@code [fe80::1%eth0]} or {@code fe80::1%eth0}) is refused by the
+ * {@code %} rule. {@link URI} accepts the zone id: for {@code http://[fe80::1%eth0]/},
+ * {@link URI#getHost()} reports {@code [fe80::1%eth0]}, so a zoned entry would otherwise name a
+ * reachable host. The zone id names a network interface of the local machine, and an allow-list
+ * entry bypasses the link-local refusal of {@link EgressPolicy}; refusing {@code %} keeps one
+ * character rule for every entry instead of admitting a host-local address.
+ * <p>
  * {@link #requireBareHost(String)} returns the canonical form {@link EgressPolicy} matches against:
  * lower-case, with a bare IPv6 literal wrapped in brackets, because {@link URI#getHost()} reports an
  * IPv6 host bracketed. The class is stateless and safe for concurrent use.

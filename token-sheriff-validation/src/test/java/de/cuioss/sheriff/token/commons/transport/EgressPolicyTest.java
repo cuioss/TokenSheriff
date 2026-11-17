@@ -16,10 +16,12 @@
 package de.cuioss.sheriff.token.commons.transport;
 
 import de.cuioss.sheriff.token.commons.error.TransportException;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.net.InetAddress;
@@ -255,6 +257,17 @@ class EgressPolicyTest {
                 assertFalse(exception.getMessage().contains(entry),
                         "the refusal must not echo the entry, but was: " + exception.getMessage());
             }
+        }
+
+        @ParameterizedTest(name = "refuses [{0}] with its fixed text")
+        @MethodSource("de.cuioss.sheriff.token.commons.transport.EgressHostValidatorTest#builderRefusalClasses")
+        @DisplayName("Should refuse every refusal class of the validator with its fixed text, never echoing the entry")
+        void shouldRefuseEveryRefusalClass(@Nullable String entry, String expectedRefusal) {
+            var builder = EgressPolicy.builder();
+
+            var exception = assertThrows(IllegalArgumentException.class, () -> builder.allowedHost(entry),
+                    "the allow-list setter must refuse the entry");
+            EgressHostValidatorTest.assertFixedRefusal(exception, entry, expectedRefusal);
         }
     }
 
