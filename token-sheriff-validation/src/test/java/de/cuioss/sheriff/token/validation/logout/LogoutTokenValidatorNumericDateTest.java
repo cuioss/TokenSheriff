@@ -32,16 +32,19 @@ import java.security.Signature;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -55,6 +58,12 @@ import static org.junit.jupiter.api.Assertions.*;
  * validation. The extreme-value tests therefore run the hostile token and a valid one on two threads and
  * require both to finish within {@link #PROMPT}, a deliberately loose bound: a validator that expands the
  * value misses it by orders of magnitude.
+ * <p>
+ * The order of the two validations is driven by the injected clock, not left to thread scheduling: the
+ * validator reads its clock once, inside the decision lock and before it reads {@code iat} or {@code exp}, so
+ * the valid control is submitted only after the hostile validation has read the clock. The control therefore
+ * always contends with a hostile validation that already holds the lock, and a validator that expanded the
+ * value would stall it every time rather than only when the threads happened to interleave.
  */
 @DisplayName("LogoutTokenValidator NumericDate and freshness window bounds")
 class LogoutTokenValidatorNumericDateTest {
@@ -110,10 +119,10 @@ class LogoutTokenValidatorNumericDateTest {
         @ValueSource(strings = {"iat", "exp"})
         @DisplayName("A 16-digit mantissa with a large exponent is refused promptly, before the logout checks")
         void shouldRefuseSixteenDigitMantissaWithLargeExponentPromptly(String claim) throws Exception {
-            // The token parser admits at most 16 digits per JSON number (ParserConfig limitDigitsBuffer), so this
-            // value never reaches the NumericDate bound: the signature-only entry refuses it, which the
-            // validator reports as SIGNATURE (documented on LogoutTokenCheck#SIGNATURE)
-            assertRefusedPromptlyBesideValidToken(LogoutTokenCheck.SIGNATURE,
+            // The token parser bounds the digits of a JSON number (ParserConfig limitDigitsBuffer), so this value
+            // never reaches the NumericDate bound: the signature-only entry refuses it, which the validator
+            // reports as SIGNATURE (documented on LogoutTokenCheck#SIGNATURE), before the decision lock
+            assertRefusedBeforeDecisionLock(LogoutTokenCheck.SIGNATURE,
                     withMember(claim, "1234567890123456e99999999", "jti-mantissa"));
         }
 
@@ -124,23 +133,54 @@ class LogoutTokenValidatorNumericDateTest {
         }
 
         /**
-         * Validates {@code hostile} on one thread and a valid token with its own {@code jti} on another, and
-         * requires both results within {@link #PROMPT}.
+         * Validates {@code hostile} on one thread and, once that validation has read the clock inside the
+         * decision lock, a valid token with its own {@code jti} on another; requires both results within
+         * {@link #PROMPT}.
          */
         private void assertRefusedPromptlyBesideValidToken(LogoutTokenCheck expected, String hostile)
                 throws Exception {
-            String valid = withMember("jti", quoted("jti-concurrent-control"), "jti-concurrent-control");
+            SignallingClock clock = new SignallingClock();
+            LogoutTokenValidator signalled = validator(WINDOW, clock);
             ExecutorService executor = Executors.newFixedThreadPool(2);
             try {
-                Future<LogoutTokenValidationResult> hostileResult = executor.submit(() -> underTest.validate(hostile));
-                Future<LogoutTokenValidationResult> validResult = executor.submit(() -> underTest.validate(valid));
+                Future<LogoutTokenValidationResult> hostileResult = executor.submit(() -> signalled.validate(hostile));
+                assertTrue(clock.awaitFirstRead(PROMPT),
+                        "the hostile validation must reach the decision lock and read the clock");
+                Future<LogoutTokenValidationResult> validResult =
+                        executor.submit(() -> signalled.validate(validControl()));
 
                 assertRefused(expected, hostileResult.get(PROMPT.toSeconds(), TimeUnit.SECONDS));
                 assertTrue(validResult.get(PROMPT.toSeconds(), TimeUnit.SECONDS).isAccepted(),
-                        "positive control: the concurrent valid token is accepted");
+                        "positive control: the valid token submitted behind the hostile one is accepted");
+                assertEquals(2, clock.reads(), "each validation reads the clock exactly once");
             } finally {
                 executor.shutdownNow();
             }
+        }
+
+        /**
+         * Validates {@code hostile}, requires its refusal within {@link #PROMPT} without a clock read, so it
+         * never entered the decision lock, and then a valid token on the same validator.
+         */
+        private void assertRefusedBeforeDecisionLock(LogoutTokenCheck expected, String hostile) throws Exception {
+            SignallingClock clock = new SignallingClock();
+            LogoutTokenValidator signalled = validator(WINDOW, clock);
+            ExecutorService executor = Executors.newSingleThreadExecutor();
+            try {
+                assertRefused(expected,
+                        executor.submit(() -> signalled.validate(hostile)).get(PROMPT.toSeconds(), TimeUnit.SECONDS));
+                assertEquals(0, clock.reads(), "a token refused by the signature-only entry never reads the clock");
+                assertTrue(executor.submit(() -> signalled.validate(validControl()))
+                        .get(PROMPT.toSeconds(), TimeUnit.SECONDS).isAccepted(),
+                        "positive control: a valid token is accepted afterwards");
+                assertEquals(1, clock.reads(), "the valid token reads the clock exactly once");
+            } finally {
+                executor.shutdownNow();
+            }
+        }
+
+        private String validControl() {
+            return withMember("jti", quoted("jti-concurrent-control"), "jti-concurrent-control");
         }
     }
 
@@ -232,14 +272,53 @@ class LogoutTokenValidatorNumericDateTest {
     // === Fixtures ===
 
     private LogoutTokenValidator validator(Duration freshnessWindow) {
+        return validator(freshnessWindow, CLOCK);
+    }
+
+    private LogoutTokenValidator validator(Duration freshnessWindow, Clock clock) {
         return LogoutTokenValidator.builder()
                 .tokenValidator(tokenValidator)
                 .expectedIssuer(ISSUER)
                 .expectedAudience(AUDIENCE)
                 .freshnessWindow(freshnessWindow)
                 .replayGuardCapacity(100)
-                .clock(CLOCK)
+                .clock(clock)
                 .build();
+    }
+
+    /**
+     * A clock fixed at {@link #NOW} that counts its reads and signals the first one, so a test can wait until
+     * a validation has entered the decision lock, where the validator reads its clock.
+     */
+    private static final class SignallingClock extends Clock {
+
+        private final CountDownLatch firstRead = new CountDownLatch(1);
+        private final AtomicInteger reads = new AtomicInteger();
+
+        @Override
+        public Instant instant() {
+            reads.incrementAndGet();
+            firstRead.countDown();
+            return NOW;
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            throw new UnsupportedOperationException("the validator reads instants only");
+        }
+
+        boolean awaitFirstRead(Duration timeout) throws InterruptedException {
+            return firstRead.await(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        }
+
+        int reads() {
+            return reads.get();
+        }
     }
 
     /**

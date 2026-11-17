@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.quarkus.health;
 
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.commons.transport.JwksType;
 import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
@@ -50,12 +51,23 @@ import static org.junit.jupiter.api.Assertions.*;
  * issuer is reported {@code DOWN} with JWKS type {@code none}, and the WARN carries the exception message
  * only in its escaped form and attaches no exception, whose stack trace would print the message raw
  * (ADR-0022, CWE-117).
+ * <p>
+ * The issuer identifier in that WARN passes through {@link ErrorTextSanitizer} as well. A hostile identifier
+ * carrying CR/LF, a control character, a bidirectional control and a non-ASCII letter is reported exactly in
+ * its sanitiser rendering, so the test fails when the sanitiser call on the identifier is removed; a benign
+ * identifier is reported verbatim.
  */
 @EnableTestLogger
 @DisplayName("JwksEndpointHealthCheck loader-check failures")
 class JwksEndpointHealthCheckIssuerStatusFailureTest {
 
-    private static final String ISSUER = "failing-issuer";
+    private static final String BENIGN_ISSUER = "failing-issuer";
+    private static final String HOSTILE_ISSUER = "hostile-issuer\r\nFORGED-ISSUER-LINE\u0007‮issuer-ü";
+    /** The raw line break the hostile identifier would inject when written unsanitised. */
+    private static final String HOSTILE_ISSUER_RAW_BREAK = "\r\nFORGED-ISSUER-LINE";
+    /** {@link ErrorTextSanitizer#sanitize(String)} of {@link #HOSTILE_ISSUER}: escaped controls, letter kept. */
+    private static final String SANITISED_HOSTILE_ISSUER =
+            "hostile-issuer\\r\\nFORGED-ISSUER-LINE\\u0007\\u202eissuer-ü";
     private static final String RAW_MESSAGE = "loader broke\r\nFORGED-LOG-LINE";
     private static final String ESCAPED_MESSAGE = "loader broke\\r\\nFORGED-LOG-LINE";
 
@@ -66,19 +78,33 @@ class JwksEndpointHealthCheckIssuerStatusFailureTest {
         @Test
         @DisplayName("An IllegalStateException from the view reports DOWN and logs only the sanitised message")
         void shouldSanitiseIllegalStateException() {
-            assertSanitisedFailure(this::checkExternal, new IllegalStateException(RAW_MESSAGE));
+            assertSanitisedFailure(this::checkExternal, BENIGN_ISSUER, new IllegalStateException(RAW_MESSAGE));
         }
 
         @Test
         @DisplayName("An IllegalArgumentException from the view reports DOWN and logs only the sanitised message")
         void shouldSanitiseIllegalArgumentException() {
-            assertSanitisedFailure(this::checkExternal, new IllegalArgumentException(RAW_MESSAGE));
+            assertSanitisedFailure(this::checkExternal, BENIGN_ISSUER, new IllegalArgumentException(RAW_MESSAGE));
+        }
+
+        @Test
+        @DisplayName("A hostile issuer identifier is logged only in its sanitiser rendering")
+        void shouldSanitiseHostileIssuerIdentifier() {
+            assertSanitisedFailure(this::checkExternal, HOSTILE_ISSUER, new IllegalStateException(RAW_MESSAGE));
+            assertHostileIssuerSanitised();
+        }
+
+        @Test
+        @DisplayName("control: a benign issuer identifier is logged verbatim")
+        void shouldReportBenignIssuerIdentifierVerbatim() {
+            assertSanitisedFailure(this::checkExternal, BENIGN_ISSUER, new IllegalStateException(RAW_MESSAGE));
+            assertBenignIssuerVerbatim();
         }
 
         @Test
         @DisplayName("positive control: a view that does not throw reports UP and logs no WARN")
         void shouldReportHealthyViewWithoutWarning() {
-            assertHealthyWithoutWarning(checkExternal(new SwitchableJwksLoader(null)));
+            assertHealthyWithoutWarning(checkExternal(new SwitchableJwksLoader(BENIGN_ISSUER, null)));
         }
 
         private HealthCheckResponse checkExternal(SwitchableJwksLoader loader) {
@@ -98,19 +124,34 @@ class JwksEndpointHealthCheckIssuerStatusFailureTest {
         @Test
         @DisplayName("An IllegalStateException from the loader reports DOWN and logs only the sanitised message")
         void shouldSanitiseIllegalStateException() {
-            assertSanitisedFailure(this::checkConfigured, new IllegalStateException(RAW_MESSAGE));
+            assertSanitisedFailure(this::checkConfigured, BENIGN_ISSUER, new IllegalStateException(RAW_MESSAGE));
         }
 
         @Test
         @DisplayName("An IllegalArgumentException from the loader reports DOWN and logs only the sanitised message")
         void shouldSanitiseIllegalArgumentException() {
-            assertSanitisedFailure(this::checkConfigured, new IllegalArgumentException(RAW_MESSAGE));
+            assertSanitisedFailure(this::checkConfigured, BENIGN_ISSUER,
+                    new IllegalArgumentException(RAW_MESSAGE));
+        }
+
+        @Test
+        @DisplayName("A hostile issuer identifier is logged only in its sanitiser rendering")
+        void shouldSanitiseHostileIssuerIdentifier() {
+            assertSanitisedFailure(this::checkConfigured, HOSTILE_ISSUER, new IllegalStateException(RAW_MESSAGE));
+            assertHostileIssuerSanitised();
+        }
+
+        @Test
+        @DisplayName("control: a benign issuer identifier is logged verbatim")
+        void shouldReportBenignIssuerIdentifierVerbatim() {
+            assertSanitisedFailure(this::checkConfigured, BENIGN_ISSUER, new IllegalStateException(RAW_MESSAGE));
+            assertBenignIssuerVerbatim();
         }
 
         @Test
         @DisplayName("positive control: a loader that does not throw reports UP and logs no WARN")
         void shouldReportHealthyLoaderWithoutWarning() {
-            assertHealthyWithoutWarning(checkConfigured(new SwitchableJwksLoader(null)));
+            assertHealthyWithoutWarning(checkConfigured(new SwitchableJwksLoader(BENIGN_ISSUER, null)));
         }
 
         private HealthCheckResponse checkConfigured(SwitchableJwksLoader loader) {
@@ -126,12 +167,12 @@ class JwksEndpointHealthCheckIssuerStatusFailureTest {
     // === Fixtures ===
 
     /**
-     * Runs the health check over a loader that starts throwing {@code failure} once its issuer is set up, and
-     * asserts the ERROR outcome and the sanitised, exception-free WARN.
+     * Runs the health check over a loader for {@code issuer} that starts throwing {@code failure} once its
+     * issuer is set up, and asserts the ERROR outcome and the sanitised, exception-free WARN.
      */
     private static void assertSanitisedFailure(Function<SwitchableJwksLoader, HealthCheckResponse> check,
-            RuntimeException failure) {
-        HealthCheckResponse response = check.apply(new SwitchableJwksLoader(failure));
+            String issuer, RuntimeException failure) {
+        HealthCheckResponse response = check.apply(new SwitchableJwksLoader(issuer, failure));
 
         Map<String, Object> data = response.getData().orElseThrow();
         assertAll("loader-check failure",
@@ -139,7 +180,6 @@ class JwksEndpointHealthCheckIssuerStatusFailureTest {
                 () -> assertEquals("DOWN", data.get("issuer.0.status")),
                 () -> assertEquals("none", data.get("issuer.0.jwksType"), "the catch reports no JWKS type"));
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, ESCAPED_MESSAGE);
-        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, ISSUER);
         LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, RAW_MESSAGE);
         var warnings = TestLoggerFactory.getTestHandler().resolveLogMessagesContaining(TestLogLevel.WARN,
                 ESCAPED_MESSAGE);
@@ -148,31 +188,55 @@ class JwksEndpointHealthCheckIssuerStatusFailureTest {
                 "the WARN must not attach the exception, whose stack trace prints the raw message");
     }
 
+    /**
+     * Asserts that the WARN names the hostile issuer exactly in its {@link ErrorTextSanitizer} rendering and
+     * that no WARN carries the raw line break the identifier holds.
+     */
+    private static void assertHostileIssuerSanitised() {
+        assertEquals(SANITISED_HOSTILE_ISSUER, ErrorTextSanitizer.sanitize(HOSTILE_ISSUER),
+                "fixture: the expected rendering is the sanitiser's");
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, SANITISED_HOSTILE_ISSUER);
+        assertTrue(TestLoggerFactory.getTestHandler()
+                .resolveLogMessagesContaining(TestLogLevel.WARN, HOSTILE_ISSUER_RAW_BREAK).isEmpty(),
+                "no WARN may carry the raw issuer identifier");
+    }
+
+    /**
+     * Asserts that a benign issuer identifier, which the sanitiser leaves unchanged, is reported verbatim.
+     */
+    private static void assertBenignIssuerVerbatim() {
+        assertEquals(BENIGN_ISSUER, ErrorTextSanitizer.sanitize(BENIGN_ISSUER),
+                "fixture: the sanitiser leaves a benign identifier unchanged");
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, BENIGN_ISSUER);
+    }
+
     private static void assertHealthyWithoutWarning(HealthCheckResponse response) {
         assertEquals(HealthCheckResponse.Status.UP, response.getStatus());
         assertEquals("memory", response.getData().orElseThrow().get("issuer.0.jwksType"));
         LogAsserts.assertNoLogMessagePresent(TestLogLevel.WARN, "FORGED-LOG-LINE");
     }
 
-    private static IssuerConfig issuerConfig(JwksLoader loader) {
+    private static IssuerConfig issuerConfig(SwitchableJwksLoader loader) {
         return IssuerConfig.builder()
-                .issuerIdentifier(ISSUER)
+                .issuerIdentifier(loader.issuer)
                 .jwksLoader(loader)
                 .audienceValidationDisabled(true)
                 .build();
     }
 
     /**
-     * An in-memory loader reporting {@link LoaderStatus#OK} until {@link #startFailing()}, after which reading
-     * its status throws the given exception, as both health-check catches read the status first. Without a
-     * failure it keeps reporting {@link LoaderStatus#OK}.
+     * An in-memory loader for one issuer, reporting {@link LoaderStatus#OK} until {@link #startFailing()},
+     * after which reading its status throws the given exception, as both health-check catches read the status
+     * first. Without a failure it keeps reporting {@link LoaderStatus#OK}.
      */
     private static final class SwitchableJwksLoader implements JwksLoader {
 
+        private final String issuer;
         private final @Nullable RuntimeException failure;
         private volatile boolean failing;
 
-        SwitchableJwksLoader(@Nullable RuntimeException failure) {
+        SwitchableJwksLoader(String issuer, @Nullable RuntimeException failure) {
+            this.issuer = issuer;
             this.failure = failure;
         }
 
