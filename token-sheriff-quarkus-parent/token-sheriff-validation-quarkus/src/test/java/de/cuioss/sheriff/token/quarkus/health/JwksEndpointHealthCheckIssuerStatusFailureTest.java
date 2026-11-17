@@ -62,7 +62,9 @@ import static org.junit.jupiter.api.Assertions.*;
 class JwksEndpointHealthCheckIssuerStatusFailureTest {
 
     private static final String BENIGN_ISSUER = "failing-issuer";
-    private static final String HOSTILE_ISSUER = "hostile-issuer\r\nFORGED-ISSUER-LINE\u0007‮issuer-ü";
+    /** Carries U+202E (right-to-left override), written as a char code so the source holds no bidi control. */
+    private static final String HOSTILE_ISSUER =
+            "hostile-issuer\r\nFORGED-ISSUER-LINE\u0007" + (char) 0x202E + "issuer-ü";
     /** The raw line break the hostile identifier would inject when written unsanitised. */
     private static final String HOSTILE_ISSUER_RAW_BREAK = "\r\nFORGED-ISSUER-LINE";
     /** {@link ErrorTextSanitizer#sanitize(String)} of {@link #HOSTILE_ISSUER}: escaped controls, letter kept. */

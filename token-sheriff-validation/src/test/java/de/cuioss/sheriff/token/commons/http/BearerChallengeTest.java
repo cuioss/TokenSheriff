@@ -308,13 +308,15 @@ class BearerChallengeTest {
         void shouldRefuseFarTooLongRealmAtBuild() {
             String justOver = "r".repeat(BearerChallenge.MAX_LENGTH + 1);
             String farOver = "r".repeat(1_000_000);
+            BearerChallenge.Builder justOverBuilder = BearerChallenge.insufficientScope().realm(justOver);
+            BearerChallenge.Builder farOverBuilder = BearerChallenge.insufficientScope().realm(farOver);
             BearerChallenge.Builder controlPastBound = BearerChallenge.insufficientScope()
                     .realm(farOver + "\r\nSet-Cookie: a=b");
 
-            String justOverMessage = assertThrows(IllegalArgumentException.class,
-                    () -> BearerChallenge.insufficientScope().realm(justOver).build()).getMessage();
-            String farOverMessage = assertThrows(IllegalArgumentException.class,
-                    () -> BearerChallenge.insufficientScope().realm(farOver).build()).getMessage();
+            String justOverMessage = assertThrows(IllegalArgumentException.class, justOverBuilder::build)
+                    .getMessage();
+            String farOverMessage = assertThrows(IllegalArgumentException.class, farOverBuilder::build)
+                    .getMessage();
             String controlPastBoundMessage = assertThrows(IllegalArgumentException.class, controlPastBound::build,
                     "a control character past the scanned prefix is refused for the length instead").getMessage();
 
@@ -325,7 +327,8 @@ class BearerChallengeTest {
             assertEquals(BearerChallenge.MAX_LENGTH, BearerChallenge.insufficientScope()
                             .realm("r".repeat(BearerChallenge.MAX_LENGTH - overhead)).build().length(),
                     "control: a realm that fits the bound is built");
-            assertThrows(IllegalArgumentException.class, () -> BearerChallenge.insufficientScope().realm("a\rb"),
+            BearerChallenge.Builder controlBuilder = BearerChallenge.insufficientScope();
+            assertThrows(IllegalArgumentException.class, () -> controlBuilder.realm("a\rb"),
                     "control: a control character inside the scanned prefix is still refused by the setter");
         }
     }

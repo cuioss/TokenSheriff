@@ -169,7 +169,7 @@ class BearerScopeValidationBuildStepTest {
 
     @Test
     @DisplayName("Should accept inherited methods whose run-time union fits, ignoring a non-bean declaring class")
-    void shouldAcceptInheritedMethodsWhoseRunTimeUnionFits() throws Exception {
+    void shouldAcceptInheritedMethodsWhoseRunTimeUnionFits() {
         assertAll("inherited methods merged as the interceptor merges them",
                 () -> assertEquals(List.of(), TokenSheriffProcessor.findScopeViolations(
                                 Index.of(InheritedEndpointBase.class, InheritingAtBound.class)),

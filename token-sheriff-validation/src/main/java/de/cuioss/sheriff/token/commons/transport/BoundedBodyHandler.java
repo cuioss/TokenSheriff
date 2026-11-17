@@ -357,7 +357,7 @@ public final class BoundedBodyHandler {
             int required = position + length;
             if (required > content.length) {
                 long doubled = Math.max(2L * content.length, INITIAL_CAPACITY);
-                content = Arrays.copyOf(content, (int) Math.min(Math.max(doubled, required), maxBytes));
+                content = Arrays.copyOf(content, (int) Math.clamp(doubled, required, maxBytes));
             }
             buffer.get(content, position, length);
             total = required;
