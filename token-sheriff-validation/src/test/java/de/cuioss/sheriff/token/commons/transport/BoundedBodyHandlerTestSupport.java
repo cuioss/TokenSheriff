@@ -91,9 +91,18 @@ final class BoundedBodyHandlerTestSupport {
      * @param advertisedContentLength the {@code Content-Length} to advertise, or {@code null} for none
      */
     static HttpResponse.ResponseInfo responseInfo(Long advertisedContentLength) {
-        Map<String, List<String>> headerMap = advertisedContentLength == null
+        return responseInfoWithHeaders(advertisedContentLength == null
                 ? Map.of()
-                : Map.of("Content-Length", List.of(Long.toString(advertisedContentLength)));
+                : Map.of("Content-Length", List.of(Long.toString(advertisedContentLength))));
+    }
+
+    /**
+     * Builds a minimal {@link HttpResponse.ResponseInfo} for a 200 response carrying exactly
+     * {@code headerMap}, so a test can present a header value no {@code long} can express.
+     *
+     * @param headerMap the response headers
+     */
+    static HttpResponse.ResponseInfo responseInfoWithHeaders(Map<String, List<String>> headerMap) {
         HttpHeaders headers = HttpHeaders.of(headerMap, (name, value) -> true);
         return new HttpResponse.ResponseInfo() {
             @Override
@@ -118,7 +127,15 @@ final class BoundedBodyHandlerTestSupport {
      * subscribes it; the caller then sends each signal through the returned {@link ManualDrive}.
      */
     static <T> ManualDrive<T> subscribe(HttpResponse.BodyHandler<T> handler, Long advertisedContentLength) {
-        HttpResponse.BodySubscriber<T> subscriber = handler.apply(responseInfo(advertisedContentLength));
+        return subscribeTo(handler, responseInfo(advertisedContentLength));
+    }
+
+    /**
+     * Applies {@code handler} to {@code info} and subscribes it; the caller then sends each signal
+     * through the returned {@link ManualDrive}.
+     */
+    static <T> ManualDrive<T> subscribeTo(HttpResponse.BodyHandler<T> handler, HttpResponse.ResponseInfo info) {
+        HttpResponse.BodySubscriber<T> subscriber = handler.apply(info);
         AtomicBoolean cancelled = new AtomicBoolean(false);
         AtomicBoolean requested = new AtomicBoolean(false);
         subscriber.onSubscribe(new RecordingSubscription(cancelled, requested));

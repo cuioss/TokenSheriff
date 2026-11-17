@@ -285,6 +285,49 @@ class BearerChallengeTest {
             assertDoesNotThrow(() -> BearerChallenge.insufficientScope().errorDescription("\"".repeat(room / 2)).build(),
                     "control: escaped characters that fit are accepted");
         }
+
+        @Test
+        @DisplayName("Far more than 64 scope tokens are refused at build() with the message of 65")
+        void shouldRefuseFarTooManyScopesLikeOnePastTheBound() {
+            BearerChallenge.Builder onePast = BearerChallenge.insufficientScope()
+                    .scopes(scopes(BearerChallenge.MAX_SCOPE_TOKENS + 1));
+            BearerChallenge.Builder farPast = BearerChallenge.insufficientScope().scopes(scopes(100_000));
+
+            String onePastMessage = assertThrows(IllegalArgumentException.class, onePast::build).getMessage();
+            String farPastMessage = assertThrows(IllegalArgumentException.class, farPast::build,
+                    "100000 distinct tokens are refused when the challenge is built").getMessage();
+
+            assertEquals("A challenge carries at most 64 scope tokens, got more than 64", onePastMessage);
+            assertEquals(onePastMessage, farPastMessage, "the refusal does not depend on how far past the bound");
+            assertDoesNotThrow(() -> BearerChallenge.insufficientScope()
+                    .scopes(scopes(BearerChallenge.MAX_SCOPE_TOKENS)).build(), "control: 64 tokens are built");
+        }
+
+        @Test
+        @DisplayName("A realm far longer than 8192 characters is refused at build() with the same message")
+        void shouldRefuseFarTooLongRealmAtBuild() {
+            String justOver = "r".repeat(BearerChallenge.MAX_LENGTH + 1);
+            String farOver = "r".repeat(1_000_000);
+            BearerChallenge.Builder controlPastBound = BearerChallenge.insufficientScope()
+                    .realm(farOver + "\r\nSet-Cookie: a=b");
+
+            String justOverMessage = assertThrows(IllegalArgumentException.class,
+                    () -> BearerChallenge.insufficientScope().realm(justOver).build()).getMessage();
+            String farOverMessage = assertThrows(IllegalArgumentException.class,
+                    () -> BearerChallenge.insufficientScope().realm(farOver).build()).getMessage();
+            String controlPastBoundMessage = assertThrows(IllegalArgumentException.class, controlPastBound::build,
+                    "a control character past the scanned prefix is refused for the length instead").getMessage();
+
+            assertEquals("A challenge is at most 8192 characters long, got more than 8192", justOverMessage);
+            assertEquals(justOverMessage, farOverMessage, "the refusal does not depend on how far past the bound");
+            assertEquals(justOverMessage, controlPastBoundMessage);
+            int overhead = BearerChallenge.insufficientScope().realm("").build().length();
+            assertEquals(BearerChallenge.MAX_LENGTH, BearerChallenge.insufficientScope()
+                            .realm("r".repeat(BearerChallenge.MAX_LENGTH - overhead)).build().length(),
+                    "control: a realm that fits the bound is built");
+            assertThrows(IllegalArgumentException.class, () -> BearerChallenge.insufficientScope().realm("a\rb"),
+                    "control: a control character inside the scanned prefix is still refused by the setter");
+        }
     }
 
     @Nested

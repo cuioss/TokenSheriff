@@ -19,7 +19,7 @@ import java.io.IOException;
 import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.OptionalLong;
@@ -52,6 +52,14 @@ import java.util.concurrent.Flow;
  * Chunks that arrive after the first crossing are ignored under both policies. The handlers log
  * nothing; an over-limit body never becomes an {@code OutOfMemoryError}.
  * <p>
+ * The bytes read so far are kept in one array that grows by doubling and never beyond the ceiling, so
+ * the number of objects a body costs grows with the logarithm of its size, not with the number of
+ * buffers it arrives in: a body delivered as many one-byte buffers costs no more than the same bytes in
+ * one buffer, and an empty buffer costs nothing. Under {@link OverLimitPolicy#FAIL} a {@code Content-Length}
+ * header that is not a valid number is a normal failure as well: the subscription is cancelled without
+ * reading a byte and the body future completes exceptionally with an {@link IOException} reading
+ * {@code Response Content-Length header is not a valid number}; the header value is not echoed.
+ * <p>
  * The ceiling is accepted from {@code 0} to {@link #MAX_CEILING} inclusive, the largest array the result
  * can hold; a negative or larger ceiling is refused with an {@link IllegalArgumentException} when the
  * handler is created. The {@code boundOrigin} names the setting that produced the ceiling and whether it
@@ -79,7 +87,17 @@ public final class BoundedBodyHandler {
     public static final long MAX_CEILING = Integer.MAX_VALUE - 8L;
 
     /**
+     * Fixed message of the failure for a {@code Content-Length} header that is not a valid number. The
+     * header value is remote content and is not part of the message.
+     */
+    static final String UNPARSABLE_CONTENT_LENGTH = "Response Content-Length header is not a valid number";
+
+    private static final String CONTENT_LENGTH = "Content-Length";
+
+    /**
      * What a handler does when the body exceeds the ceiling.
+     *
+     * @since 1.0
      */
     public enum OverLimitPolicy {
 
@@ -151,9 +169,15 @@ public final class BoundedBodyHandler {
     private static HttpResponse.BodySubscriber<BoundedBody> subscriberFor(HttpResponse.ResponseInfo responseInfo,
             long maxBytes, OverLimitPolicy policy, String boundOrigin) {
         if (policy == OverLimitPolicy.FAIL) {
-            OptionalLong advertised = responseInfo.headers().firstValueAsLong("Content-Length");
+            OptionalLong advertised;
+            try {
+                advertised = responseInfo.headers().firstValueAsLong(CONTENT_LENGTH);
+            } catch (NumberFormatException e) {
+                // The header value is remote content and is not echoed into the message.
+                return new CancellingRejectSubscriber(new IOException(UNPARSABLE_CONTENT_LENGTH));
+            }
             if (advertised.isPresent() && advertised.getAsLong() > maxBytes) {
-                return new CancellingRejectSubscriber(maxBytes, boundOrigin);
+                return new CancellingRejectSubscriber(new IOException(overLimitMessage(maxBytes, boundOrigin)));
             }
         }
         return new BoundedSubscriber(maxBytes, policy, boundOrigin);
@@ -166,6 +190,8 @@ public final class BoundedBodyHandler {
     /**
      * The body read by a bounded handler: its bytes and whether bytes past the ceiling were dropped.
      * Immutable; {@link #toString()} never shows the content.
+     *
+     * @since 1.0
      */
     public static final class BoundedBody {
 
@@ -207,17 +233,17 @@ public final class BoundedBodyHandler {
     }
 
     /**
-     * Subscriber for the {@code Content-Length} pre-check rejection: cancels the subscription the instant
-     * it is offered, so no body byte is streamed, and returns an already-failed body future. Unlike a
-     * discarding subscriber, which requests {@link Long#MAX_VALUE} and drains every buffer, this defeats an
-     * over-advertised body without reading it.
+     * Subscriber for a {@code Content-Length} pre-check rejection (an over-advertised or unparsable
+     * length): cancels the subscription the instant it is offered, so no body byte is streamed, and
+     * returns an already-failed body future. Unlike a discarding subscriber, which requests
+     * {@link Long#MAX_VALUE} and drains every buffer, this defeats the body without reading it.
      */
     private static final class CancellingRejectSubscriber implements HttpResponse.BodySubscriber<BoundedBody> {
 
         private final CompletableFuture<BoundedBody> result = new CompletableFuture<>();
 
-        CancellingRejectSubscriber(long maxBytes, String boundOrigin) {
-            result.completeExceptionally(new IOException(overLimitMessage(maxBytes, boundOrigin)));
+        CancellingRejectSubscriber(IOException failure) {
+            result.completeExceptionally(failure);
         }
 
         @Override
@@ -252,11 +278,22 @@ public final class BoundedBodyHandler {
      */
     private static final class BoundedSubscriber implements HttpResponse.BodySubscriber<BoundedBody> {
 
+        private static final byte[] EMPTY = new byte[0];
+
+        /** Capacity of the first allocation, unless the ceiling is smaller. */
+        private static final int INITIAL_CAPACITY = 1024;
+
         private final long maxBytes;
         private final OverLimitPolicy policy;
         private final String boundOrigin;
         private final CompletableFuture<BoundedBody> result = new CompletableFuture<>();
-        private final List<byte[]> chunks = new ArrayList<>();
+
+        /**
+         * The bytes read so far, in {@code content[0..total)}. Grown by doubling, never beyond
+         * {@link #maxBytes}, so the number of arrays allocated grows with the logarithm of the body size
+         * and not with the number of buffers it arrives in.
+         */
+        private byte[] content = EMPTY;
         private long total;
         private Flow.Subscription subscription;
 
@@ -293,42 +330,46 @@ public final class BoundedBodyHandler {
                     onCrossing(buffer);
                     return;
                 }
-                chunks.add(read(buffer, remaining));
-                total += remaining;
+                append(buffer, remaining);
             }
         }
 
         private void onCrossing(ByteBuffer buffer) {
             subscription.cancel();
             if (policy == OverLimitPolicy.TRUNCATE) {
-                chunks.add(read(buffer, (int) (maxBytes - total)));
-                total = maxBytes;
+                append(buffer, (int) (maxBytes - total));
                 result.complete(new BoundedBody(assemble(), true));
             } else {
                 result.completeExceptionally(new IOException(overLimitMessage(maxBytes, boundOrigin)));
             }
-            chunks.clear();
+            content = EMPTY;
         }
 
-        private static byte[] read(ByteBuffer buffer, int length) {
-            byte[] chunk = new byte[length];
-            buffer.get(chunk);
-            return chunk;
+        /**
+         * Copies {@code length} bytes of {@code buffer} behind the bytes read so far; the caller guarantees
+         * that {@code total + length} does not exceed {@link #maxBytes}. An empty read allocates nothing.
+         */
+        private void append(ByteBuffer buffer, int length) {
+            if (length == 0) {
+                return;
+            }
+            int position = (int) total;
+            int required = position + length;
+            if (required > content.length) {
+                long doubled = Math.max(2L * content.length, INITIAL_CAPACITY);
+                content = Arrays.copyOf(content, (int) Math.min(Math.max(doubled, required), maxBytes));
+            }
+            buffer.get(content, position, length);
+            total = required;
         }
 
         private byte[] assemble() {
-            byte[] all = new byte[(int) total];
-            int position = 0;
-            for (byte[] chunk : chunks) {
-                System.arraycopy(chunk, 0, all, position, chunk.length);
-                position += chunk.length;
-            }
-            return all;
+            return content.length == total ? content : Arrays.copyOf(content, (int) total);
         }
 
         @Override
         public void onError(Throwable throwable) {
-            chunks.clear();
+            content = EMPTY;
             result.completeExceptionally(throwable);
         }
 
@@ -338,7 +379,7 @@ public final class BoundedBodyHandler {
                 return;
             }
             result.complete(new BoundedBody(assemble(), false));
-            chunks.clear();
+            content = EMPTY;
         }
     }
 }
