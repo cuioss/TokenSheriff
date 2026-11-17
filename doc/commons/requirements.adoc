@@ -113,6 +113,22 @@ validation side has its own per-issuer settings. The policy resolves the host im
 fetch, so a DNS answer that changes before the HTTP client connects is not seen (the DNS-rebinding
 limit).
 
+*Allow-list entries are bare hosts, refused fail-closed.* Every egress allow-list entry, on either
+side, MUST be a bare host as `URI.getHost()` reports it: an ASCII host name of letter-digit-hyphen
+labels, a dotted IPv4 literal, or an IPv6 literal, bare or bracketed. A `null` or blank entry, an
+entry carrying a port (`keycloak:8080`, `[::1]:443`), whitespace, a control or non-ASCII character,
+or a URL syntax character (`/`, `@`, `?`, `#`, `%`) MUST be refused when the configuration is built —
+never stored, never silently ignored — with a fixed text that does not contain the entry. The one rule
+is `commons.transport.EgressHostValidator`; `EgressPolicy.EgressPolicyBuilder.allowedHost`,
+`WellKnownConfig.WellKnownConfigBuilder.allowedEgressHost`,
+`HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder.allowedEgressHost` and the client's
+`ClientConfiguration` all apply it. An admitted entry is stored lower-cased, a bare IPv6 literal in
+bracketed form, so a bare IPv6 entry matches the bracketed host of an IPv6 URL; matching stays
+case-insensitive. Under
+Quarkus a port-carrying element of `sheriff.token.issuers.<name>.jwks.http.allowed-egress-hosts`
+fails startup naming the property, and blank CSV elements are dropped before the rule runs; a blank or
+port-carrying element of `sheriff.client.allowed-egress-hosts` fails the client mapping.
+
 * Source: https://owasp.org/www-community/attacks/Server_Side_Request_Forgery[OWASP SSRF], https://github.com/advisories/GHSA-7vw6-5q2f-7w5r[CVE-2026-1180], https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4.10].
 
 [#COMMONS-4]

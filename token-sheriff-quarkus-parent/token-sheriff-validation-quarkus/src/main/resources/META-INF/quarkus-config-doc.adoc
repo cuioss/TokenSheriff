@@ -73,7 +73,7 @@ as `dpop.enabled` of the issuer `my` — configure such an issuer in dotted form
 |`jwks.http.allow-insecure-http` |boolean |`false` |Permit plain-HTTP JWKS endpoints (testing only)
 |`jwks.http.verify-hostname` |boolean |`true` |Enforce TLS hostname verification on the JWKS / well-known fetch. Set to `false` only for SAN-mismatched development certificates (see NOTE below)
 |`jwks.http.allow-loopback-egress` |boolean |`false` |Permit loopback resolutions in the SSRF egress guard (local development / MockWebServer)
-|`jwks.http.allowed-egress-hosts` |String (csv) |— |Explicit host allow-list bypassing the egress address-range checks
+|`jwks.http.allowed-egress-hosts` |String (csv) |— |Explicit host allow-list bypassing the egress address-range checks. Each element must be a bare host — a host name, an IPv4 literal or an IPv6 literal, bare or in brackets, never `host:port`. A port-carrying element (such as `keycloak:8080`) fails application startup with an error naming the property but not the element; blank elements are dropped
 |===
 
 NOTE: `jwks.http.verify-hostname` is the only row in this table that defaults to the *secure* value

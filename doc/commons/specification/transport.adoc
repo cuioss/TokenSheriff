@@ -158,6 +158,48 @@ The advertised `issuer` is validated against the configured issuer before advert
 are trusted. Mitigates xref:../threat-model.adoc#T-SSRF[T-SSRF] and
 xref:../threat-model.adoc#T-DISCOVERY[T-DISCOVERY].
 
+==== [[egress_host_validator]] Allow-list entries: `EgressHostValidator`
+
+An allow-list entry names a host exactly as `URI.getHost()` reports it, and one public rule,
+`commons.transport.EgressHostValidator`, decides whether an entry is such a bare host:
+
+* `refusal(String)` returns empty for an admitted entry and otherwise one fixed refusal text, which
+  never contains the entry;
+* `requireBareHost(String)` throws `IllegalArgumentException` carrying that text, and otherwise
+  returns the canonical form the policy matches against — lower-cased, a bare IPv6 literal wrapped in
+  brackets, because `URI.getHost()` reports an IPv6 host bracketed.
+
+[cols="1,2", options="header"]
+|===
+| Admitted | Refused
+
+| An ASCII host name of dot-separated letter-digit-hyphen labels (each 1 to 63 characters, not
+  starting or ending with `-`, at most 253 in total); a dotted IPv4 literal; a bare IPv6 literal,
+  validated without DNS; a bracketed IPv6 literal
+| `null`; blank; a port in any form (`keycloak:8080`, a bracketed IPv6 literal followed by a port,
+  any other single-colon form);
+  whitespace; control characters; non-ASCII characters; the URL syntax characters `/`, `@`, `?`, `#`
+  and `%`; an invalid IPv6 literal or host name
+|===
+
+Every builder that takes an entry applies the rule at its setter and fails closed: a refused entry is
+never stored and never silently ignored.
+
+* `EgressPolicy.EgressPolicyBuilder.allowedHost` stores `requireBareHost(entry)`;
+* `WellKnownConfig.WellKnownConfigBuilder.allowedEgressHost` and
+  `HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder.allowedEgressHost` refuse at the setter rather than
+  in `build()`, so the fixed text is the first-class message and the entry appears nowhere in the
+  cause chain;
+* the client's `ClientConfiguration` refuses each `allowedEgressHosts` entry through `refusal`, naming
+  the entry's zero-based index but never the entry;
+* under Quarkus, `IssuerConfigResolver` turns a refused element of
+  `sheriff.token.issuers.<name>.jwks.http.allowed-egress-hosts` into an `IllegalStateException` naming
+  the property key and the bare-host rule, with the fixed text chained as its cause; blank CSV elements
+  are dropped before the rule runs.
+
+`EgressPolicy.check` is unchanged: a listed host still bypasses the address-range check, matched
+case-insensitively, and a bracketed IPv6 entry matches the bracketed host of an IPv6 URL.
+
 === Resilience / DoS bounds (COMMONS-4)
 
 Each fetch applies a connect/read timeout, a response-size limit, and bounded

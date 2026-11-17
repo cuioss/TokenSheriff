@@ -104,6 +104,13 @@ the egress policy rejects *before* the TLS handshake — and therefore before ho
 ever reached. Relaxing hostname matching alone would leave the fetch blocked at the earlier gate.
 `allowedEgressHost` governs *where* a JWKS fetch may go; `verifyHostname` governs *whether the
 certificate's name must match*. Both are development-only opt-ins, and neither implies the other.
+An `allowedEgressHost` entry is a *bare host* — a host name, an IPv4 literal or an IPv6 literal, bare
+or in brackets — never a URL and never `host:port`: the egress policy compares it with the host of the
+URL alone. A `null`, blank or port-carrying entry (`keycloak:8443`), or one carrying
+whitespace, a control or non-ASCII character or a URL syntax character, makes the setter throw an
+`IllegalArgumentException` whose message does not contain the entry, so a misconfigured allow-list
+fails the builder instead of being silently ignored. `WellKnownConfig.builder().allowedEgressHost(...)`
+applies the same rule.
 
 WARNING: `verifyHostname` defaults to `true`. Setting it to `false` relaxes *hostname matching only* —
 certificate chain trust, expiry, and algorithm constraints all remain fully enforced, so an untrusted

@@ -51,7 +51,10 @@ were audited to the requirements below during the move into commons.
   discovery and back-channel call (discovery, token, PAR, userinfo, revocation), checked on the
   URL actually contacted after the back-channel origin rewrite. The client back channel also
   keeps its path-structure and scheme checks. Relaxations are explicit only (see the residual
-  risks below).
+  risks below). A misconfigured allow-list — an entry carrying a port, or a blank entry, which would
+  otherwise be stored and silently never match, so the host stays refused or the operator believes a
+  relaxation is in force that is not — is refused fail-closed when the configuration is built, with a
+  fixed text that never echoes the entry (`EgressHostValidator`).
 | https://owasp.org/www-community/attacks/Server_Side_Request_Forgery[OWASP SSRF], https://github.com/advisories/GHSA-7vw6-5q2f-7w5r[CVE-2026-1180]
 | xref:requirements.adoc#COMMONS-3[COMMONS-3]
 
