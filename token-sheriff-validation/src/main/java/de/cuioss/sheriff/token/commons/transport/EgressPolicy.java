@@ -65,6 +65,15 @@ import java.util.Set;
  *       host allow-list whose entries bypass address-range checks entirely.</li>
  * </ul>
  * <p>
+ * <strong>Allow-list entries are bare hosts.</strong> Each entry must pass
+ * {@link EgressHostValidator}: a host name, a dotted IPv4 literal or an IPv6 literal, with no
+ * scheme, port, path, user-info or other URL syntax. A malformed entry is refused when it is added,
+ * with a fixed text that does not echo it, rather than stored as an entry that can never match.
+ * Entries are stored in canonical form — lower-case, an IPv6 literal bracketed — because
+ * {@link URI#getHost()} reports an IPv6 host as {@code [::1]}; a bare {@code ::1} entry therefore
+ * matches {@code http://[::1]/}. Matching against the checked URL's host is case-insensitive and
+ * textual, so an IPv6 entry matches only the same textual form of the address.
+ * <p>
  * A rejection raises the typed {@link TransportException} SSRF-blocked branch.
  *
  * @since 1.0
@@ -229,11 +238,15 @@ public final class EgressPolicy {
          * Adds a host to the explicit allow-list. Allow-listed hosts bypass address-range
          * checks entirely. Matching is case-insensitive.
          *
-         * @param host the host name to allow-list
+         * @param host the bare host to allow-list — a host name, a dotted IPv4 literal or an IPv6
+         *             literal, bare or bracketed; stored in the canonical form
+         *             {@link EgressHostValidator#requireBareHost(String)} returns
          * @return this builder instance
+         * @throws IllegalArgumentException if {@code host} is {@code null}, blank or not a bare host;
+         *                                  the message is a fixed text that does not echo the entry
          */
         public EgressPolicyBuilder allowedHost(String host) {
-            this.allowedHosts.add(host.toLowerCase(Locale.ROOT));
+            this.allowedHosts.add(EgressHostValidator.requireBareHost(host));
             return this;
         }
 

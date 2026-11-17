@@ -219,6 +219,43 @@ class EgressPolicyTest {
                     () -> policy.check(URI.create("https://internal.example.com/jwks")),
                     "Allow-listed hosts must bypass every address-range check");
         }
+
+        @ParameterizedTest(name = "entry {0} matches https://[::1]/")
+        @ValueSource(strings = {"::1", "[::1]"})
+        @DisplayName("Should match an allow-listed IPv6 entry, bare or bracketed, against the bracketed URL host")
+        void shouldMatchAllowedIpv6Entry(String entry) {
+            EgressPolicy policy = EgressPolicy.builder()
+                    .allowedHost(entry)
+                    .resolver(fixedResolver("::1"))
+                    .build();
+
+            assertDoesNotThrow(
+                    () -> policy.check(URI.create("https://[::1]/jwks")),
+                    "URI.getHost() reports [::1], so the stored canonical entry must be bracketed");
+        }
+
+        @Test
+        @DisplayName("Should refuse a null allow-list entry")
+        void shouldRefuseNullEntry() {
+            var builder = EgressPolicy.builder();
+
+            var exception = assertThrows(IllegalArgumentException.class, () -> builder.allowedHost(null));
+            assertEquals(EgressHostValidator.NULL_ENTRY, exception.getMessage());
+        }
+
+        @ParameterizedTest(name = "refuses [{0}]")
+        @ValueSource(strings = {"", "   ", "internal.example.com:8443", "[::1]:443", "https://internal.example.com"})
+        @DisplayName("Should refuse a blank, port-carrying or URL-shaped allow-list entry without echoing it")
+        void shouldRefuseMalformedEntry(String entry) {
+            var builder = EgressPolicy.builder();
+
+            var exception = assertThrows(IllegalArgumentException.class, () -> builder.allowedHost(entry));
+            assertEquals(EgressHostValidator.refusal(entry).orElseThrow(), exception.getMessage());
+            if (!entry.isBlank()) {
+                assertFalse(exception.getMessage().contains(entry),
+                        "the refusal must not echo the entry, but was: " + exception.getMessage());
+            }
+        }
     }
 
     @Nested

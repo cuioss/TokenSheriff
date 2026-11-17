@@ -73,9 +73,14 @@ public final class ClientConfigMapper {
      *                                  {@link ClientRuntimeConfig#DISCOVERY_DOCUMENT_MAX_SIZE} is not
      *                                  positive, or when {@link ClientRuntimeConfig#BACK_CHANNEL_ORIGIN}
      *                                  is not a bare absolute {@code http}/{@code https} origin, or when
-     *                                  {@link ClientRuntimeConfig#ALLOWED_EGRESS_HOSTS} holds a blank
-     *                                  entry (the engine {@link ClientConfiguration} rejects both at build
-     *                                  time)
+     *                                  {@link ClientRuntimeConfig#ALLOWED_EGRESS_HOSTS} holds an entry
+     *                                  that is not a bare host — one carrying a port such as
+     *                                  {@code keycloak:8080} or {@code [::1]:443}, or surrounding
+     *                                  whitespace (entries are not trimmed; the engine
+     *                                  {@link ClientConfiguration} rejects them at build time; the
+     *                                  allow-list refusal names the entry index, never the entry). Empty
+     *                                  CSV elements are dropped by the configuration reader before this
+     *                                  mapping runs
      */
     public static ClientConfiguration map(Config config) {
         String issuer = requiredValue(config, ClientRuntimeConfig.ISSUER);

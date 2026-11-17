@@ -159,6 +159,13 @@ public final class ClientRuntimeConfig {
      * address — typically the host of {@link #BACK_CHANNEL_ORIGIN}, which the egress policy otherwise
      * refuses when it resolves to a private network. Scope it narrowly: a listed host is trusted wherever
      * it appears, including in an endpoint the authorization server advertised.
+     * <p>
+     * Each entry is a bare host name exactly as the URL host reads — an ASCII host name, a dotted IPv4
+     * literal, or an IPv6 literal, bare ({@code ::1}) or bracketed ({@code [::1]}) — never with a port. An
+     * entry carrying a port ({@code keycloak:8080}, {@code [::1]:443}) or surrounding whitespace is refused
+     * when the client configuration is built, with an {@link IllegalArgumentException} that names the entry
+     * index but not the entry. Entries are not trimmed, and empty CSV elements are dropped by the
+     * configuration reader before the rule runs.
      *
      * @see de.cuioss.sheriff.token.client.config.ClientConfiguration#getAllowedEgressHosts()
      */

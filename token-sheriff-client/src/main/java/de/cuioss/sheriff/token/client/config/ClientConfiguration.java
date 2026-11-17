@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.client.config;
 
+import de.cuioss.sheriff.token.commons.transport.EgressHostValidator;
 import de.cuioss.sheriff.token.commons.transport.EgressPolicy;
 import de.cuioss.sheriff.token.commons.transport.EgressPolicy.HostResolver;
 import lombok.Builder;
@@ -30,6 +31,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Immutable configuration describing how this confidential client talks to a single
@@ -329,6 +331,13 @@ public class ClientConfiguration {
      * {@link #backChannelOrigin}. Scope it narrowly: an entry is trusted wherever it appears, including
      * in an endpoint the authorization server advertised. It mirrors the {@code allowedEgressHost} input
      * on the validation side.
+     * <p>
+     * Every entry must be a bare host exactly as {@link URI#getHost()} reports it — an ASCII host name, a
+     * dotted IPv4 literal, or an IPv6 literal, bare ({@code ::1}) or bracketed ({@code [::1]}); a bare
+     * IPv6 entry matches the bracketed host of a contacted URL. A {@code null}, blank or port-carrying
+     * entry ({@code host:8080}, {@code [::1]:443}), and any entry carrying whitespace, control or
+     * non-ASCII characters or URL syntax, is refused at construction with an
+     * {@link IllegalArgumentException} that names the entry index but never the entry.
      */
     @Singular
     List<String> allowedEgressHosts;
@@ -356,7 +365,7 @@ public class ClientConfiguration {
      * RFC 6749 §3.3 scope-token (see {@link #validateScopes(List)}; a {@code null} scope would otherwise
      * serialise as the literal {@code "null"} in the {@code scope} request parameter), a provided {@code backChannelOrigin} must be a bare
      * absolute {@code http}/{@code https} origin, and every {@code allowedEgressHosts} entry must be a
-     * non-blank host name. This mirrors {@code PostLogoutRedirectValidator}, which validates every entry
+     * bare host without a port (see {@link EgressHostValidator}). This mirrors {@code PostLogoutRedirectValidator}, which validates every entry
      * it accepts (L14).
      *
      * @throws IllegalArgumentException if any field is blank, malformed, or otherwise invalid
@@ -426,15 +435,30 @@ public class ClientConfiguration {
     }
 
     /**
-     * Every allow-listed host must be a non-blank host name: a blank entry would match nothing and only
-     * hide a misconfiguration.
+     * Every allow-listed host must be a bare host as decided by {@link EgressHostValidator#refusal(String)}:
+     * a {@code null}, blank or port-carrying entry would match no contacted host and only hide a
+     * misconfiguration.
+     * <p>
+     * A refusal names the zero-based entry index and the validator's fixed reason, never the entry itself,
+     * so an untrusted or control-character-bearing value can never reach an exception message and from
+     * there a log. The stored list keeps the entries as configured; {@link #getEgressPolicy()} hands them
+     * to {@link EgressPolicy.EgressPolicyBuilder#allowedHost(String)}, which canonicalises them.
+     *
+     * @param allowedEgressHosts the configured allow-list; must not be {@code null}
+     * @return an immutable copy of the validated list
+     * @throws NullPointerException     if {@code allowedEgressHosts} is {@code null}
+     * @throws IllegalArgumentException if an entry is not a bare host
      */
     private static List<String> validateAllowedEgressHosts(List<String> allowedEgressHosts) {
         Objects.requireNonNull(allowedEgressHosts, "allowedEgressHosts must not be null");
+        int index = 0;
         for (String host : allowedEgressHosts) {
-            if (host == null || host.isBlank()) {
-                throw new IllegalArgumentException("allowedEgressHosts must not contain null or blank entries");
+            Optional<String> refusal = EgressHostValidator.refusal(host);
+            if (refusal.isPresent()) {
+                throw new IllegalArgumentException(
+                        "allowedEgressHosts entry %d is refused: %s".formatted(index, refusal.get()));
             }
+            index++;
         }
         return List.copyOf(allowedEgressHosts);
     }
@@ -484,54 +508,29 @@ public class ClientConfiguration {
     }
 
     /**
-     * Validates a provided back-channel origin and normalises it.
+     * Validates a provided back-channel origin against {@link BackChannelOriginValidator} and
+     * normalises it.
      * <p>
-     * An absent ({@code null}) value is preserved. A provided value must be a well-formed absolute
-     * {@code http}/{@code https} URL with a host and nothing beyond the origin: no user-info, no query,
-     * no fragment, and an empty path — a single trailing {@code /} is accepted and stripped.
+     * An absent ({@code null}) value is preserved. A provided value must be a bare absolute
+     * {@code http}/{@code https} origin; a single trailing {@code /} is accepted and stripped.
      *
      * @param backChannelOrigin the configured back-channel origin, may be {@code null}
      * @return the normalised origin (without trailing {@code /}), or {@code null} when absent
-     * @throws IllegalArgumentException if the value is blank or is not a bare http(s) origin
+     * @throws IllegalArgumentException with the validator's fixed refusal text if the value is not a
+     *                                  bare http(s) origin
      */
     private static @Nullable String validateBackChannelOrigin(@Nullable String backChannelOrigin) {
         if (backChannelOrigin == null) {
             return null;
         }
-        if (backChannelOrigin.isBlank()) {
-            throw new IllegalArgumentException("backChannelOrigin must not be blank when provided");
+        Optional<String> refusal = BackChannelOriginValidator.refusal(backChannelOrigin);
+        if (refusal.isPresent()) {
+            throw new IllegalArgumentException(refusal.get());
         }
-        // No rejection below echoes the configured value: it may carry a credential in its
-        // user-info, and the user-info check is not the first check that can reject it.
-        final URI uri;
-        try {
-            uri = new URI(backChannelOrigin);
-        } catch (URISyntaxException e) {
-            // The exception is not chained: its message repeats the input verbatim.
-            throw new IllegalArgumentException(
-                    "backChannelOrigin must be a valid absolute URL (" + e.getReason() + " at index " + e.getIndex()
-                            + ")");
-        }
-        String scheme = uri.getScheme();
-        if (!uri.isAbsolute() || uri.getHost() == null
-                || !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))) {
-            throw new IllegalArgumentException("backChannelOrigin must be an absolute http(s) URL with a host");
-        }
-        if (uri.getRawUserInfo() != null) {
-            throw new IllegalArgumentException("backChannelOrigin must not carry user-info");
-        }
-        if (uri.getRawQuery() != null) {
-            throw new IllegalArgumentException("backChannelOrigin must not carry a query");
-        }
-        if (uri.getRawFragment() != null) {
-            throw new IllegalArgumentException("backChannelOrigin must not carry a fragment");
-        }
-        String path = uri.getRawPath();
-        if ("/".equals(path)) {
+        // An accepted origin carries no query or fragment and at most a single "/" as its path, so a
+        // trailing "/" is exactly that path.
+        if (backChannelOrigin.endsWith("/")) {
             return backChannelOrigin.substring(0, backChannelOrigin.length() - 1);
-        }
-        if (path != null && !path.isEmpty()) {
-            throw new IllegalArgumentException("backChannelOrigin must be an origin without a path");
         }
         return backChannelOrigin;
     }

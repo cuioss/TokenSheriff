@@ -390,6 +390,23 @@ class TokenSheriffClientProducerTest {
         }
 
         @Test
+        @DisplayName("Should reject a port-carrying allowed-egress-hosts element without echoing it")
+        void shouldRejectPortCarryingAllowedEgressHost() {
+            Map<String, String> properties = minimalClientProperties();
+            properties.put(ClientRuntimeConfig.ALLOWED_EGRESS_HOSTS, "idp.internal,keycloak:8080");
+            Config config = configOf(properties);
+
+            IllegalArgumentException failure =
+                    assertThrows(IllegalArgumentException.class, () -> ClientConfigMapper.map(config),
+                            "an allow-list element carrying a port matches no contacted host and must fail the mapping");
+            assertAll("the failure names the allow-list and the entry index, never the entry",
+                    () -> assertTrue(failure.getMessage().contains("allowedEgressHosts entry 1"),
+                            "the failure names the field and the refused index, but was: " + failure.getMessage()),
+                    () -> assertFalse(failure.getMessage().contains("keycloak"),
+                            "the refused element must not be echoed, but was: " + failure.getMessage()));
+        }
+
+        @Test
         @DisplayName("Should throw when a required property is missing during mapping")
         void shouldThrowOnMissingRequiredProperty() {
             Config config = configOf(Map.of(ClientRuntimeConfig.ISSUER, ISSUER));

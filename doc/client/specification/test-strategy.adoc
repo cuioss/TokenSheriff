@@ -599,6 +599,28 @@ an isolated-component or server-capability test alone does not qualify the row a
   `DiscoveryCacheDisabledNoInjectionDeploymentTest` (cache disabled, no injection point)
 | `DiscoverySpecIT`: two resolutions within the TTL against the real Keycloak realm return equal,
   independent copies, and the cache reports `RESOLVED` and `LoaderStatus.OK` | all
+
+| xref:../requirements.adoc#CLIENT-30[CLIENT-30] | T-TOKEN-REPLAY, T-CLIENT-CRED, T-SSRF-ADVERTISED, T-LOGOUT
+| `JwkPublicMembersTest`: the RSA, EC P-256 and Ed25519 member sets, coordinate left-padding and the
+  unsigned RSA modulus, an unmodifiable map, and the refusal of an off-curve point, secp256k1, P-384,
+  Ed448 and DSA with fixed texts carrying no key material; `DpopProofGeneratorJktGoldenTest`: the
+  `jkt` of fixed RSA, EC P-256 and Ed25519 keys, captured from the generator before it was rewired
+  onto `JwkPublicMembers`, is unchanged for every supported algorithm (`DpopProofGeneratorTest` passes
+  unedited); `PemKeyPairLoaderTest`: per key type, both block orders, CRLF line endings, the loaded
+  pair accepted by `DpopProofGenerator` and `PrivateKeyJwtAuth`, policy narrowing and the
+  `KeyPairPolicy` construction refusals; `PemKeyPairLoaderAdversarialTest`: the size bound plus one
+  byte and a multi-megabyte file, directory, missing and empty files, text outside a block, unknown,
+  repeated and mismatched labels, the encrypted PKCS#8, PKCS#1 and SEC1 encodings, PEM injection,
+  invalid base64, a non-ASCII byte, mismatched halves, RSA 1024, P-384, an off-curve public half and
+  Ed448 — each refused with its fixed text, containing neither the path nor any body fragment;
+  `BackChannelOriginValidatorTest`: the accepted origins and the refused inputs (user-info credential,
+  query, fragment, path, non-http(s), relative, blank, `null`, control and Unicode characters), no
+  refusal echoing the input; `ClientConfigurationTest`: a port-carrying, control-character or Unicode
+  `allowedEgressHosts` entry refused without echoing it; `RevocationClientTest`: `revokeIfSupported`
+  sends one request and returns `true` for an advertised endpoint, sends nothing and returns `false`
+  without one, propagates `TransportException`, delegates to an overridden `revoke` (ADR-0006), and
+  refuses invalid arguments before any request
+| — (no OP behaviour to observe; the existing suite runs on bare allow-list hosts) | all
 |===
 
 == Per-increment definition of done (test view)

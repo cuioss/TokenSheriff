@@ -22,6 +22,8 @@ import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import javax.net.ssl.SSLContext;
 import java.net.URI;
@@ -108,6 +110,52 @@ class WellKnownConfigTest {
         assertDoesNotThrow(
                 () -> egressPolicy.check(loopbackDiscoveryUri),
                 "An allow-listed discovery host must bypass the egress address-range checks");
+    }
+
+    @Test
+    @DisplayName("Should refuse a null egress allow-list entry at the setter")
+    void shouldRefuseNullAllowedEgressHost() {
+        var builder = WellKnownConfig.builder().wellKnownUrl(TEST_WELL_KNOWN_URL);
+
+        var exception = assertThrows(IllegalArgumentException.class, () -> builder.allowedEgressHost(null),
+                "a null entry must be refused at the setter instead of being ignored");
+        assertEquals(EgressHostValidator.NULL_ENTRY, exception.getMessage());
+    }
+
+    @ParameterizedTest(name = "refuses [{0}]")
+    @ValueSource(strings = {"", "   ", "localhost:8443", "[::1]:8443"})
+    @DisplayName("Should refuse a blank or port-carrying egress allow-list entry at the setter")
+    void shouldRefuseMalformedAllowedEgressHost(String entry) {
+        var builder = WellKnownConfig.builder().wellKnownUrl(TEST_WELL_KNOWN_URL);
+
+        var exception = assertThrows(IllegalArgumentException.class, () -> builder.allowedEgressHost(entry),
+                "a malformed entry must be refused at the setter, before build()");
+        assertEquals(EgressHostValidator.refusal(entry).orElseThrow(), exception.getMessage());
+        if (!entry.isBlank()) {
+            assertCauseChainDoesNotContain(exception, entry);
+        }
+    }
+
+    @Test
+    @DisplayName("Should store a bare IPv6 egress allow-list entry so it matches the bracketed URL host")
+    void shouldMatchBareIpv6AllowedEgressHost() {
+        WellKnownConfig config = WellKnownConfig.builder()
+                .wellKnownUrl(TEST_WELL_KNOWN_URL)
+                .allowedEgressHost("::1")
+                .build();
+        var egressPolicy = config.getEgressPolicy();
+        URI loopbackDiscoveryUri = URI.create("https://[::1]:8443/.well-known/openid-configuration");
+
+        assertDoesNotThrow(() -> egressPolicy.check(loopbackDiscoveryUri),
+                "a bare ::1 entry must match the [::1] host URI.getHost() reports");
+    }
+
+    private static void assertCauseChainDoesNotContain(Throwable thrown, String entry) {
+        for (Throwable current = thrown; current != null; current = current.getCause()) {
+            String message = current.getMessage();
+            assertFalse(message != null && message.contains(entry),
+                    "no exception in the cause chain may echo the entry, but found: " + message);
+        }
     }
 
     @Test

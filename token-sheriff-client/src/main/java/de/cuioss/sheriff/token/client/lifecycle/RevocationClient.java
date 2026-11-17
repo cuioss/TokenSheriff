@@ -19,6 +19,7 @@ import de.cuioss.http.client.handler.HttpHandler;
 import de.cuioss.http.client.handler.HttpStatusFamily;
 import de.cuioss.sheriff.token.client.auth.ClientAuthentication;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
+import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
 import de.cuioss.sheriff.token.client.internal.BackChannelHttp;
 import de.cuioss.sheriff.token.client.internal.FormEncoder;
 import de.cuioss.sheriff.token.commons.error.TransportException;
@@ -33,6 +34,7 @@ import java.net.http.HttpResponse;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Revokes a token at the RFC 7009 revocation endpoint over the authenticated back channel
@@ -119,6 +121,49 @@ public class RevocationClient {
             Thread.currentThread().interrupt();
             throw new TransportException("Revocation request interrupted", e);
         }
+    }
+
+    /**
+     * Revokes a token at the revocation endpoint the provider advertises, when it advertises one.
+     * <p>
+     * RFC 7009 revocation is optional for an authorization server: its discovery document may omit
+     * {@code revocation_endpoint}. When {@link ProviderMetadata#getRevocationEndpoint()} is present this
+     * method delegates to the overridable {@link #revoke(String, String, String, ClientAuthentication)}
+     * and returns {@code true}; when it is absent nothing is sent and {@code false} is returned. The
+     * delegation goes through the public, subclassable entry point rather than duplicating its transport
+     * (ADR-0006), so a subclass that overrides {@code revoke} observes every revocation this method makes.
+     * <p>
+     * The arguments are checked up front, before the metadata is consulted, so the contract does not
+     * depend on whether the provider advertises an endpoint.
+     *
+     * @param metadata             the resolved provider metadata; must not be {@code null}
+     * @param token                the token to revoke; must not be {@code null} or blank
+     * @param tokenTypeHint        the RFC 7009 {@code token_type_hint} (e.g. {@code refresh_token}), or
+     *                             {@code null} to omit it
+     * @param clientAuthentication the client authentication strategy to present; must not be
+     *                             {@code null}
+     * @return {@code true} when a revocation endpoint is advertised and the revocation request was sent
+     *         successfully, {@code false} when no revocation endpoint is advertised and nothing was sent
+     * @throws TransportException if the request fails or the response is not successful, exactly as
+     *                            {@link #revoke(String, String, String, ClientAuthentication)} throws
+     * @see <a href="https://www.rfc-editor.org/rfc/rfc7009">RFC 7009 - OAuth 2.0 Token Revocation</a>
+     */
+    public boolean revokeIfSupported(ProviderMetadata metadata, String token, @Nullable String tokenTypeHint,
+            ClientAuthentication clientAuthentication) {
+        Objects.requireNonNull(metadata, "metadata must not be null");
+        Objects.requireNonNull(token, "token must not be null");
+        Objects.requireNonNull(clientAuthentication, "clientAuthentication must not be null");
+        if (token.isBlank()) {
+            throw new IllegalArgumentException("token must not be blank");
+        }
+
+        Optional<String> revocationEndpoint = metadata.getRevocationEndpoint();
+        if (revocationEndpoint.isEmpty()) {
+            LOGGER.debug("Provider advertises no revocation endpoint; skipping RFC 7009 revocation");
+            return false;
+        }
+        revoke(revocationEndpoint.get(), token, tokenTypeHint, clientAuthentication);
+        return true;
     }
 
 }

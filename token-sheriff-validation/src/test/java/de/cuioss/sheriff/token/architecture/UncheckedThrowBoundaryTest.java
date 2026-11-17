@@ -145,6 +145,10 @@ class UncheckedThrowBoundaryTest {
                     + "#validateEndpointExclusivity", CONSTRUCTION_TIME),
             Map.entry("de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig$HttpJwksLoaderConfigBuilder"
                     + "#build", CONSTRUCTION_TIME),
+            Map.entry("de.cuioss.sheriff.token.commons.transport.EgressHostValidator#requireBareHost",
+                    CONSTRUCTION_TIME + " (builder argument contract: the egress allow-list setters of"
+                            + " EgressPolicy, WellKnownConfig and HttpJwksLoaderConfig refuse a non-bare"
+                            + " host; never inside a create*Token call stack)"),
             Map.entry("de.cuioss.sheriff.token.commons.transport.ParserConfig$ParserConfigBuilder#build",
                     CONSTRUCTION_TIME),
             Map.entry("de.cuioss.sheriff.token.commons.transport.WellKnownConfig$WellKnownConfigBuilder#build",
