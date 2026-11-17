@@ -202,47 +202,11 @@ public final class PemKeyPairLoader {
      * Splits the content into its private-key and public-key block bodies.
      */
     private static PemBlocks parse(String content) {
-        byte @Nullable [] privateKey = null;
-        byte @Nullable [] publicKey = null;
-        @Nullable String openLabel = null;
-        StringBuilder body = new StringBuilder();
+        PemParser parser = new PemParser();
         for (String line : content.split("\r?\n", -1)) {
-            if (openLabel == null) {
-                if (line.isEmpty()) {
-                    continue;
-                }
-                openLabel = beginLabel(line);
-                boolean repeated = PRIVATE_KEY_LABEL.equals(openLabel) ? privateKey != null : publicKey != null;
-                if (repeated) {
-                    throw new IllegalArgumentException(REPEATED_BLOCK);
-                }
-                body.setLength(0);
-            } else if (line.startsWith(END_PREFIX)) {
-                if (!line.equals(END_PREFIX + openLabel + BOUNDARY_DASHES)) {
-                    throw new IllegalArgumentException(LABEL_MISMATCH);
-                }
-                byte[] der = decodeBase64(body.toString());
-                if (PRIVATE_KEY_LABEL.equals(openLabel)) {
-                    privateKey = der;
-                } else {
-                    publicKey = der;
-                }
-                openLabel = null;
-            } else if (line.startsWith(BOUNDARY_DASHES)) {
-                throw new IllegalArgumentException(BOUNDARY_INSIDE_BLOCK);
-            } else if (line.isEmpty()) {
-                throw new IllegalArgumentException(INVALID_BASE64);
-            } else {
-                body.append(line);
-            }
+            parser.accept(line);
         }
-        if (openLabel != null) {
-            throw new IllegalArgumentException(UNTERMINATED_BLOCK);
-        }
-        if (privateKey == null || publicKey == null) {
-            throw new IllegalArgumentException(MISSING_BLOCK);
-        }
-        return new PemBlocks(privateKey, publicKey);
+        return parser.finish();
     }
 
     /**
@@ -314,11 +278,7 @@ public final class PemKeyPairLoader {
 
     private static void requirePolicy(KeyType keyType, PublicKey publicKey, KeyPairPolicy policy) {
         switch (keyType) {
-            case RSA -> {
-                if (((RSAPublicKey) publicKey).getModulus().bitLength() < policy.minimumRsaModulusBits()) {
-                    throw new IllegalArgumentException(RSA_MODULUS_TOO_SHORT);
-                }
-            }
+            case RSA -> requireRsaModulus((RSAPublicKey) publicKey, policy);
             case EC_P256 -> {
                 try {
                     JwkPublicMembers.of(publicKey);
@@ -329,6 +289,12 @@ public final class PemKeyPairLoader {
             case ED25519 -> {
                 // The Ed25519 key factory decodes Ed25519 keys only; nothing further to check.
             }
+        }
+    }
+
+    private static void requireRsaModulus(RSAPublicKey publicKey, KeyPairPolicy policy) {
+        if (publicKey.getModulus().bitLength() < policy.minimumRsaModulusBits()) {
+            throw new IllegalArgumentException(RSA_MODULUS_TOO_SHORT);
         }
     }
 
@@ -368,6 +334,79 @@ public final class PemKeyPairLoader {
             case EC_P256 -> "SHA256withECDSA";
             case ED25519 -> "Ed25519";
         };
+    }
+
+    /**
+     * Line-by-line state of {@link #parse(String)}: the label of the open block, the body collected
+     * for it and the decoded halves seen so far. Each line is checked in the order the refusals are
+     * documented — outside a block, the {@code END} line, then a body line — so the first refusal a
+     * file earns does not depend on how the checks are split.
+     */
+    private static final class PemParser {
+
+        private byte @Nullable [] privateKeyDer;
+        private byte @Nullable [] publicKeyDer;
+        private @Nullable String openLabel;
+        private final StringBuilder body = new StringBuilder();
+
+        private void accept(String line) {
+            String label = openLabel;
+            if (label == null) {
+                acceptOutsideBlock(line);
+            } else if (line.startsWith(END_PREFIX)) {
+                acceptEnd(label, line);
+            } else {
+                acceptBodyLine(line);
+            }
+        }
+
+        private void acceptOutsideBlock(String line) {
+            if (line.isEmpty()) {
+                return;
+            }
+            String label = beginLabel(line);
+            boolean repeated = PRIVATE_KEY_LABEL.equals(label) ? privateKeyDer != null : publicKeyDer != null;
+            if (repeated) {
+                throw new IllegalArgumentException(REPEATED_BLOCK);
+            }
+            openLabel = label;
+            body.setLength(0);
+        }
+
+        private void acceptEnd(String label, String line) {
+            if (!line.equals(END_PREFIX + label + BOUNDARY_DASHES)) {
+                throw new IllegalArgumentException(LABEL_MISMATCH);
+            }
+            byte[] der = decodeBase64(body.toString());
+            if (PRIVATE_KEY_LABEL.equals(label)) {
+                privateKeyDer = der;
+            } else {
+                publicKeyDer = der;
+            }
+            openLabel = null;
+        }
+
+        private void acceptBodyLine(String line) {
+            if (line.startsWith(BOUNDARY_DASHES)) {
+                throw new IllegalArgumentException(BOUNDARY_INSIDE_BLOCK);
+            }
+            if (line.isEmpty()) {
+                throw new IllegalArgumentException(INVALID_BASE64);
+            }
+            body.append(line);
+        }
+
+        private PemBlocks finish() {
+            if (openLabel != null) {
+                throw new IllegalArgumentException(UNTERMINATED_BLOCK);
+            }
+            byte[] privateKey = privateKeyDer;
+            byte[] publicKey = publicKeyDer;
+            if (privateKey == null || publicKey == null) {
+                throw new IllegalArgumentException(MISSING_BLOCK);
+            }
+            return new PemBlocks(privateKey, publicKey);
+        }
     }
 
     /** The decoded DER bodies of the two PEM blocks. */
