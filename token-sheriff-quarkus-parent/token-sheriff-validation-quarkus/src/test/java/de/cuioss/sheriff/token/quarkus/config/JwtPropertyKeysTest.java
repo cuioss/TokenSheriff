@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.quarkus.config;
 
+import io.quarkus.runtime.annotations.RegisterForReflection;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -305,79 +306,89 @@ class JwtPropertyKeysTest {
     }
 
     /**
-     * Guards {@link JwtPropertyKeys.ISSUERS#DPOP_SUB_PROPERTIES} against drift from the key definitions.
-     * <p>
-     * The population is derived from the {@code public static final String} templates that
-     * {@link JwtPropertyKeys.ISSUERS} declares under {@link JwtPropertyKeys.ISSUERS#DPOP_BASE}, not repeated
-     * here. Every such key other than {@link JwtPropertyKeys.ISSUERS#DPOP_ENABLED} only takes effect while
-     * DPoP is enabled and must therefore be listed, so an orphaned value fails startup. A newly added
-     * {@code dpop.*} key fails this guard until it is listed.
-     * </p>
+     * Key definitions shaped like {@link JwtPropertyKeys.ISSUERS}: the base, the enabled switch, one real
+     * sub-property, one extra {@code dpop.*} key, a key outside the base and a non-constant field.
+     * Package-private so that {@link JwtPropertyKeys#declaredKeysUnder} can read it.
+     */
+    static final class DpopKeyFixture {
+
+        public static final String BASE = JwtPropertyKeys.ISSUERS.DPOP_BASE;
+        public static final String ENABLED = JwtPropertyKeys.ISSUERS.DPOP_ENABLED;
+        public static final String FIRST = JwtPropertyKeys.ISSUERS.DPOP_REQUIRED;
+        public static final String EXTRA = JwtPropertyKeys.ISSUERS.DPOP_BASE + "extra-setting";
+        public static final String OUTSIDE = JwtPropertyKeys.ISSUERS.BASE + "dpop-like-setting";
+        @SuppressWarnings("unused") // read reflectively: not final, so never derived
+        public static String notConstant = JwtPropertyKeys.ISSUERS.DPOP_BASE + "mutable";
+
+        private DpopKeyFixture() {
+        }
+    }
+
+    /**
+     * Pins {@link JwtPropertyKeys.ISSUERS#DPOP_SUB_PROPERTIES}, which is derived from the {@code dpop.*}
+     * key definitions by {@link JwtPropertyKeys#declaredKeysUnder}, and the derivation itself on
+     * {@link DpopKeyFixture}.
      */
     @Nested
     @DisplayName("DPoP sub-property list")
     class DpopSubPropertyList {
 
-        /**
-         * Every {@code public static final String} key template that {@link JwtPropertyKeys.ISSUERS} declares
-         * under {@link JwtPropertyKeys.ISSUERS#DPOP_BASE}, the base template itself excluded.
-         */
-        private static Set<String> declaredDpopKeys() {
-            return declaredIssuerKeysUnder(JwtPropertyKeys.ISSUERS.DPOP_BASE);
-        }
-
-        /**
-         * The keys of {@code declared}, {@link JwtPropertyKeys.ISSUERS#DPOP_ENABLED} excluded, that are not
-         * listed in {@link JwtPropertyKeys.ISSUERS#DPOP_SUB_PROPERTIES}.
-         */
-        private static List<String> unlisted(Collection<String> declared) {
-            List<String> result = new ArrayList<>();
-            for (String key : declared) {
-                if (!JwtPropertyKeys.ISSUERS.DPOP_ENABLED.equals(key)
-                        && !JwtPropertyKeys.ISSUERS.DPOP_SUB_PROPERTIES.contains(key)) {
-                    result.add(key);
-                }
-            }
-            return result;
+        @Test
+        @DisplayName("should hold the four dpop sub-properties in declaration order")
+        void shouldHoldTheFourSubPropertiesInDeclarationOrder() {
+            assertEquals(List.of(
+                            JwtPropertyKeys.ISSUERS.DPOP_REQUIRED,
+                            JwtPropertyKeys.ISSUERS.DPOP_PROOF_MAX_AGE_SECONDS,
+                            JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_SIZE,
+                            JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_TTL_SECONDS),
+                    JwtPropertyKeys.ISSUERS.DPOP_SUB_PROPERTIES,
+                    "existing callers see the same list as before the derivation");
         }
 
         @Test
-        @DisplayName("should derive a dpop key population holding the enabled switch and every listed sub-property")
-        void shouldDeriveNonEmptyPopulation() {
-            Set<String> declared = declaredDpopKeys();
+        @DisplayName("should pick up a new dpop key and no key outside the dpop base")
+        void shouldPickUpNewDpopKeyOnly() {
+            List<String> derived = JwtPropertyKeys.declaredKeysUnder(DpopKeyFixture.class, DpopKeyFixture.BASE,
+                    Set.of(DpopKeyFixture.ENABLED));
 
-            assertAll("Derived dpop population",
-                    () -> assertTrue(declared.contains(JwtPropertyKeys.ISSUERS.DPOP_ENABLED),
-                            "The derived population must contain the enabled switch: " + declared),
-                    () -> assertTrue(declared.containsAll(JwtPropertyKeys.ISSUERS.DPOP_SUB_PROPERTIES),
-                            "The derived population must contain every listed sub-property: " + declared));
+            assertEquals(List.of(DpopKeyFixture.FIRST, DpopKeyFixture.EXTRA), derived,
+                    "the extra dpop key is derived, the outside key and the non-constant field are not");
         }
 
         @Test
-        @DisplayName("should list exactly the declared dpop keys other than the enabled switch, each once")
-        void shouldListEveryDeclaredDpopSubProperty() {
-            Set<String> expected = new TreeSet<>(declaredDpopKeys());
-            expected.remove(JwtPropertyKeys.ISSUERS.DPOP_ENABLED);
-            List<String> listed = JwtPropertyKeys.ISSUERS.DPOP_SUB_PROPERTIES;
+        @DisplayName("should never return the dpop base or the enabled switch")
+        void shouldNeverReturnBaseOrEnabledSwitch() {
+            List<String> derived = JwtPropertyKeys.declaredKeysUnder(DpopKeyFixture.class, DpopKeyFixture.BASE,
+                    Set.of(DpopKeyFixture.ENABLED));
 
-            assertAll("DPoP sub-property list content",
-                    () -> assertEquals(listed.size(), Set.copyOf(listed).size(),
-                            "The DPoP sub-property list must not repeat a key: " + listed),
-                    () -> assertEquals(expected, new TreeSet<>(listed),
-                            "Every dpop key other than the enabled switch must be listed in "
-                                    + "JwtPropertyKeys.ISSUERS.DPOP_SUB_PROPERTIES, and nothing else; unlisted: "
-                                    + unlisted(declaredDpopKeys())));
+            assertAll("excluded keys",
+                    () -> assertFalse(derived.contains(JwtPropertyKeys.ISSUERS.DPOP_BASE), "base: " + derived),
+                    () -> assertFalse(derived.contains(JwtPropertyKeys.ISSUERS.DPOP_ENABLED), "enabled: " + derived),
+                    () -> assertFalse(JwtPropertyKeys.ISSUERS.DPOP_SUB_PROPERTIES
+                                    .contains(JwtPropertyKeys.ISSUERS.DPOP_BASE),
+                            "the production list holds no base"),
+                    () -> assertFalse(JwtPropertyKeys.ISSUERS.DPOP_SUB_PROPERTIES
+                                    .contains(JwtPropertyKeys.ISSUERS.DPOP_ENABLED),
+                            "the production list holds no enabled switch"));
         }
 
         @Test
-        @DisplayName("should report a newly added dpop key that is not listed")
-        void shouldReportUnlistedNewKey() {
-            String newKey = JwtPropertyKeys.ISSUERS.DPOP_BASE + "some-new-setting";
-            Set<String> declared = new TreeSet<>(declaredDpopKeys());
-            declared.add(newKey);
+        @DisplayName("should be unmodifiable")
+        void shouldBeUnmodifiable() {
+            List<String> subProperties = JwtPropertyKeys.ISSUERS.DPOP_SUB_PROPERTIES;
 
-            assertEquals(List.of(newKey), unlisted(declared),
-                    "A dpop key missing from the sub-property list must be reported as unlisted");
+            assertThrows(UnsupportedOperationException.class,
+                    () -> subProperties.add(JwtPropertyKeys.ISSUERS.DPOP_BASE + "added"));
+        }
+
+        @Test
+        @DisplayName("should register ISSUERS for reflection with its fields, so the derivation works natively")
+        void shouldRegisterIssuersFieldsForReflection() {
+            RegisterForReflection registration =
+                    JwtPropertyKeys.ISSUERS.class.getAnnotation(RegisterForReflection.class);
+
+            assertNotNull(registration, "ISSUERS must carry @RegisterForReflection");
+            assertTrue(registration.fields(), "the registration must include the fields the derivation reads");
         }
     }
 

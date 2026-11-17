@@ -17,9 +17,14 @@ package de.cuioss.sheriff.token.quarkus.config;
 
 import de.cuioss.sheriff.token.commons.transport.HttpJwksLoaderConfig;
 import de.cuioss.sheriff.token.validation.jwks.JwksLoader;
+import io.quarkus.runtime.annotations.RegisterForReflection;
 import lombok.experimental.UtilityClass;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Constants for JWT property keys used in the Token-Sheriff Quarkus module.
@@ -42,6 +47,41 @@ public final class JwtPropertyKeys {
     public static final String PREFIX = "sheriff.token";
     public static final String DOT_JWKS = ".jwks";
     public static final String DOT_ENABLED = ".enabled";
+
+    /**
+     * Derives the keys declared under a base: the values of the {@code public static final String}
+     * fields of {@code declaringClass} that start with {@code base}, without {@code base} itself and
+     * without {@code excluded}, in the order {@link Class#getDeclaredFields()} returns the fields, which
+     * is their declaration order.
+     *
+     * @param declaringClass the class whose key definitions are read
+     * @param base           the prefix the derived keys share
+     * @param excluded       the keys under {@code base} that are not part of the result
+     * @return the derived keys, as an unmodifiable list
+     * @throws IllegalStateException if a matching field cannot be read
+     */
+    static List<String> declaredKeysUnder(Class<?> declaringClass, String base, Set<String> excluded) {
+        List<String> keys = new ArrayList<>();
+        for (Field field : declaringClass.getDeclaredFields()) {
+            int modifiers = field.getModifiers();
+            if (Modifier.isPublic(modifiers) && Modifier.isStatic(modifiers) && Modifier.isFinal(modifiers)
+                    && field.getType() == String.class) {
+                String value = constantValue(field);
+                if (value.startsWith(base) && !value.equals(base) && !excluded.contains(value)) {
+                    keys.add(value);
+                }
+            }
+        }
+        return List.copyOf(keys);
+    }
+
+    private static String constantValue(Field field) {
+        try {
+            return (String) field.get(null);
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("Key definition " + field.getName() + " is not readable", e);
+        }
+    }
 
     /**
      * Properties related to JWT parser configuration.
@@ -90,6 +130,7 @@ public final class JwtPropertyKeys {
      * </ul>
      */
     @UtilityClass
+    @RegisterForReflection(fields = true)
     public static final class ISSUERS {
         /**
          * Base template for issuer configurations.
@@ -343,18 +384,17 @@ public final class JwtPropertyKeys {
 
         /**
          * The {@code dpop.*} sub-property templates that only take effect while {@link #DPOP_ENABLED} is
-         * {@code true}, in declaration order.
+         * {@code true}, in declaration order, as an unmodifiable list.
          * <p>
-         * This is the single definition of that set: a configured value of any of them on an issuer whose
-         * DPoP validation is not enabled fails startup instead of being ignored. Every new {@code dpop.*}
-         * key other than {@link #DPOP_ENABLED} must be listed here.
+         * The list is derived once, when this class is initialized, from the {@code dpop.*} key
+         * definitions of this class: every {@code public static final String} whose value starts with
+         * {@link #DPOP_BASE}, without {@link #DPOP_BASE} itself and {@link #DPOP_ENABLED}. A configured
+         * value of any of them on an issuer whose DPoP validation is not enabled fails startup instead of
+         * being ignored, so a new {@code dpop.*} key is covered as soon as it is declared here.
          * </p>
          */
-        public static final List<String> DPOP_SUB_PROPERTIES = List.of(
-                DPOP_REQUIRED,
-                DPOP_PROOF_MAX_AGE_SECONDS,
-                DPOP_NONCE_CACHE_SIZE,
-                DPOP_NONCE_CACHE_TTL_SECONDS);
+        public static final List<String> DPOP_SUB_PROPERTIES = declaredKeysUnder(ISSUERS.class, DPOP_BASE,
+                Set.of(DPOP_ENABLED));
 
         // === JWKS Source Configuration (Mutually Exclusive) ===
 
