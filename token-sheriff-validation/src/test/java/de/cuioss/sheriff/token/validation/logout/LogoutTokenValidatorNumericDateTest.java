@@ -29,21 +29,13 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.Signature;
-import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
+import java.time.*;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -171,7 +163,7 @@ class LogoutTokenValidatorNumericDateTest {
                         executor.submit(() -> signalled.validate(hostile)).get(PROMPT.toSeconds(), TimeUnit.SECONDS));
                 assertEquals(0, clock.reads(), "a token refused by the signature-only entry never reads the clock");
                 assertTrue(executor.submit(() -> signalled.validate(validControl()))
-                        .get(PROMPT.toSeconds(), TimeUnit.SECONDS).isAccepted(),
+                                .get(PROMPT.toSeconds(), TimeUnit.SECONDS).isAccepted(),
                         "positive control: a valid token is accepted afterwards");
                 assertEquals(1, clock.reads(), "the valid token reads the clock exactly once");
             } finally {

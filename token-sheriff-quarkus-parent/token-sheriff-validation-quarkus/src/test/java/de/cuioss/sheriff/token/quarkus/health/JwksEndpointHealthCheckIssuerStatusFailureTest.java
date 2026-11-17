@@ -197,7 +197,7 @@ class JwksEndpointHealthCheckIssuerStatusFailureTest {
                 "fixture: the expected rendering is the sanitiser's");
         LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, SANITISED_HOSTILE_ISSUER);
         assertTrue(TestLoggerFactory.getTestHandler()
-                .resolveLogMessagesContaining(TestLogLevel.WARN, HOSTILE_ISSUER_RAW_BREAK).isEmpty(),
+                        .resolveLogMessagesContaining(TestLogLevel.WARN, HOSTILE_ISSUER_RAW_BREAK).isEmpty(),
                 "no WARN may carry the raw issuer identifier");
     }
 
