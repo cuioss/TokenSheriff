@@ -331,6 +331,60 @@ class BearerChallengeTest {
             assertThrows(IllegalArgumentException.class, () -> controlBuilder.realm("a\rb"),
                     "control: a control character inside the scanned prefix is still refused by the setter");
         }
+
+        /**
+         * Pins the refusal of a scope text longer than the bound on its own, and the boundary of that check.
+         * A single valid scope keeps the scope count at one, so the scope-token bound cannot be what refuses
+         * it. The allocation itself is not observable here - the final length check would refuse the same
+         * input after the join - so the test pins the refusal message and the boundary: a scope text one
+         * character past the bound is refused with the pre-copy message ({@code got more than 8192}), while a
+         * scope text of exactly the bound passes that check and is refused by the final check, which names the
+         * written length. The pre-copy property itself is carried by the check sitting before the join.
+         */
+        @Test
+        @DisplayName("A single scope longer than 8192 characters is refused at build() before it is joined")
+        void shouldRefuseOverLongScopeTextBeforeJoin() {
+            String preCopyMessage = "A challenge is at most 8192 characters long, got more than 8192";
+            BearerChallenge.Builder farOver = BearerChallenge.insufficientScope().scope("s".repeat(1_000_000));
+            BearerChallenge.Builder justOver = BearerChallenge.insufficientScope()
+                    .scope("s".repeat(BearerChallenge.MAX_LENGTH + 1));
+            BearerChallenge.Builder exactlyAtBound = BearerChallenge.insufficientScope()
+                    .scope("s".repeat(BearerChallenge.MAX_LENGTH));
+
+            String farOverMessage = assertThrows(IllegalArgumentException.class, farOver::build,
+                    "a single scope of 1000000 characters is refused").getMessage();
+            String justOverMessage = assertThrows(IllegalArgumentException.class, justOver::build).getMessage();
+            String atBoundMessage = assertThrows(IllegalArgumentException.class, exactlyAtBound::build,
+                    "a scope text of exactly the bound still cannot fit once quoted").getMessage();
+
+            assertEquals(preCopyMessage, farOverMessage, "the length refusal, not the scope-count refusal");
+            assertEquals(preCopyMessage, justOverMessage, "one character past the bound is refused before the join");
+            assertNotEquals(preCopyMessage, atBoundMessage,
+                    "a scope text of exactly the bound passes the pre-copy check and reaches the final check");
+            assertTrue(atBoundMessage.startsWith("A challenge is at most 8192 characters long, got "),
+                    "the final check refuses it with the written length");
+        }
+
+        @Test
+        @DisplayName("Positive control: scopes that fit, and a scope set filling the challenge exactly, are built")
+        void shouldBuildScopeTextThatFits() {
+            String longScope = "s".repeat(4096);
+            assertEquals("Bearer error=\"insufficient_scope\", scope=\"" + longScope + "\"",
+                    BearerChallenge.insufficientScope().scope(longScope).build(),
+                    "a single long scope that fits is written unchanged");
+
+            int overhead = BearerChallenge.insufficientScope().realm("api").scope("x").build().length() - 1;
+            int room = BearerChallenge.MAX_LENGTH - overhead;
+            String first = "a".repeat(room / 2);
+            String second = "b".repeat(room - first.length() - 1);
+
+            String atLimit = BearerChallenge.insufficientScope().realm("api").scopes(List.of(second, first)).build();
+
+            assertEquals(BearerChallenge.MAX_LENGTH, atLimit.length(),
+                    "a scope set whose challenge is exactly the bound, with a short realm, is built");
+            assertTrue(atLimit.endsWith("scope=\"" + first + " " + second + "\""),
+                    "the scopes are sorted and joined by one space");
+        }
     }
 
     @Nested

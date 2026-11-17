@@ -291,7 +291,8 @@ received buffer and let an unparsable `Content-Length` escape as a `NumberFormat
   output is unchanged, and the round trip of builder and client parser stays pinned by test.
 * **The builder bounds its own work.** It holds at most `MAX_SCOPE_TOKENS + 1` distinct scopes, still
   checking every further name against the grammar, and scans at most `MAX_LENGTH` characters of a `realm`
-  or `error_description`; `build()` refuses an over-long value before copying it. The refusal point and its
+  or `error_description`; `build()` refuses an over-long `realm`, `error_description` or space-joined scope
+  text before copying it, the scope text's length being computed without joining it. The refusal point and its
   messages stay at `build()`.
 * **The body handler bounds its own work.** The bytes read so far are kept in one array that grows by
   doubling and never beyond the ceiling, so the object count grows with the logarithm of the body size, not

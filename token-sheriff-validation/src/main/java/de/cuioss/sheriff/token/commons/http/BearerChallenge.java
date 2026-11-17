@@ -53,7 +53,9 @@ import java.util.TreeSet;
  * {@value #MAX_SCOPE_TOKENS}{@code + 1} distinct scopes: every further name is still checked against the
  * grammar but not kept, since one scope past the bound already makes {@link Builder#build()} refuse. It
  * scans at most {@value #MAX_LENGTH} characters of a {@code realm} or {@code error_description}, and
- * {@code build()} refuses a value longer than {@value #MAX_LENGTH} characters before copying it. A control
+ * {@code build()} refuses a value longer than {@value #MAX_LENGTH} characters before copying it - a
+ * {@code realm}, an {@code error_description}, or a scope text whose space-joined length, computed without
+ * joining it, exceeds the bound. A control
  * character past that point is therefore not reported by the setter; the value is refused by
  * {@code build()} for its length instead.
  * <p>
@@ -195,8 +197,10 @@ public final class BearerChallenge {
                         + " scope tokens, got more than " + MAX_SCOPE_TOKENS);
             }
             // The quoted values are only ever longer once written, so a value longer than the bound on its
-            // own is refused before it is copied.
-            if (length(realm) > MAX_LENGTH || length(errorDescription) > MAX_LENGTH) {
+            // own - the realm, the error_description or the space-joined scope text - is refused before it
+            // is copied.
+            if (length(realm) > MAX_LENGTH || length(errorDescription) > MAX_LENGTH
+                    || scopeTextLength() > MAX_LENGTH) {
                 throw new IllegalArgumentException("A challenge is at most " + MAX_LENGTH
                         + " characters long, got more than " + MAX_LENGTH);
             }
@@ -220,6 +224,22 @@ public final class BearerChallenge {
 
         private static int length(@Nullable String value) {
             return value == null ? 0 : value.length();
+        }
+
+        /**
+         * @return the length of the space-joined scope text, computed without building it; a {@code long} so
+         *         that the sum of up to {@value BearerChallenge#MAX_SCOPE_TOKENS} very long names cannot
+         *         overflow
+         */
+        private long scopeTextLength() {
+            if (scopes.isEmpty()) {
+                return 0;
+            }
+            long total = scopes.size() - 1L;
+            for (String scope : scopes) {
+                total += scope.length();
+            }
+            return total;
         }
 
         /**
