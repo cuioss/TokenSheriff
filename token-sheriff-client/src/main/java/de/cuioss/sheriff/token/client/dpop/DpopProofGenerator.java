@@ -23,23 +23,13 @@ import de.cuioss.sheriff.token.validation.util.JwkThumbprintUtil;
 import de.cuioss.tools.logging.CuiLogger;
 import org.jspecify.annotations.Nullable;
 
-import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
-import java.security.AlgorithmParameters;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.MessageDigest;
-import java.security.PublicKey;
 import java.security.Signature;
-import java.security.interfaces.ECPublicKey;
-import java.security.interfaces.EdECPublicKey;
-import java.security.interfaces.RSAPublicKey;
-import java.security.spec.ECGenParameterSpec;
-import java.security.spec.ECParameterSpec;
-import java.security.spec.EdECPoint;
 import java.security.spec.PSSParameterSpec;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -105,33 +95,10 @@ public class DpopProofGenerator {
      */
     private static final int MAX_TRACKED_JTIS = 10_000;
 
-    private static final String KTY_RSA = "RSA";
-    private static final String KTY_EC = "EC";
-    private static final String KTY_OKP = "OKP";
-    private static final String CRV_P256 = "P-256";
-    private static final String CRV_ED25519 = "Ed25519";
-
-    /** JCA standard name of curve P-256, the only curve an EC proof key may use. */
-    private static final String CURVE_SECP256R1 = "secp256r1";
-
-    /**
-     * Curve P-256's domain parameters, resolved once from the JCA provider. Every EC proof key is
-     * compared against these in full — a field-size check alone would admit any other 256-bit curve
-     * (secp256k1, brainpoolP256r1), whose key would then be published in a JWK claiming
-     * {@code "crv":"P-256"}: a curve-confusion defect.
-     */
-    private static final ECParameterSpec P256_PARAMS = resolveP256Params();
-
-    /** Fixed width of a P-256 affine coordinate per RFC 7518 §6.2.1.2. */
-    private static final int P256_COORDINATE_BYTES = 32;
-
-    /** Fixed width of an Ed25519 public key per RFC 8032. */
-    private static final int ED25519_KEY_BYTES = 32;
-
     /**
      * The {@link JwsAlgorithm} subset this generator accepts. The shared catalog is deliberately
-     * wider than DPoP: admitting {@code ES384} / {@code ES512} would reach this class's P-256-only
-     * JWK builder, and {@code PS384} / {@code PS512} are outside the matrix documented on the type,
+     * wider than DPoP: admitting {@code ES384} / {@code ES512} would reach the P-256-only member set
+     * of {@link JwkPublicMembers}, and {@code PS384} / {@code PS512} are outside the matrix documented on the type,
      * so the subset is declared here rather than inherited from the catalog wholesale.
      */
     static final Set<JwsAlgorithm> SUPPORTED_ALGORITHMS = EnumSet.of(
@@ -216,96 +183,12 @@ public class DpopProofGenerator {
         this.jcaAlgorithm = jcaSignatureAlgorithmOf(this.algorithm);
         // One JWK map feeds both the header 'jwk' and the cnf.jkt thumbprint, so a proof can never
         // advertise a key whose thumbprint does not match the embedded JWK.
-        Map<String, Object> jwk = buildJwk(keyPair.getPublic(), this.algorithm);
+        // JWK admission (JwkPublicMembers) stays independent of the signing catalog: the algorithm is
+        // matched against the admitted key's type here, not inside the member builder (ADR-0009).
+        Map<String, Object> jwk = JwkPublicMembers.of(keyPair.getPublic());
+        requireKeyTypeMatches(this.algorithm, (String) jwk.get("kty"));
         this.jwkJson = JwkThumbprintUtil.canonicalJson(jwk);
         this.jkt = JwkThumbprintUtil.computeThumbprint(jwk);
-    }
-
-    /**
-     * Classifies the proof key, verifies it matches the requested signing algorithm, and builds the
-     * canonical JWK members for its key type.
-     *
-     * @param publicKey the proof key's public key
-     * @param algorithm the requested signing algorithm's catalog entry
-     * @return the JWK members required for this key type by RFC 7638
-     * @throws IllegalArgumentException if the key type or curve is unsupported, or the algorithm does
-     *         not match the key type
-     */
-    private static Map<String, Object> buildJwk(PublicKey publicKey, JwsAlgorithm algorithm) {
-        if (publicKey instanceof RSAPublicKey rsaKey) {
-            requireKeyTypeMatches(algorithm, KTY_RSA);
-            return Map.of(
-                    "kty", KTY_RSA,
-                    "e", base64UrlUnsigned(rsaKey.getPublicExponent()),
-                    "n", base64UrlUnsigned(rsaKey.getModulus()));
-        }
-        if (publicKey instanceof ECPublicKey ecKey) {
-            requireKeyTypeMatches(algorithm, KTY_EC);
-            requireP256Curve(ecKey.getParams());
-            return Map.of(
-                    "kty", KTY_EC,
-                    "crv", CRV_P256,
-                    // RFC 7518 §6.2.1.2: coordinates are left-padded to the full coordinate width,
-                    // so base64UrlUnsigned (which strips rather than pads) must not be used here.
-                    "x", base64UrlFixedWidth(ecKey.getW().getAffineX(), P256_COORDINATE_BYTES),
-                    "y", base64UrlFixedWidth(ecKey.getW().getAffineY(), P256_COORDINATE_BYTES));
-        }
-        if (publicKey instanceof EdECPublicKey edKey) {
-            requireKeyTypeMatches(algorithm, KTY_OKP);
-            String curve = edKey.getParams().getName();
-            if (!CRV_ED25519.equals(curve)) {
-                throw new IllegalArgumentException(
-                        "DPoP OKP proof key must use curve Ed25519, but the key uses " + curve);
-            }
-            return Map.of(
-                    "kty", KTY_OKP,
-                    "crv", CRV_ED25519,
-                    "x", encodeEd25519Point(edKey.getPoint()));
-        }
-        throw new IllegalArgumentException(
-                "DPoP proof key must be an RSA, EC P-256 or OKP Ed25519 key pair, but was "
-                        + publicKey.getAlgorithm());
-    }
-
-    /**
-     * Resolves curve P-256's domain parameters from the JCA provider.
-     *
-     * @return the {@code secp256r1} domain parameters
-     * @throws IllegalStateException if the provider does not offer curve P-256
-     */
-    private static ECParameterSpec resolveP256Params() {
-        try {
-            AlgorithmParameters parameters = AlgorithmParameters.getInstance(KTY_EC);
-            parameters.init(new ECGenParameterSpec(CURVE_SECP256R1));
-            return parameters.getParameterSpec(ECParameterSpec.class);
-        } catch (GeneralSecurityException e) {
-            throw new IllegalStateException("JCA provider does not offer curve P-256 (secp256r1)", e);
-        }
-    }
-
-    /**
-     * Fails fast when an EC proof key is not on curve P-256. The comparison covers the full domain
-     * parameters — curve, generator, order and cofactor — because matching only the field size would
-     * accept a different 256-bit curve and publish it as {@code "crv":"P-256"}.
-     * <p>
-     * {@link ECParameterSpec} does not define {@code equals}, so its components are compared
-     * individually; {@link java.security.spec.EllipticCurve} and {@link java.security.spec.ECPoint}
-     * do define value equality.
-     *
-     * @param params the supplied proof key's domain parameters
-     * @throws IllegalArgumentException if the parameters are not curve P-256's
-     */
-    private static void requireP256Curve(ECParameterSpec params) {
-        boolean onP256 = P256_PARAMS.getCurve().equals(params.getCurve())
-                && P256_PARAMS.getGenerator().equals(params.getGenerator())
-                && P256_PARAMS.getOrder().equals(params.getOrder())
-                && P256_PARAMS.getCofactor() == params.getCofactor();
-        if (!onP256) {
-            throw new IllegalArgumentException(
-                    ("DPoP EC proof key must use curve P-256 (secp256r1), but the key's domain parameters "
-                            + "are those of another curve over a %d-bit field").formatted(
-                            params.getCurve().getField().getFieldSize()));
-        }
     }
 
     /**
@@ -476,85 +359,6 @@ public class DpopProofGenerator {
             return BASE64_URL.encodeToString(rawSignature);
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException("Failed to sign DPoP proof", e);
-        }
-    }
-
-    /**
-     * Encodes an RSA JWK member as an unsigned big-endian base64url value, stripping the sign byte
-     * {@link BigInteger#toByteArray()} prepends. Suitable for {@code e} and {@code n}, which are
-     * variable-width; it MUST NOT be used for EC coordinates, which are fixed-width and require
-     * left-padding — see {@link #base64UrlFixedWidth(BigInteger, int)}.
-     */
-    private static String base64UrlUnsigned(BigInteger value) {
-        byte[] bytes = value.toByteArray();
-        if (bytes.length > 1 && bytes[0] == 0) {
-            bytes = Arrays.copyOfRange(bytes, 1, bytes.length);
-        }
-        return BASE64_URL.encodeToString(bytes);
-    }
-
-    /**
-     * Encodes a fixed-width JWK member as a big-endian base64url value left-padded with zeros to
-     * exactly {@code width} bytes, per RFC 7518 §6.2.1.2.
-     *
-     * @param value the non-negative value to encode
-     * @param width the fixed member width in bytes
-     * @return the base64url encoding of the zero-padded big-endian value
-     * @throws IllegalArgumentException if the value does not fit into {@code width} bytes
-     */
-    private static String base64UrlFixedWidth(BigInteger value, int width) {
-        return BASE64_URL.encodeToString(toFixedWidth(value, width));
-    }
-
-    /**
-     * Renders a non-negative value as a big-endian byte array of exactly {@code width} bytes.
-     *
-     * @param value the non-negative value to render
-     * @param width the target width in bytes
-     * @return the zero-padded big-endian representation
-     * @throws IllegalArgumentException if the value does not fit into {@code width} bytes
-     */
-    private static byte[] toFixedWidth(BigInteger value, int width) {
-        byte[] magnitude = value.toByteArray();
-        int offset = 0;
-        while (offset < magnitude.length - 1 && magnitude[offset] == 0) {
-            offset++;
-        }
-        int significantLength = magnitude.length - offset;
-        if (significantLength > width) {
-            throw new IllegalArgumentException(
-                    "JWK member is %d bytes, exceeds the %d-byte member width".formatted(significantLength, width));
-        }
-        byte[] fixedWidth = new byte[width];
-        System.arraycopy(magnitude, offset, fixedWidth, width - significantLength, significantLength);
-        return fixedWidth;
-    }
-
-    /**
-     * Encodes an Ed25519 public point as the RFC 8032 32-byte {@code x} member: the point's
-     * {@code y} coordinate big-endian left-padded to 32 bytes, byte-reversed to little-endian, with
-     * the most significant bit of the final byte set when {@code x} is odd.
-     * <p>
-     * This is the exact inverse of {@code JwkKeyHandler.parseOkpKey}, the reference implementation
-     * for the encoding.
-     */
-    private static String encodeEd25519Point(EdECPoint point) {
-        byte[] encoded = toFixedWidth(point.getY(), ED25519_KEY_BYTES);
-        reverseInPlace(encoded);
-        if (point.isXOdd()) {
-            encoded[encoded.length - 1] |= (byte) 0x80;
-        }
-        return BASE64_URL.encodeToString(encoded);
-    }
-
-    /**
-     * Reverses a byte array in place (big-endian to little-endian conversion).
-     */
-    private static void reverseInPlace(byte[] array) {
-        for (int i = 0, j = array.length - 1; i < j; i++, j--) {
-            byte tmp = array[i];
-            array[i] = array[j];
-            array[j] = tmp;
         }
     }
 
