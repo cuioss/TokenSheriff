@@ -336,12 +336,12 @@ class JwtPropertyKeysTest {
         @Test
         @DisplayName("should hold the four dpop sub-properties in declaration order")
         void shouldHoldTheFourSubPropertiesInDeclarationOrder() {
-            assertEquals(List.of(
+            assertEquals(
+                    JwtPropertyKeys.ISSUERS.DPOP_SUB_PROPERTIES, List.of(
                             JwtPropertyKeys.ISSUERS.DPOP_REQUIRED,
                             JwtPropertyKeys.ISSUERS.DPOP_PROOF_MAX_AGE_SECONDS,
                             JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_SIZE,
                             JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_TTL_SECONDS),
-                    JwtPropertyKeys.ISSUERS.DPOP_SUB_PROPERTIES,
                     "existing callers see the same list as before the derivation");
         }
 

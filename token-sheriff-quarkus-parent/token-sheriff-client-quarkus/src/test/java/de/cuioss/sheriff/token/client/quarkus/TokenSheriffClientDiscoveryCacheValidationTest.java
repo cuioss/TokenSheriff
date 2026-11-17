@@ -426,7 +426,7 @@ class TokenSheriffClientDiscoveryCacheValidationTest {
                     () -> assertTrue(message.contains("'" + ClientRuntimeConfig.DISCOVERY_CACHE_GRACE_PERIOD + "'"),
                             "the failure names the property: " + message),
                     () -> assertTrue(message.contains("PT5M") && message.contains("300")
-                                    && message.contains("ms, s, m, h or d") && message.contains("5m"),
+                            && message.contains("ms, s, m, h or d") && message.contains("5m"),
                             "the failure names every form the converter accepts: " + message),
                     () -> assertInstanceOf(IllegalArgumentException.class, failure.getCause(),
                             "the converter failure is kept as the cause"));
