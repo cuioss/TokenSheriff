@@ -29,8 +29,10 @@ import de.cuioss.tools.logging.CuiLogger;
 import org.jspecify.annotations.Nullable;
 
 import javax.net.ssl.SSLContext;
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
@@ -101,6 +103,14 @@ import java.util.concurrent.ConcurrentMap;
  *       the ceiling while streaming fails at the crossing. The ceiling's provenance travels with the
  *       failure: each construction site supplies a {@code boundOrigin} descriptor naming the knob that
  *       set the bound and whether it is settable, and the over-limit message reports it.</li>
+ *   <li><strong>Malformed response framing:</strong> {@link #send(HttpClient, HttpRequest, String)} is
+ *       the send of the discovery, PAR, userinfo and revocation clients; the token endpoint client, which
+ *       wraps the body handler to observe the status line, maps the same exception in its own send. The
+ *       JDK HTTP/1.1 client parses a response's {@code Content-Length} itself, after the body handler
+ *       returned, and refuses a value that is not a number with an {@link IllegalArgumentException}
+ *       carrying the raw header value. The send maps that exception to a {@link TransportException} with
+ *       the failure context and the fixed text {@value #MALFORMED_RESPONSE}; the JDK's exception is
+ *       neither chained nor echoed, because its message is remote content.</li>
  * </ul>
  *
  * @since 1.0
@@ -113,6 +123,14 @@ public final class BackChannelHttp {
     /** Fixed refusal reason of the host-address egress policy; carries no part of the refused URL. */
     private static final String HOST_EGRESS_REFUSAL =
             "SSRF egress blocked: the host of the contacted URL is not permitted by the host-address egress policy";
+
+    /**
+     * Fixed reason for a response the JDK HTTP client refused as malformed, such as a
+     * {@code Content-Length} that is not a number; carries no part of the response. Public so that an
+     * endpoint client with its own send — the token endpoint, which tells a failure after a success
+     * status apart — reports the same text.
+     */
+    public static final String MALFORMED_RESPONSE = "the HTTP client refused the response as malformed";
 
     /**
      * Bound origin for the back-channel clients (token, PAR, userinfo, revocation) that build their
@@ -324,6 +342,38 @@ public final class BackChannelHttp {
         return sharedClients.computeIfAbsent(
                 scheme == null ? "" : scheme.toLowerCase(Locale.ROOT),
                 unusedKey -> handler.createHttpClient());
+    }
+
+    /**
+     * Sends {@code request} through {@code client} with this helper's {@link #bodyHandler() bounded body
+     * handler}.
+     * <p>
+     * The JDK HTTP/1.1 client parses a response's {@code Content-Length} itself after the body handler
+     * returned, so a value that is not a number never reaches the handler's own fixed failure: the JDK
+     * throws an {@link IllegalArgumentException} carrying the raw header value out of
+     * {@link HttpClient#send}. This method maps that exception to a {@link TransportException} whose
+     * message is {@code failureContext} and {@value #MALFORMED_RESPONSE}; the JDK's exception is neither
+     * chained nor reused, because its message is remote content (CWE-117, CWE-532).
+     *
+     * @param client         the client from {@link #sharedClient(HttpHandler)}; must not be {@code null}
+     * @param request        the request to send; must not be {@code null}
+     * @param failureContext a short, caller-safe prefix identifying the endpoint for exception messages
+     * @return the response, its body read under the payload ceiling
+     * @throws IOException          if the exchange fails, including a body over the ceiling
+     * @throws InterruptedException if the calling thread is interrupted while waiting
+     * @throws TransportException   if the HTTP client refuses the response as malformed
+     */
+    public HttpResponse<String> send(HttpClient client, HttpRequest request, String failureContext)
+            throws IOException, InterruptedException {
+        Objects.requireNonNull(client, "client must not be null");
+        Objects.requireNonNull(request, "request must not be null");
+        try {
+            return client.send(request, bodyHandler());
+        } catch (IllegalArgumentException ignored) {
+            // Deliberately neither chained nor reused: the JDK's message carries the raw header value.
+            LOGGER.debug("The HTTP client refused the response as malformed");
+            throw new TransportException(failureContext + ": " + MALFORMED_RESPONSE);
+        }
     }
 
     /**

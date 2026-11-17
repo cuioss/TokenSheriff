@@ -113,7 +113,7 @@ public class ParClient {
 
         HttpClient client = backChannel.sharedClient(handler);
         try {
-            HttpResponse<String> response = client.send(requestBuilder.build(), backChannel.bodyHandler());
+            HttpResponse<String> response = backChannel.send(client, requestBuilder.build(), FAILURE_CONTEXT);
             if (!HttpStatusFamily.isSuccess(response.statusCode())) {
                 throw new TransportException(
                         "PAR endpoint returned unexpected HTTP status " + response.statusCode());

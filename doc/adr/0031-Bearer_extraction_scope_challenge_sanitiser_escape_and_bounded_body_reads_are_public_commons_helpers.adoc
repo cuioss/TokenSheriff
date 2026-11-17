@@ -319,7 +319,12 @@ received buffer, and its own read of an unparsable `Content-Length` threw a `Num
   that is not a valid number, it cancels the subscription without requesting a byte and fails the body
   future with an `IOException` carrying a fixed message that does not echo the header value. That guarantee
   is the handler's own; whether the surrounding client reaches the handler, and whether it parses the header
-  itself first, is the client's behaviour (see COMMONS-17).
+  itself first, is the client's behaviour (see COMMONS-17). The handler has no hook before the JDK client's
+  own parse, so the fixed failure is delivered by the caller of `send`: `BackChannelHttp.send`, through
+  which the client's discovery, PAR, userinfo and revocation clients send, and the token endpoint client's
+  own send map the JDK's `IllegalArgumentException` to a `TransportException` with a fixed text, without
+  chaining it. The validation-side discovery and JWKS reads
+  hand the handler to cui-http, whose adapter performs the send, so no mapping is made for them here.
 
 === Consequences
 
@@ -347,8 +352,11 @@ received buffer, and its own read of an unparsable `Content-Length` threw a `Num
 * The client's own parse of a malformed `Content-Length` can still surface its own exception: the JDK
   HTTP/1.1 client (observed on JDK 25) parses the header itself after the handler returned, so the caller of
   `HttpClient.send` receives the JDK's `IllegalArgumentException` (cause `NumberFormatException`) carrying
-  the raw header value, not the handler's fixed message; a caller treats the message of any exception out
-  of an HTTP exchange as remote content and sanitises it before logging.
+  the raw header value, not the handler's fixed message. The client's back-channel turns that exception
+  into a `TransportException` with a fixed text, so a caller of the client's endpoint clients never sees the
+  raw value; on the validation-side reads the send is cui-http's, and what reaches their caller is cui-http's
+  handling of that exception. A caller treats the message of any exception out of an HTTP exchange as remote
+  content and sanitises it before logging.
 
 == References
 

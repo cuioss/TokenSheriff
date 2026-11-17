@@ -67,9 +67,15 @@ import java.util.concurrent.Flow;
  * parses the header itself first, is the client's behaviour: the JDK HTTP/1.1 client (observed on JDK 25)
  * parses {@code Content-Length} itself after the handler returned, so there the caller of
  * {@code HttpClient.send} receives the JDK's own {@link IllegalArgumentException} (cause
- * {@link NumberFormatException}) carrying the raw header value, and the fixed message is not delivered. A
- * caller therefore treats the message of any exception out of an HTTP exchange as remote content and
- * sanitises it before logging.
+ * {@link NumberFormatException}) carrying the raw header value, and the fixed message is not delivered.
+ * The handler has no hook before that parse, so the mapping belongs to the caller of {@code send}: the
+ * client module's endpoint clients ({@code BackChannelHttp.send}, and the token endpoint client's own
+ * send) catch that {@link IllegalArgumentException} and report a {@code TransportException} with a fixed
+ * text, neither
+ * chaining the JDK's exception nor echoing its message. The validation-side discovery and JWKS reads
+ * hand the handler to cui-http, whose adapter performs the send, so this repository has no send call
+ * there to map. A caller therefore treats the message of any exception out of an HTTP exchange as remote
+ * content and sanitises it before logging.
  * <p>
  * The ceiling is accepted from {@code 0} to {@link #MAX_CEILING} inclusive, the largest array the result
  * can hold; a negative or larger ceiling is refused with an {@link IllegalArgumentException} when the

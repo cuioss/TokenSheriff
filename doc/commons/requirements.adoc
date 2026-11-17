@@ -190,7 +190,14 @@ That guarantee is the handler's own. Whether the surrounding client reaches the 
 parses the header itself first, is the client's behaviour: the JDK HTTP/1.1 client (observed on JDK 25)
 parses `Content-Length` itself after the handler returned, so there the caller of `HttpClient.send`
 receives the JDK's own `IllegalArgumentException` (cause `NumberFormatException`) carrying the raw header
-value, and the handler's fixed message is not delivered. A caller therefore treats the message of any
+value, and the handler's fixed message is not delivered. The handler has no hook before that parse, so the
+mapping belongs to the caller of `send`. The client's discovery, PAR, userinfo and revocation clients send
+through `BackChannelHttp.send`, and the token endpoint client through its own send; each catches that
+`IllegalArgumentException` and fails the call with a `TransportException` whose message is the endpoint's
+failure context and the fixed text `BackChannelHttp.MALFORMED_RESPONSE` (after a success status the token
+endpoint reports it as its post-redemption failure), neither chaining the JDK's exception nor echoing its
+message. The validation-side discovery and JWKS reads hand the handler to cui-http, whose adapter performs
+the send, so this repository has no send call there to map. A caller therefore treats the message of any
 exception that comes out of an HTTP exchange as remote content and sanitises it before logging.
 
 The ceiling is accepted from 0 to `Integer.MAX_VALUE - 8` bytes; any other value is refused when the

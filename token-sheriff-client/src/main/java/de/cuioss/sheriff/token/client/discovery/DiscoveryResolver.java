@@ -174,7 +174,7 @@ public class DiscoveryResolver {
                 .setHeader("Accept", JsonResponseMediaType.APPLICATION_JSON)
                 .build();
         try {
-            HttpResponse<String> response = client.send(request, backChannel.bodyHandler());
+            HttpResponse<String> response = backChannel.send(client, request, failureContext);
             if (!HttpStatusFamily.isSuccess(response.statusCode())) {
                 LOGGER.warn(ClientLogMessages.WARN.DISCOVERY_STATUS, issuer, response.statusCode());
                 throw new TransportException(ClientLogMessages.ERROR.DISCOVERY_FAILED.format(
