@@ -154,6 +154,12 @@ read, never `0`).
 - Target release: 0.9.10 (the repository is at `0.9.10-SNAPSHOT`). The plan exists so that API Sheriff's PLAN-34 adopts documentation that matches the code.
 - Depends on: PLAN-08, shipped (#912, `dcbdcfb6`); PLAN-01, PLAN-02 and PLAN-04 shipped.
 - Sequence after PLAN-03 when PLAN-03 is in flight or staged: they share `ClientConfiguration`, `ClientConfigMapper`, `doc/client/requirements.adoc`, `doc/client/specification/test-strategy.adoc` and `doc/LogMessages.adoc`, and deliverables 3 and 4 may be closed in part by PLAN-03's outline. PLAN-09 shares `doc/LogMessages.adoc` only. The `next` admission gate decides from the declared surface; the deliverable-5 surface (the files the body findings name) is declared at outline by the fold rule and is not in the table above.
+- Update (2026-11-17, at emit): PLAN-03 has shipped (#915, `dfab40cb`; `landings/PLAN-03.md`), so the sequencing above is satisfied. Its merge moved this plan's anchors: `ClientConfiguration` (`validateAllowedEgressHosts` `:452-464`
+  now calls `EgressHostValidator`; `getEgressPolicy` `:428`), `ClientConfigMapper` (Javadoc only, `:114-116` unchanged), `doc/client/requirements.adoc` (`CLIENT-30` taken, the next free is `CLIENT-31`), `doc/client/README.adoc` (range
+  `CLIENT-1`–`CLIENT-30`) and `doc/client/specification/test-strategy.adoc` (the `CLIENT-30` row at `:603-621`); `doc/LogMessages.adoc` was NOT touched by it. Whether the merge closed any of deliverables 3 and 4 in part was not checked: the outline
+  re-reads PLAN-01's and PLAN-02's residuals at HEAD. PLAN-03's own residuals and the five review-body findings of #915 (the `unresolved` items `nitpick-1`, `-2`, `inline-1..3`) are NOT in this spec: they are listed in `epic.md` Open Defects and
+  await the operator's decision (a fold into this plan before launch, or a new plan); this plan does not take them on its own (scope guard, five deliverables). PLAN-09 shares `doc/LogMessages.adoc` only and a live plan exists for it (PR #916, in finalize at the time of
+  this note; the epic ledger still records it as staged until the operator says it launched).
 - Adjacent to: API Sheriff's PLAN-34 (adopts the verifier and the cache; waits for a released 0.9.10; not part of this spec).
 - Requirement and log ids are next free at write time.
 

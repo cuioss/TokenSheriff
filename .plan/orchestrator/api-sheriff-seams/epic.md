@@ -64,6 +64,14 @@ fail-closed posture is never loosened.
   `ClientRuntimeConfig`, `quarkus-config-doc.adoc`, `doc/client/requirements.adoc` (`CLIENT-29` edited), `doc/client/specification/test-strategy.adoc`,
   `retrieval-flow.adoc`, `threat-model.adoc`, `doc/LogMessages.adoc` (INFO `4` row text only; no new record) and `AGENTS.md` (a new approved broad-catch
   site). Each outline re-reads them at HEAD.
+- PLAN-03 — shipped (#915, merge dfab40cb, `landings/PLAN-03.md`): the public key-to-JWK utility (`JwkPublicMembers`), the bounded PEM key-pair loader (`PemKeyPairLoader`, `KeyPairPolicy`),
+  the back-channel-origin validator, the egress-host validator (`EgressHostValidator`) with fail-closed builders, and `RevocationClient.revokeIfSupported`. A 39-file merge (+3238/-283) for six spec
+  deliverables (nine lane tasks). PLAN-09 and PLAN-10 inherit moved anchors, all re-read at `dfab40cb`: `HttpJwksLoaderConfig` (`allowedEgressHost` now stores `EgressHostValidator.requireBareHost`, `:624`),
+  `IssuerConfigResolver` (`configureAllowedEgressHosts` `:550-569`; blank CSV elements are dropped by `ConfigValueParser.splitCsv` `:47-52`; any non-bare element fails startup), `ClientConfiguration`
+  (`validateAllowedEgressHosts` `:452-464`, keeps the configured spelling; `getEgressPolicy` `:428`), `ClientConfigMapper` (Javadoc only), `ClientRuntimeConfig`, `JwtPropertyKeys`, both
+  `quarkus-config-doc.adoc`, `doc/client/requirements.adoc` (`CLIENT-30` taken; the next free is `CLIENT-31`, README range `CLIENT-1`–`CLIENT-30`), `doc/commons/requirements.adoc` (`COMMONS-3` amended, no new id),
+  `doc/commons/threat-model.adoc`, `doc/commons/specification/transport.adoc`, `openid-discovery.adoc`, `test-strategy.adoc` (the `CLIENT-30` row `:603-621`) and `UncheckedThrowBoundaryTest` (a new
+  `CONSTRUCTION_TIME` exemption). `doc/LogMessages.adoc`, `BoundedBodyHandler` and its test are NOT in the merge, so the pairing's declared seven-file overlap with PLAN-09 over-predicted by three. Each outline re-reads them at HEAD.
 - PLAN-10 — staged on the operator's word from PLAN-08's analysis ("one follow-up plan for the residuals and other left-overs and open issues"): the
   discovery cache's residual text errors and test-rule deviations, PLAN-01's and PLAN-02's minor residuals, PLAN-04's two test-hardening nitpicks, and
   a recorded disposition for every unsettled review-bot body finding on the shipped PRs. Five deliverables, workstream WS-01. It shares surface with
@@ -167,6 +175,19 @@ fail-closed posture is never loosened.
   review-bot body finding). The overlap prompt for PLAN-03 against PLAN-09 (seven shared files: `LogMessages.adoc`, `doc/commons/requirements.adoc`,
   `IssuerConfigResolver`, `openid-discovery.adoc`, `BoundedBodyHandler`, `HttpJwksLoaderConfig`, `BoundedBodyHandlerTest`) was answered **emit PLAN-03 only**; PLAN-09 waits for
   PLAN-03 to land and PLAN-10 sequences after PLAN-03.
+- 2026-11-17 — PLAN-03 shipped (PR #915, merge dfab40cb; `landings/PLAN-03.md`). Three-layer analysis: no blocker or major at any layer. Layer 1: the spec's criterion D4(f) ("startup fails
+  when a CSV element is blank") contradicts the premise it left open, because `ConfigValueParser.splitCsv` already drops blank elements; the stated bound "only blank, null or port-carrying entries"
+  is exceeded (whitespace, control, non-ASCII, URL syntax, invalid labels, `idp.123`, invalid IPv6 are refused too); the three spec hypotheses held (a bare IPv6 entry could never match, `DpopProofGenerator`
+  does not check its pair, `PrivateKeyJwtAuth` has no RSA floor). Layer 2: the PR narrative overstates three claims (every non-bare Quarkus element fails startup, not only a port; `ClientConfiguration` keeps the
+  configured IPv6 spelling; the client mapper's code is unchanged); the `CLIENT-30` test-strategy row omits the egress validator, builder and Quarkus tests; three test classes exceed 500 lines without a reason
+  in the PR body. Layer 3: two minor points not shown by reading (a zoned IPv6 literal `[fe80::1%eth0]` is now refused; an off-curve EC test depends on the JDK's `KeyFactory`), and two info points
+  (symlink and special-file handling in the loader; key text held in unwipeable heap strings). The five operator decisions at outline were read off the merged code: fail closed in every builder, the key
+  types public in `token-sheriff-client` and the egress validator in `commons.transport`, a caller-supplied `KeyPairPolicy`, `DecryptionKeyLoader` not widened, a `boolean` return. Inbox drain: five
+  candidate-lessons: `-001` **promoted** as lesson 2026-11-17-15-001 (an allow-list validator is derived from `URI.getHost()`); `-002` a recurrence of the mirrored-list class (lesson 2026-11-15-11-001), discarded with the
+  recurrence recorded in that Watch; `-003` a recurrence of the invented-name argparse class, discarded and absorbed into the `script_failure` Watch (three rejections, verified at `work.log:37`, `:158`, `:243`);
+  `-004` a recurrence of the carry-forward ask for an accepted `weakened_test` row, discarded and absorbed into the PLAN-07 drain Watch; `-005` a recurrence of lesson 2026-10-31-12-005 (the formatter rewrites imports
+  after the gate), discarded and absorbed into the same Watch. The landing is incomplete (see Open Defects). The overlap prompt answer of the earlier emit (PLAN-09 beside PLAN-03) did not turn into a collision,
+  because PLAN-09 was never launched.
 - 2026-11-12 — Not in this epic: anything API Sheriff can do with 0.9.9 as released (that is API
   Sheriff's PLAN-33); API Sheriff's own internal duplicates; `TokenLifecycleManager` as a replacement
   for the gateway's refresh coordinator (the manager is keyed on a server-side store and has no
@@ -327,6 +348,25 @@ fail-closed posture is never loosened.
   `2026-11-13-06-005`, `2026-11-13-06-008` and `2026-11-15-18-001`, `-002`, `-004`, `-005` and `-006` are not listed either (`2026-11-15-18-003` is). The cause is not known (an explicit removal, a plan's lesson carry-back or a cleanup run); not recreated here. The operator
   decides whether the missing lessons are re-promoted from the ledger text; every Watch below that names a missing lesson loses its owner until then.
 
+- 2026-11-17 — PLAN-03 landing `plan-03-client-key-material-config-validators-006.md` is **incomplete** (`inbox landing-check`: `complete: false`; `unresolved_review_threads`, `review_body_findings_total`,
+  `review_body_findings_handled` and `sonar_open_new_issues` are `unknown`; no finalize step records them). No claim to contradict. The lane's residue text gives what it observed (0 pending `pr-comment` findings at the merge
+  gate, four stored CodeRabbit findings fixed and answered, a Sonar round trip with 0 new-code issues that does not count hotspots). The provider re-read: `review-gate --pr-number 915` returns 0 open threads, 5 coderabbit body findings
+  (`nitpick-1`, `-2`, `inline-1..3`), `handled` 0, `merge_allowed: false, reason: body_findings_undisposed`; the three threads are resolved and carry the lane's replies. `handled` is not re-verified. `ci pr comments`
+  reports `unresolved: 5` of 11 beside the gate's 0 unresolved threads; the difference was not reconciled per item. Sonar is `undecidable` (`head_revision_unavailable`, analysis revision `67672997`, the PR's last head),
+  recorded as unknown. These five findings are **not** in PLAN-10 deliverable 5 (its list ends at #912); whether to add #915 is the operator's call.
+- 2026-11-17 — PLAN-03 layer-1, layer-2 and layer-3 residuals, reported to the operator at once and **not staged** (a layer-3 defect is staged only on the operator's word; see `landings/PLAN-03.md`, the code points
+  re-read at `dfab40cb`, the leaf's test-side points not): (1) the validator refuses more than the spec's bound (`EgressHostValidator:92`, `:101-123`, `:146-163`), and on the client path `ClientConfigMapper:114-116` passes
+  elements on untrimmed, so `keycloak, dex` fails the mapping where ` dex` was stored and never matched; the PR narrative's "only a port-carrying element newly fails startup" is wrong in the same direction
+  (`IssuerConfigResolver:555-563`); the Javadoc of both callers states the wider refusal (`ClientConfigMapper` says entries are not trimmed, `IssuerConfigResolver:543-548` says any other entry is refused), but the user-facing text
+  (`openid-discovery.adoc`, the requirements) was not checked for it; (2) `[fe80::1%eth0]` is refused by the `%` rule and may have been a working entry
+  (not shown by reading); (3) `ClientConfiguration` keeps the configured spelling while the other three builders store the canonical form (`ClientConfiguration:452-464`, `ClientConfigurationTest:908-914`);
+  (4) the `CLIENT-30` row of `test-strategy.adoc:603-621` omits `EgressHostValidatorTest`, the three builder tests, `IssuerConfigResolverEgressHostTest`, `BackChannelEgressPolicyTest` and the `TokenSheriffClientProducerTest` case;
+  (5) per-site refusal coverage at the three builders is null, blank, port and `[::1]:port` only (the leaf's reading); (6) `HttpJwksLoaderConfigTest` (537 lines), `TokenSheriffClientProducerTest` (523) and
+  `ClientConfigurationTest` (968) exceed 500 lines with no reason in the PR body; (7) `PemKeyPairLoader:180-184` follows symlinks and can block on a special file swapped in after the check (info, operator-supplied path), and holds key
+  text in unwipeable heap strings (`:198`, info); (8) `PemKeyPairLoaderAdversarialTest`'s off-curve case assumes the JDK's `KeyFactory` accepts the point (not shown by reading); (9) `DpopProofGenerator:188-191`
+  does not check that its `KeyPair` halves match and `PrivateKeyJwtAuth:88-96` has no RSA floor, so the loader is the only check and only for loaded pairs (a statement for consumers, not a defect); (10) the `CLIENT-30` traceability row sits out of
+  order (cosmetic). Nothing here has run.
+
 ## Watches
 
 - Source claims in the specs are audit leads read from code only; nothing was run. Each spec labels
@@ -366,7 +406,10 @@ fail-closed posture is never loosened.
   (`work.log:593`, `:609`) and both classified:** a `manage-status` exit 1 that is a guarded refusal working as designed (the pre-merge check "1 of 6 worktree-branch
   commit(s) since diverging from main carry no kind=change ledger row", the same class as lesson 2026-11-15-11-004), and an invented `--deliverable all` on `manage-tasks list`
   (an argparse rejection, `--deliverable` takes an int; a recurrence of 2026-11-11-12-003). PLAN-08's inbox carried no `no_sanction` cluster, so that count stays four plans (PLAN-01, PLAN-06,
-  PLAN-04, PLAN-07); whether the `phase_handshake` drift recurred in PLAN-08 was not checked (its archived log was searched for `script_failure` only). — trigger: the next `analyze` of a landing, and any second `phase_handshake` drift.
+  PLAN-04, PLAN-07); whether the `phase_handshake` drift recurred in PLAN-08 was not checked (its archived log was searched for `script_failure` only). **PLAN-03's drain carried one candidate (`-003`) and its archived work log three `script_failure` lines, all `argparse_rejection`s from an invented name and all
+  classified** (`work.log:37`, `:158`, `:243`, read): `manage-findings qgate query` (the third plan to invent it after PLAN-07) and `manage-solution-outline get-deliverable --number` twice, 34 minutes apart in one plan (the `--number` flag was
+  also PLAN-04's and PLAN-07's). All recurrences of lesson 2026-11-11-12-003, which is not in the lessons store; the lane's suggestion (read the verb from the canonical invocation before the first use, and put the corrected form in the next work-log line) is
+  not carried by any stored lesson. PLAN-03's logs carry no `no_sanction` line (the `no_sanction` count stays four plans) and were not searched for a `phase_handshake` drift. — trigger: the next `analyze` of a landing, and any second `phase_handshake` drift.
 - Four of PLAN-06's thirteen candidate lessons were the same defect class as lesson 2026-11-02-14-001 (a document states a rule more
   broadly than the code gives it, or describes a throttle as a deadline), one with an incomplete sweep. That lesson has now recurred
   in the PLAN-05 and the PLAN-06 drains; if PLAN-04 or PLAN-07 add another, the lesson's rule is not working as written and
@@ -383,6 +426,9 @@ fail-closed posture is never loosened.
   fix it (`landings/PLAN-08.md` L2-1 to L2-5: the Javadoc Logging paragraph says an interrupt leaves a `DEBUG` line and a recovering refresh logs `DEBUG`, the single-flight paragraph
   omits one outcome, "most failed attempts" overstates by site count, the 12.2 rationale omits the unchecked stored ID token), and the lane's own advisories named two of them as left unfixed.
   Note: lesson 2026-11-02-14-001 is not in the lessons store (see the Open Defect of 2026-11-17), so the review has nothing to review until it is restored or re-promoted.
+  **PLAN-03**: its inbox carried none, and the analysis found the class only in the PR narrative (not in shipped text): "only a port-carrying element newly fails startup" (every non-bare element does,
+  `IssuerConfigResolver:555-563`), "a bare IPv6 literal stored in bracketed form" by the builders (not by `ClientConfiguration`, `:452-464`) and the mapper "makes a port fail the mapping" (its code is unchanged). The shipped docs and Javadoc were
+  not searched for the class, so no eighth plan is counted.
   — trigger: any decision on reviewing 2026-11-02-14-001.
 - The mirrored-list defect class (lesson 2026-11-15-11-001) recurred in PLAN-04: a hand-kept key list in the Quarkus orphan test
   mirrored `ClientRuntimeConfig` and was caught only by CodeRabbit (fixed in `36b61921`); the production side still keeps
@@ -392,7 +438,11 @@ fail-closed posture is never loosened.
   `DISCOVERY_CACHE_SETTINGS` beside a parameter-name map mirroring `checkSettings` (now one exhaustive `propertyOf(Setting)` switch, `ClientConfigMapper:126-133`, re-read),
   and the guard test for the orphan check built its expected set from the same constants it looped over, so it could not catch an omission (now derived by reflection over
   `ClientRuntimeConfig`, the leaf's reading). The second is a refinement the lesson's text does not carry: a completeness test needs an oracle independent of the registry it checks.
-  — trigger: the PLAN-03 landing, which is the next to run with the lesson; if the lesson is restored or re-promoted, add the independent-oracle sentence.
+  **PLAN-03 recurred it, caught by CodeRabbit and fixed** (inbox `-002`): `PemKeyPairLoaderTest` kept a hand-written three-entry key-type list (now generated from `KeyType.values()`) and `DpopProofGeneratorJktGoldenTest` repeated the six
+  algorithms of `DpopProofGenerator.SUPPORTED_ALGORITHMS` (now iterating the set, failing on a key type with no fixture); the leaf read both as fixed. PLAN-03 ran after the lesson existed (2026-11-15-11-001), so the lesson did not stop it
+  (whether the lane loaded it is not shown). The same message carried a refinement the lesson does not state, the vacuous-positive case: `BackChannelEgressPolicyTest` asserted case-insensitive matching with `2001:db8::1`, an address the policy admits anyway
+  (now `fd00::abcd`, plus an assertion that the URL is refused without the entry); the neighbours are lesson 2026-11-02-14-002 (a negative control) and 2026-11-13-06-003. That makes three plans (PLAN-04, PLAN-08, PLAN-03).
+  — trigger: the PLAN-10 landing (client tests); if the lesson is restored or re-promoted, add the independent-oracle sentence and the prove-it-fails-without sentence.
 - The Standing Constraint "never gate on `test-compile` or `test`" in every spec rests on a premise main no longer holds:
   PLAN-05's `AGENTS.md` rewrite says the fixtures resolve in the reactor through `<type>test-jar</type>`. The constraint stays
   safe; whether `test-compile` now builds is not shown by reading, and the reactor and published classpaths can diverge.
@@ -441,13 +491,28 @@ fail-closed posture is never loosened.
   and its hex case matches; `LogoutTokenValidator.MAX_FRESHNESS_WINDOW` is 100 years and a `numericDate` beyond 17 integer digits is refused as the owning
   check; an unchanged JWKS discard logs at DEBUG; the client back channel gets the `Content-Length` pre-check, the validation module's failure text and a per-chunk
   list instead of a `ByteArrayOutputStream`; `BoundedBodyHandlers` and `BoundedContentBodyHandler` are gone. API Sheriff's own deletions are its plan.
+  PLAN-03 adds (`landings/PLAN-03.md`): a configured egress allow-list entry that is not a bare host now fails the build of every allow-list builder (`EgressPolicy`, `WellKnownConfig`, `HttpJwksLoaderConfig`,
+  `ClientConfiguration`) and fails Quarkus startup for an issuer (`IssuerConfigResolver`) or the mapping for the client: a port, a scheme or any URL syntax, an underscore, a non-ASCII name, `idp.123`, a malformed IPv6 literal, a name with `%`
+  (so a zoned literal), `null`, and on the client path a space after a comma (entries are not trimmed there); on the issuer path blank and whitespace-padded elements are dropped by the CSV parser. A bare IPv6 entry is stored and matched
+  in bracketed form by the three loader and policy builders, and `ClientConfiguration.getAllowedEgressHosts()` keeps the configured spelling. The new public types are `JwkPublicMembers` (RSA, EC P-256, Ed25519 only, with an on-curve check the old private
+  method lacked), `PemKeyPairLoader` and `KeyPairPolicy` (a 16 KiB bound, one `PRIVATE KEY` and one `PUBLIC KEY` block, a sign-and-verify probe; `DpopProofGenerator` and `PrivateKeyJwtAuth` do not check the pair or an RSA floor themselves),
+  `BackChannelOriginValidator.refusal`, `EgressHostValidator.refusal` and `requireBareHost`, and `RevocationClient.revokeIfSupported` (returns `true` after calling the overridable `revoke`, `false` with no request when no endpoint is advertised).
+  `DpopProofGenerator` now refuses a key type that fails `JwkPublicMembers.of` before the key-type-versus-algorithm check, with new fixed texts. `CLIENT-30` is taken. API Sheriff's matching deletions are its PLAN-34.
 - PLAN-07's drain recurred four finalize-tooling lessons with new detail, none worth another lesson: `weakened_test` re-raised six accepted test-class-split flags
   at every later head (a split with no rename reads as a weakened test; lesson 2026-11-11-12-002 has the cause for raw U+2028 and the carry-forward ask, and the
   split case is a second trigger for the same carry-forward); a `-Ppre-commit` verify rewrote imports in about 60 client test files the plan did not touch, and reverting
   that churn made the freshness stamp stale (lesson 2026-10-31-12-005); each fix commit after the PR opened re-staled both review steps and the pre-push gate, and a step
   whose last record is `loop_back` replays as a full round (lessons 2026-11-13-06-008 and 2026-11-15-18-002). All four are the lane's account of its own logs, not recounted here.
-  — trigger: PLAN-03's landing; if the split-flag or the stale-stamp case repeats there, add the second trigger to the owning lesson.
+  **PLAN-03's drain met both triggers, with new detail** (inbox `-004`, `-005`; the lane's account of its own logs, the first only partly checked): an operator-accepted replacement of `shouldRejectBlankAllowedHost` by the broader
+  `shouldRejectNonBareAllowedHost` was re-raised as `weakened_test` at three later heads and closed by operator override each time (`functional_review_override_heads` 6ab07597, b23e0d0b, f0f7cf41), and `loop-back close --accept` was refused until a review
+  round existed at the head being closed: a third cause for the carry-forward ask (an accepted replacement keyed by test identity). The `-Ppre-commit` build rewrote three explicit `Assertions` imports in `DpopProofGeneratorJktGoldenTest` into the wildcard form
+  after the gate, needing a separate commit (`f0f7cf41`, one file, re-read) and a gate re-run: the stale-stamp case again, a recurrence of lesson 2026-10-31-12-005 (in the store) beside the two earlier chores (#910 and `3bc0e33b`, the second not checked).
+  The owning lesson of the carry-forward ask, 2026-11-11-12-002, is not in the store; lesson 2026-10-31-12-005 was not edited here. Two smaller frictions from `-005` are the lane's account and were not checked: `manage-tasks` cannot replace a task's verification commands
+  (the landing's residue says the same), and the e2e CI job hung after 30 passing tests and needed a re-run of the failed job.
+  — trigger: PLAN-10's landing; if the accepted-replacement or the formatter case repeats there, the carry-forward fix is the operator's to route to the marketplace.
 - PLAN-08's `weakened_test` rows had a different cause from the split flags above and were promoted as lesson 2026-11-17-06-001: the check's pattern `\.assert[A-Z]\w*` (`_review_support_integrity.py:66`,
   plugin 0.1.2114) counts `import static ...Assertions.assertAll` lines, so an OpenRewrite wildcard-import rewrite read as a lost assertion; five accepted rows in one plan (two reviews times
   two heads, then a fifth), re-counted here as 49 to 60 call sites and 9 to 2 gate-pattern lines. It recurs in any plan that touches test imports until the counter changes; PLAN-03 and PLAN-10 edit client tests.
-  — trigger: PLAN-03's and PLAN-10's landings; if the row recurs there, the checker fix is the operator's to route to the marketplace source (as for lesson 2026-11-13-06-005).
+  **PLAN-03's `weakened_test` rows had the third cause above (an accepted test replacement), not import counting** by the lane's account; whether the formatter commit `f0f7cf41`, which also changed `import static` lines, tripped the counter is not stated and
+  was not checked, so the import-counting cause is neither confirmed nor refuted for PLAN-03.
+  — trigger: PLAN-10's landing; if the row recurs there, the checker fix is the operator's to route to the marketplace source (as for lesson 2026-11-13-06-005).
