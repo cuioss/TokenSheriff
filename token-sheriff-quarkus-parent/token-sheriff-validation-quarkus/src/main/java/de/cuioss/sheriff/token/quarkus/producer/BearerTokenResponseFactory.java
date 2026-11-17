@@ -158,8 +158,11 @@ public class BearerTokenResponseFactory {
         if (hasScopeViolation) {
             // OAuth Step-Up Authentication Challenge for insufficient scope (RFC 9470)
             // RFC 6750 Section 3.1: scope parameter contains the full scope necessary for access
-            // Scope names outside the RFC 6749 §3.3 scope-token grammar are refused by BearerChallenge
-            // (IllegalArgumentException) rather than escaped into the header
+            // Scope names outside the RFC 6749 §3.3 scope-token grammar, and more than 64 distinct scopes,
+            // are refused by BearerChallenge (IllegalArgumentException) rather than escaped into the header.
+            // The requiredScopes of @BearerAuth and @BearerToken are checked against that rule at deployment
+            // (TokenSheriffProcessor), so an annotation-declared scope set never reaches this refusal; a
+            // direct caller passing such a set still gets the IllegalArgumentException
             String wwwAuthenticate = BearerChallenge.insufficientScope()
                     .realm(PROTECTED_RESOURCE_REALM)
                     .errorDescription(ERROR_MSG_HIGHER_PRIVILEGES)

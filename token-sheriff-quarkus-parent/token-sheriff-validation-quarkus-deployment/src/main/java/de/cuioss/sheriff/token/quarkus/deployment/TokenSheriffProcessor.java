@@ -15,6 +15,10 @@
  */
 package de.cuioss.sheriff.token.quarkus.deployment;
 
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
+import de.cuioss.sheriff.token.commons.http.BearerChallenge;
+import de.cuioss.sheriff.token.quarkus.annotation.BearerAuth;
+import de.cuioss.sheriff.token.quarkus.annotation.BearerToken;
 import de.cuioss.sheriff.token.quarkus.config.AccessLogFilterConfigResolver;
 import de.cuioss.sheriff.token.quarkus.error.ProblemDetailExceptionMapper;
 import de.cuioss.sheriff.token.quarkus.health.JwksEndpointHealthCheck;
@@ -42,9 +46,12 @@ import de.cuioss.tools.logging.LogRecordModel;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
+import io.quarkus.arc.deployment.ValidationPhaseBuildItem;
+import io.quarkus.arc.deployment.ValidationPhaseBuildItem.ValidationErrorBuildItem;
 import io.quarkus.deployment.IsDevelopment;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
@@ -52,8 +59,21 @@ import io.quarkus.devui.spi.JsonRPCProvidersBuildItem;
 import io.quarkus.devui.spi.page.CardPageBuildItem;
 import io.quarkus.devui.spi.page.Page;
 import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
+import jakarta.enterprise.inject.spi.DeploymentException;
 import org.eclipse.microprofile.jwt.JsonWebToken;
+import org.jboss.jandex.AnnotationInstance;
+import org.jboss.jandex.AnnotationTarget;
+import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.DotName;
+import org.jboss.jandex.IndexView;
+import org.jboss.jandex.MethodInfo;
+import org.jboss.jandex.MethodParameterInfo;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Processor for the Token-Sheriff Quarkus extension.
@@ -91,6 +111,12 @@ public class TokenSheriffProcessor {
             .prefix("TokenSheriff_Q_D")
             .identifier(1)
             .build();
+
+    private static final DotName BEARER_AUTH = DotName.createSimple(BearerAuth.class.getName());
+
+    private static final DotName BEARER_TOKEN = DotName.createSimple(BearerToken.class.getName());
+
+    private static final String REQUIRED_SCOPES = "requiredScopes";
 
     /**
      * Register the Token-Sheriff feature.
@@ -243,6 +269,115 @@ public class TokenSheriffProcessor {
         ));
     }
 
+
+    /**
+     * Refuses the deployment when an annotation declares required scopes that cannot be sent in an RFC 6750
+     * {@code insufficient_scope} challenge.
+     * <p>
+     * {@code BearerTokenResponseFactory} builds that challenge through {@link BearerChallenge}, which refuses
+     * a scope name outside the RFC 6749 §3.3 {@code scope-token} grammar and more than
+     * {@value BearerChallenge#MAX_SCOPE_TOKENS} distinct scopes. Without this step such an annotation would
+     * surface as an unhandled {@link IllegalArgumentException} on the first request that misses a scope; with
+     * it, the misconfiguration fails the deployment, with one error per refused annotation naming its
+     * declaring class and member. Class-level and method-level {@code @BearerAuth} (merged as the interceptor
+     * merges them) and every {@code @BearerToken} injection point are checked.
+     *
+     * @param validationPhase  orders this step into the ArC validation phase; not otherwise read
+     * @param combinedIndex    the application's combined Jandex index
+     * @param validationErrors producer for the deployment errors, one per refused annotation
+     */
+    @BuildStep
+    public void validateAnnotationScopes(ValidationPhaseBuildItem validationPhase, CombinedIndexBuildItem combinedIndex,
+            BuildProducer<ValidationErrorBuildItem> validationErrors) {
+        List<String> violations = findScopeViolations(combinedIndex.getIndex());
+        if (!violations.isEmpty()) {
+            validationErrors.produce(new ValidationErrorBuildItem(violations.stream()
+                    .map(DeploymentException::new)
+                    .toArray(Throwable[]::new)));
+        }
+    }
+
+    /**
+     * Checks the required scopes of every {@link BearerAuth} and {@link BearerToken} annotation in the index.
+     * <p>
+     * A class-level {@code @BearerAuth} is checked on its own. A method-level {@code @BearerAuth} is checked
+     * together with the {@code @BearerAuth} of its declaring class, as the union {@code BearerTokenInterceptor}
+     * enforces (ADR-0024): only that one class is read, the hierarchy above it is not walked. A
+     * {@code @BearerToken} on a field, a method, a method parameter or a producer parameter is checked on its
+     * own. Each scope set is checked by building {@code BearerChallenge.insufficientScope().scopes(set)}, so
+     * the rule is exactly the one applied when the challenge is sent.
+     * <p>
+     * Each message names the declaring class and member and the reason. A scope name outside the grammar is
+     * rendered through {@link ErrorTextSanitizer#sanitize(String)}, never raw.
+     *
+     * @param index the index to scan
+     * @return one message per refused annotation, sorted; empty when every annotation is valid
+     */
+    static List<String> findScopeViolations(IndexView index) {
+        List<String> violations = new ArrayList<>();
+        for (AnnotationInstance bearerAuth : index.getAnnotations(BEARER_AUTH)) {
+            AnnotationTarget target = bearerAuth.target();
+            Set<String> scopes = new TreeSet<>(requiredScopes(bearerAuth));
+            if (target.kind() == AnnotationTarget.Kind.METHOD) {
+                AnnotationInstance classLevel = target.asMethod().declaringClass().declaredAnnotation(BEARER_AUTH);
+                if (classLevel != null) {
+                    scopes.addAll(requiredScopes(classLevel));
+                }
+            }
+            checkScopes("@BearerAuth", target, scopes, violations);
+        }
+        for (AnnotationInstance bearerToken : index.getAnnotations(BEARER_TOKEN)) {
+            checkScopes("@BearerToken", bearerToken.target(), new TreeSet<>(requiredScopes(bearerToken)),
+                    violations);
+        }
+        violations.sort(null);
+        return violations;
+    }
+
+    private static List<String> requiredScopes(AnnotationInstance annotation) {
+        AnnotationValue value = annotation.value(REQUIRED_SCOPES);
+        return value == null ? List.of() : Arrays.asList(value.asStringArray());
+    }
+
+    private static void checkScopes(String annotation, AnnotationTarget target, Set<String> scopes,
+            List<String> violations) {
+        try {
+            BearerChallenge.insufficientScope().scopes(scopes).build();
+        } catch (IllegalArgumentException e) {
+            violations.add(annotation + " on " + describe(target)
+                    + " declares requiredScopes that an insufficient_scope challenge cannot carry: "
+                    + reason(scopes, e));
+        }
+    }
+
+    private static String reason(Set<String> scopes, IllegalArgumentException refusal) {
+        for (String scope : scopes) {
+            try {
+                BearerChallenge.insufficientScope().scope(scope);
+            } catch (IllegalArgumentException e) {
+                return "the scope name '" + ErrorTextSanitizer.sanitize(scope)
+                        + "' is not an RFC 6749 section 3.3 scope-token";
+            }
+        }
+        return refusal.getMessage();
+    }
+
+    private static String describe(AnnotationTarget target) {
+        return switch (target.kind()) {
+            case CLASS -> "class " + target.asClass().name();
+            case METHOD -> "method " + methodName(target.asMethod());
+            case FIELD -> "field " + target.asField().declaringClass().name() + "#" + target.asField().name();
+            case METHOD_PARAMETER -> {
+                MethodParameterInfo parameter = target.asMethodParameter();
+                yield "parameter " + parameter.position() + " of method " + methodName(parameter.method());
+            }
+            default -> target.toString();
+        };
+    }
+
+    private static String methodName(MethodInfo method) {
+        return method.declaringClass().name() + "#" + method.name();
+    }
 
     /**
      * Create DevUI card page for JWT validation monitoring and debugging.

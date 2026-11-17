@@ -156,6 +156,11 @@ public @interface BearerAuth {
      * If this array is empty, no scope validation is performed.
      * <p>
      * Missing scopes result in HTTP 401 Unauthorized with error code "insufficient_scope".
+     * <p>
+     * Every name must be an RFC 6749 §3.3 {@code scope-token}: at least one character, each in
+     * {@code %x21 / %x23-5B / %x5D-7E} (printable ASCII except space, {@code "} and {@code \}). The set
+     * merged from the class-level and the method-level annotation may hold at most 64 distinct scopes, the
+     * bound of the {@code insufficient_scope} challenge. A violation of either rule fails the deployment.
      *
      * @return array of required scope names
      */
