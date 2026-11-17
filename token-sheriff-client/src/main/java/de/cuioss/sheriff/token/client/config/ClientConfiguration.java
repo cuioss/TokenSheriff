@@ -30,6 +30,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Immutable configuration describing how this confidential client talks to a single
@@ -484,54 +485,29 @@ public class ClientConfiguration {
     }
 
     /**
-     * Validates a provided back-channel origin and normalises it.
+     * Validates a provided back-channel origin against {@link BackChannelOriginValidator} and
+     * normalises it.
      * <p>
-     * An absent ({@code null}) value is preserved. A provided value must be a well-formed absolute
-     * {@code http}/{@code https} URL with a host and nothing beyond the origin: no user-info, no query,
-     * no fragment, and an empty path — a single trailing {@code /} is accepted and stripped.
+     * An absent ({@code null}) value is preserved. A provided value must be a bare absolute
+     * {@code http}/{@code https} origin; a single trailing {@code /} is accepted and stripped.
      *
      * @param backChannelOrigin the configured back-channel origin, may be {@code null}
      * @return the normalised origin (without trailing {@code /}), or {@code null} when absent
-     * @throws IllegalArgumentException if the value is blank or is not a bare http(s) origin
+     * @throws IllegalArgumentException with the validator's fixed refusal text if the value is not a
+     *                                  bare http(s) origin
      */
     private static @Nullable String validateBackChannelOrigin(@Nullable String backChannelOrigin) {
         if (backChannelOrigin == null) {
             return null;
         }
-        if (backChannelOrigin.isBlank()) {
-            throw new IllegalArgumentException("backChannelOrigin must not be blank when provided");
+        Optional<String> refusal = BackChannelOriginValidator.refusal(backChannelOrigin);
+        if (refusal.isPresent()) {
+            throw new IllegalArgumentException(refusal.get());
         }
-        // No rejection below echoes the configured value: it may carry a credential in its
-        // user-info, and the user-info check is not the first check that can reject it.
-        final URI uri;
-        try {
-            uri = new URI(backChannelOrigin);
-        } catch (URISyntaxException e) {
-            // The exception is not chained: its message repeats the input verbatim.
-            throw new IllegalArgumentException(
-                    "backChannelOrigin must be a valid absolute URL (" + e.getReason() + " at index " + e.getIndex()
-                            + ")");
-        }
-        String scheme = uri.getScheme();
-        if (!uri.isAbsolute() || uri.getHost() == null
-                || !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))) {
-            throw new IllegalArgumentException("backChannelOrigin must be an absolute http(s) URL with a host");
-        }
-        if (uri.getRawUserInfo() != null) {
-            throw new IllegalArgumentException("backChannelOrigin must not carry user-info");
-        }
-        if (uri.getRawQuery() != null) {
-            throw new IllegalArgumentException("backChannelOrigin must not carry a query");
-        }
-        if (uri.getRawFragment() != null) {
-            throw new IllegalArgumentException("backChannelOrigin must not carry a fragment");
-        }
-        String path = uri.getRawPath();
-        if ("/".equals(path)) {
+        // An accepted origin carries no query or fragment and at most a single "/" as its path, so a
+        // trailing "/" is exactly that path.
+        if (backChannelOrigin.endsWith("/")) {
             return backChannelOrigin.substring(0, backChannelOrigin.length() - 1);
-        }
-        if (path != null && !path.isEmpty()) {
-            throw new IllegalArgumentException("backChannelOrigin must be an origin without a path");
         }
         return backChannelOrigin;
     }
