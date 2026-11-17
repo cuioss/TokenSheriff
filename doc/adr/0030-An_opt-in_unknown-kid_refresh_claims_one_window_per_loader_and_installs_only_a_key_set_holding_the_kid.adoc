@@ -6,7 +6,7 @@
 :source-highlighter: highlight.js
 
 // adr-metadata
-// summary: HttpJwksLoader may, when opted in, refresh its JWKS on an unknown kid through one compare-and-set window per loader and one shared in-flight guard, without I/O on the caller, installing only a key set that holds the kid and never counting a failed attempt; a separate opt-in retries a failed initial load sequentially with a fixed 1 s to 30 s backoff
+// summary: HttpJwksLoader may, when opted in, refresh its JWKS on an unknown kid through one compare-and-set window per loader and one shared in-flight guard, without I/O on the caller, installing only a key set that holds the kid and never counting a failed attempt; a separate opt-in retries a failed initial load sequentially with a fixed 1 s to 30 s backoff; an amendment adds a read-only window pre-check before the guard and states that a failed hand-off burns the window
 // tags: jwks, key-rotation, denial-of-service, concurrency, configuration
 // affects: token-sheriff-validation, token-sheriff-validation-quarkus
 // supersedes:
@@ -58,14 +58,16 @@ the same in-flight guard as every other fetch.
   an unknown `kid` never causes a fetch and the loader behaves as before. The window has no default value;
   it is accepted from 5 to 3600 seconds inclusive.
 * **One window per loader.** A lookup that misses the installed and the retired key sets, while a key set is
-  installed, first takes the in-flight guard and then claims the window with one compare-and-set on a monotonic clock, compared overflow-safely. A
-  lost claim means another caller owns the window; nothing else happens. At most one fetch per window and per
-  loader — that is per issuer — whatever the request rate and the number of distinct `kid` values.
+  installed, first reads the window and returns at once while it is still claimed, taking nothing (see the
+  amendment below). Otherwise it takes the in-flight guard and then claims the window with one compare-and-set
+  on a monotonic clock, compared overflow-safely. A lost claim means another caller owns the window; nothing
+  else happens. At most one fetch per window and per loader — that is per issuer — whatever the request rate
+  and the number of distinct `kid` values.
 * **Schedule only.** The winning lookup hands one fetch to the loader's background refresh executor and
   returns empty at once. It performs no I/O and never waits, so the triggering token is rejected; the next
   token naming the new `kid` succeeds once the fetch has installed it. An executor that rejects the fetch,
   or fails the hand-off with any other `RuntimeException`, releases the guard and never throws on the
-  caller.
+  caller; the window it claimed stays claimed, so a failed hand-off burns the window.
 * **Install only a key set holding the `kid`.** The fetch re-runs the egress check on the current endpoint,
   fetches with that endpoint's adapter, and builds a candidate key set without touching shared state. The
   candidate is committed only if it holds the requested `kid` and its generation is still live; otherwise it
@@ -127,8 +129,9 @@ orphaned-configuration rule of ADR-0026.
   next refresh interval; the window bounds how often such a fetch is claimed.
 * Request-triggered fetches are bounded by configuration, not by the request rate: an invented-`kid` flood
   reaches the identity provider at most once per window per issuer.
-* The request path never waits on the network; a lookup costs at most one clock read and two compare-and-set
-  operations.
+* The request path never waits on the network; a lookup costs at most one clock read, two atomic reads and
+  two compare-and-set operations, and a miss inside a claimed window costs one clock read and one atomic read
+  and takes no claim.
 * An attacker cannot rotate keys out of the retired sets, because a key set is installed only if it holds the
   `kid` the identity provider actually published.
 * A failing identity provider combined with invented `kid` values cannot degrade an issuer: discarded fetches
@@ -165,13 +168,17 @@ orphaned-configuration rule of ADR-0026.
   falls into that gap skips once. Only a sustained deferral needs more: with a caller-supplied multi-thread
   executor and a slow identity provider, a caller who claims a window in every window can keep the guard held
   and so defer the `maxStaleness` degradation. No production caller supplies such an executor today.
-* The guard is taken before the window. A miss while the guard is already held leaves the window
-  untouched, and a lost window claim releases the guard it had taken, so a held guard never burns a window
-  and a window claim never leaks a guard.
+* The order is fixed: a read-only pre-check of the window, then the guard, then the window claim. The
+  pre-check returns while the window is still claimed and takes nothing, so a miss inside a claimed window
+  never holds the guard and never makes a periodic cycle skip its fetch. Past the pre-check the guard is
+  taken before the window: a miss while the guard is already held leaves the window untouched, and a lost
+  window claim releases the guard it had taken, so a held guard never burns a window and a lost claim never
+  leaks a guard.
 * The hand-off releases the guard on every outcome other than an accepted task. An executor that rejects
   the fetch, or fails with any other `RuntimeException`, releases the guard in the scheduling method; the
   failure is logged at DEBUG and never thrown on the lookup that only missed. This is a deliberate boundary
-  catch around a caller-supplied executor.
+  catch around a caller-supplied executor. The window is not refunded: a failed hand-off burns the window it
+  claimed, so the next on-demand fetch can be claimed only in the next window.
 * Requirement on a caller-supplied executor: it must run or reject every task it accepts. An accepted fetch
   releases the guard only when it runs, so an executor that accepts a task and silently discards it leaves
   the guard held; every later periodic fetch then skips and no unknown-`kid` fetch is scheduled again. The
@@ -212,6 +219,39 @@ interval covers the need, keeps the configuration surface small and cannot be mi
 The rejected options share one flaw: each lets the request rate, the attacker's choice of `kid`, or a
 deployment's tuning decide how often the loader reaches out or what it installs. The decision taken keeps
 both under configuration-bounded, atomic control on the loader itself.
+
+== Amendment: a read-only window pre-check, and a failed hand-off burns the window
+
+=== Context
+
+The decision above takes the in-flight guard before it looks at the window. Every miss inside a window that
+is already claimed therefore took the guard for a moment and released it again on finding the window
+claimed. A periodic cycle that fell into that moment found the guard held and skipped its fetch, so a spray
+of invented `kid` values could pulse the guard and make periodic cycles skip, although no on-demand fetch
+was running. The decision also left unstated what happens to the window when the executor rejects the
+hand-off: the guard is released, but the window claim is kept.
+
+=== Decision
+
+* **Read-only pre-check.** Before the guard is taken, the lookup reads the window and returns, logging at
+  DEBUG, while it is still claimed. The pre-check is a plain read: it claims nothing and changes nothing. A
+  stale read can at worst let one miss go on to the guard, which is the behaviour before this amendment;
+  the guard compare-and-set and the window compare-and-set that follow are unchanged and still decide.
+* **Order kept.** Past the pre-check the order is unchanged: the guard first, then the window re-check and
+  the window claim. A held guard still never burns a window, and a lost window claim still releases the
+  guard it had taken, so a lost claim never leaks a guard.
+* **A failed hand-off burns the window.** An executor that rejects the fetch, or fails the hand-off with any
+  other `RuntimeException`, releases the guard but does not refund the window. A refund would let every miss
+  retry a rejecting executor; burning the window keeps the bound of one on-demand attempt per window and
+  per loader also while the executor rejects.
+
+=== Consequences
+
+* A miss inside a claimed window no longer touches the guard, so the invented-`kid` spray no longer makes
+  periodic cycles skip their fetch. A periodic cycle still skips while a real on-demand fetch or an
+  initial-load retry holds the guard, as the decision states.
+* An executor that rejects one hand-off costs the on-demand pickup of that window; the next window can be
+  claimed as usual, and the periodic refresh is not affected.
 
 == References
 

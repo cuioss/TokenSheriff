@@ -31,11 +31,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.LongSupplier;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -43,8 +41,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * The hand-off of the opt-in unknown-kid fetch of {@link HttpJwksLoader} to its refresh executor, and the
  * ordering of the in-flight guard and the window claim it depends on.
  * <p>
- * The guard is claimed before the window, a lost window releases it, and every hand-off outcome other than
- * an accepted task releases it in the same method. A caller-supplied executor must run or reject every
+ * A miss inside a claimed window returns before it touches the guard. Otherwise the guard is claimed before
+ * the window, a lost window releases it, and every hand-off outcome other than an accepted task releases it
+ * in the same method; a failed hand-off keeps the window claimed, so it burns it. A caller-supplied executor must run or reject every
  * task it accepts; the last case pins what happens when it does not, as the documented limit of that
  * requirement. The executor used here runs, throws from or silently drops {@code execute} calls on
  * demand; its scheduled tasks and {@code submit} calls are unaffected, so the periodic refresh and the
@@ -76,6 +75,10 @@ class HttpJwksLoaderExecutorHandOffTest {
     }
 
     private HttpJwksLoader initializedLoader(URIBuilder uriBuilder) {
+        return initializedLoader(uriBuilder, clock::get);
+    }
+
+    private HttpJwksLoader initializedLoader(URIBuilder uriBuilder, LongSupplier monotonicClock) {
         HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
                 .allowLoopbackEgress(true)
                 .allowInsecureHttp(true)
@@ -85,7 +88,7 @@ class HttpJwksLoaderExecutorHandOffTest {
                 .scheduledExecutorService(executor)
                 .unknownKidRefreshWindow(WINDOW)
                 .build();
-        HttpJwksLoader loader = new HttpJwksLoader(config, config.getEgressPolicy(), clock::get);
+        HttpJwksLoader loader = new HttpJwksLoader(config, config.getEgressPolicy(), monotonicClock);
         assertEquals(LoaderStatus.OK, loader.initJWKSLoader(new SecurityEventCounter()).join(),
                 "the initial load must install the default key set");
         return loader;
@@ -179,6 +182,108 @@ class HttpJwksLoaderExecutorHandOffTest {
         loader.close();
     }
 
+    @Test
+    @DisplayName("A miss inside a claimed window leaves the guard free; the claim path still holds it")
+    void shouldLeaveGuardFreeForMissInsideClaimedWindow(URIBuilder uriBuilder) throws Exception {
+        GatedClock gatedClock = new GatedClock();
+        HttpJwksLoader loader = initializedLoader(uriBuilder, gatedClock);
+        assertTrue(loader.getKeyInfo("invented-claiming").isEmpty());
+        drainExecutor();
+        int afterClaim = moduleDispatcher.getRequestCount();
+
+        Thread insideWindowMiss = gatedClock.gateNextReadOf(
+                () -> assertTrue(loader.getKeyInfo("invented-inside-window").isEmpty()));
+        assertTrue(gatedClock.arrived.await(10, TimeUnit.SECONDS), "the miss inside the window reads the clock");
+        loader.performBackgroundRefresh();
+        int afterPeriodicDuringMiss = moduleDispatcher.getRequestCount();
+        gatedClock.release.countDown();
+        insideWindowMiss.join(TimeUnit.SECONDS.toMillis(30));
+        drainExecutor();
+        int afterInsideWindowMiss = moduleDispatcher.getRequestCount();
+
+        clock.addAndGet(WINDOW.toNanos());
+        CountDownLatch arrived = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        moduleDispatcher.holdResponses(arrived, release);
+        assertTrue(loader.getKeyInfo("invented-after-window").isEmpty());
+        assertTrue(arrived.await(10, TimeUnit.SECONDS), "the claimed fetch reaches the endpoint");
+        loader.performBackgroundRefresh();
+        int afterPeriodicDuringClaimedFetch = moduleDispatcher.getRequestCount();
+        release.countDown();
+        drainExecutor();
+
+        assertAll("only a miss that claims the window holds the guard",
+                () -> assertFalse(insideWindowMiss.isAlive(), "the miss inside the window returned"),
+                () -> assertEquals(2, afterClaim, "the first miss claimed the window and fetched"),
+                () -> assertEquals(3, afterPeriodicDuringMiss,
+                        "a periodic cycle started while the miss inside the window runs still fetches"),
+                () -> assertEquals(3, afterInsideWindowMiss, "the miss inside the window fetched nothing"),
+                () -> assertEquals(4, afterPeriodicDuringClaimedFetch,
+                        "negative control: a periodic cycle skips its fetch while a claimed fetch holds the guard"),
+                () -> assertEquals(4, moduleDispatcher.getRequestCount()),
+                () -> assertEquals(LoaderStatus.OK, loader.getLoaderStatus()));
+        loader.close();
+    }
+
+    @Test
+    @DisplayName("A rejected hand-off burns its window: a second miss in it fetches nothing, a miss after it fetches")
+    void shouldBurnWindowOnRejectedHandOff(URIBuilder uriBuilder) throws Exception {
+        HttpJwksLoader loader = initializedLoader(uriBuilder);
+        executor.behaviour = ScriptedExecutor.Behaviour.REJECT;
+
+        assertDoesNotThrow(() -> assertTrue(loader.getKeyInfo(ROTATED_KID).isEmpty()),
+                "the rejected hand-off surfaces nothing on the calling thread");
+        executor.behaviour = ScriptedExecutor.Behaviour.RUN;
+        moduleDispatcher.serve(UnknownKidJwksDispatcher.Mode.ROTATED_KEY);
+        assertTrue(loader.getKeyInfo(ROTATED_KID).isEmpty());
+        drainExecutor();
+        int afterSecondMiss = moduleDispatcher.getRequestCount();
+
+        clock.addAndGet(WINDOW.toNanos());
+        assertTrue(loader.getKeyInfo(ROTATED_KID).isEmpty());
+        drainExecutor();
+
+        assertAll("the rejected hand-off consumed its window",
+                () -> assertEquals(1, afterSecondMiss, "a second miss in the burnt window fetched nothing"),
+                () -> assertEquals(2, moduleDispatcher.getRequestCount(), "a miss in the next window fetches"),
+                () -> assertTrue(loader.getKeyInfo(ROTATED_KID).isPresent(), "the next window's fetch installed the key"));
+        loader.close();
+    }
+
+    /**
+     * The test clock, read through {@link #clock}, that can hold back the next read made by one chosen
+     * thread until {@link #release} is counted down, counting {@link #arrived} down when that read starts.
+     * Reads by every other thread, and every later read, return at once.
+     */
+    private final class GatedClock implements LongSupplier {
+
+        private final CountDownLatch arrived = new CountDownLatch(1);
+        private final CountDownLatch release = new CountDownLatch(1);
+        private volatile Thread gatedThread;
+
+        Thread gateNextReadOf(Runnable action) {
+            Thread thread = new Thread(action, "gated-clock-reader");
+            gatedThread = thread;
+            thread.start();
+            return thread;
+        }
+
+        @Override
+        public long getAsLong() {
+            if (Thread.currentThread() == gatedThread) {
+                gatedThread = null;
+                arrived.countDown();
+                try {
+                    assertTrue(release.await(30, TimeUnit.SECONDS), "the gated clock read was not released");
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Interrupted while the clock read was gated", e);
+                }
+            }
+            return clock.get();
+        }
+    }
+
     /**
      * A single-thread scheduled executor whose {@code execute} runs, throws or silently drops the task, as
      * scripted. {@link ScheduledThreadPoolExecutor} implements {@code submit} and the scheduling methods
@@ -187,7 +292,7 @@ class HttpJwksLoaderExecutorHandOffTest {
     private static final class ScriptedExecutor extends ScheduledThreadPoolExecutor {
 
         enum Behaviour {
-            RUN, THROW, DISCARD
+            RUN, THROW, REJECT, DISCARD
         }
 
         private volatile Behaviour behaviour = Behaviour.RUN;
@@ -200,6 +305,7 @@ class HttpJwksLoaderExecutorHandOffTest {
         public void execute(Runnable command) {
             switch (behaviour) {
                 case THROW -> throw new IllegalStateException("scripted hand-off failure");
+                case REJECT -> throw new RejectedExecutionException("scripted hand-off rejection");
                 case DISCARD -> {
                     // accepted and silently dropped: the run-or-reject requirement is violated
                 }

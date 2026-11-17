@@ -91,9 +91,12 @@ import static de.cuioss.sheriff.token.validation.JWTValidationLogMessages.WARN;
  * <p>
  * <strong>Unknown-kid refresh (opt-in):</strong> when an
  * {@linkplain HttpJwksLoaderConfig#getUnknownKidRefreshWindow() unknown-kid refresh window} is configured
- * and a key set is installed, a {@link #getKeyInfo(String)} miss claims the window with one
- * compare-and-set on a monotonic clock and hands one fetch to the refresh executor; the lookup performs no
- * I/O, does not wait and still misses. At most one such fetch runs per window and per loader. The fetched
+ * and a key set is installed, a {@link #getKeyInfo(String)} miss first reads the window and returns while
+ * it is still claimed, taking nothing; otherwise it takes the in-flight guard, then claims the window with
+ * one compare-and-set on a monotonic clock and hands one fetch to the refresh executor; the lookup
+ * performs no I/O, does not wait and still misses. A hand-off the executor rejects releases the guard but
+ * keeps the window claimed, so it burns the window. At most one such fetch runs per window and per
+ * loader. The fetched
  * key set is installed through the same commit step as a periodic refresh, and only when it holds the
  * requested key id and the generation is still live; installing it publishes {@code OK} like any other
  * installation. A failed, unchanged or non-matching fetch is discarded: keys, retired key sets, status,
@@ -842,28 +845,41 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * Claims the unknown-kid refresh window and, when won, hands one fetch for {@code kid} to the
      * refresh executor, without I/O or waiting on the caller's thread.
      * <p>
-     * Two claims are taken, each a single compare-and-set, in a fixed order: first the in-flight guard
-     * {@link #fetchInFlight}, then the window claim on {@link #nextAllowedNanos} (compared overflow-safely
-     * with the monotonic clock and moved on by one window). Claiming the guard first means a miss while
-     * a fetch is already running leaves the window untouched, so a held guard never burns the window. A
-     * lost claim means a fetch is already running or another caller owns the window; it is logged at
-     * DEBUG only, and a lost window claim releases the guard it had taken. The fetch carries the
-     * {@link #epoch} read here, so it commits nothing once a {@link #close()} moved it on.
+     * The steps run in a fixed order. First a read-only pre-check reads {@link #nextAllowedNanos} and
+     * returns, logged at DEBUG, while the window is still claimed (compared overflow-safely with the
+     * monotonic clock); it claims nothing, so a miss inside a claimed window never holds the guard and
+     * never makes a periodic cycle skip its fetch. Then two claims are taken, each a single
+     * compare-and-set: first the in-flight guard {@link #fetchInFlight}, then, after re-checking the
+     * window, the window claim on {@link #nextAllowedNanos} (moved on by one window). Claiming the guard
+     * before the window means a miss while a fetch is already running leaves the window untouched, so a
+     * held guard never burns the window. A lost claim means a fetch is already running or another caller
+     * owns the window; it is logged at DEBUG only, and a lost window claim releases the guard it had
+     * taken, so a lost claim never leaks a guard. The fetch carries the {@link #epoch} read here, so it
+     * commits nothing once a {@link #close()} moved it on.
      * <p>
      * The guard is released in this method for every hand-off outcome other than an accepted task: an
      * executor that rejects the fetch, or fails with any other {@link RuntimeException}, releases the
-     * guard, and the failure is logged at DEBUG and never thrown on the caller. An accepted task releases
-     * the guard when it ends, so a caller-supplied executor must run or reject every task it accepts.
+     * guard, and the failure is logged at DEBUG and never thrown on the caller. The window is not
+     * refunded: a failed hand-off burns the window it claimed, so the next on-demand fetch can be claimed
+     * only in the next window. An accepted task releases the guard when it ends, so a caller-supplied
+     * executor must run or reject every task it accepts.
      *
      * @param kid    the key id that was not found
      * @param window the configured unknown-kid refresh window
      */
     private void scheduleUnknownKidRefresh(String kid, Duration window) {
+        long now = monotonicClock.getAsLong();
+        // Read-only pre-check: a miss inside a claimed window claims nothing and never touches the guard,
+        // so it cannot make a periodic cycle skip its fetch. A stale read at worst lets the miss go on to
+        // the guard; the guard compare-and-set and the window compare-and-set below still decide.
+        if (now - nextAllowedNanos.get() < 0) {
+            LOGGER.debug("Unknown-kid refresh window still claimed, no fetch scheduled");
+            return;
+        }
         if (!fetchInFlight.compareAndSet(false, true)) {
             LOGGER.debug("A JWKS fetch is already in flight, no unknown-kid fetch scheduled");
             return;
         }
-        long now = monotonicClock.getAsLong();
         long allowedFrom = nextAllowedNanos.get();
         if (now - allowedFrom < 0) {
             fetchInFlight.set(false);
@@ -881,6 +897,8 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         }
         // Boundary catch around a caller-supplied executor: a rejection or any other failure of the
         // hand-off releases the guard and is never thrown on the caller of getKeyInfo, which only missed.
+        // The window is deliberately not refunded: a failed hand-off burns it, so a rejecting executor is
+        // retried at most once per window.
         // cui-rewrite:disable InvalidExceptionUsageRecipe
         catch (RuntimeException e) {
             fetchInFlight.set(false);
