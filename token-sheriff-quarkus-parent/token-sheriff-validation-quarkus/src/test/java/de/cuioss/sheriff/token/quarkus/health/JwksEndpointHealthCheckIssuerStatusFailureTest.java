@@ -79,12 +79,14 @@ class JwksEndpointHealthCheckIssuerStatusFailureTest {
         @DisplayName("An IllegalStateException from the view reports DOWN and logs only the sanitised message")
         void shouldSanitiseIllegalStateException() {
             assertSanitisedFailure(this::checkExternal, BENIGN_ISSUER, new IllegalStateException(RAW_MESSAGE));
+            assertWarnNamesIssuer();
         }
 
         @Test
         @DisplayName("An IllegalArgumentException from the view reports DOWN and logs only the sanitised message")
         void shouldSanitiseIllegalArgumentException() {
             assertSanitisedFailure(this::checkExternal, BENIGN_ISSUER, new IllegalArgumentException(RAW_MESSAGE));
+            assertWarnNamesIssuer();
         }
 
         @Test
@@ -125,6 +127,7 @@ class JwksEndpointHealthCheckIssuerStatusFailureTest {
         @DisplayName("An IllegalStateException from the loader reports DOWN and logs only the sanitised message")
         void shouldSanitiseIllegalStateException() {
             assertSanitisedFailure(this::checkConfigured, BENIGN_ISSUER, new IllegalStateException(RAW_MESSAGE));
+            assertWarnNamesIssuer();
         }
 
         @Test
@@ -132,6 +135,7 @@ class JwksEndpointHealthCheckIssuerStatusFailureTest {
         void shouldSanitiseIllegalArgumentException() {
             assertSanitisedFailure(this::checkConfigured, BENIGN_ISSUER,
                     new IllegalArgumentException(RAW_MESSAGE));
+            assertWarnNamesIssuer();
         }
 
         @Test
@@ -186,6 +190,14 @@ class JwksEndpointHealthCheckIssuerStatusFailureTest {
         assertFalse(warnings.isEmpty(), "the sanitised WARN must be recorded");
         assertTrue(warnings.stream().allMatch(warning -> warning.getThrown() == null),
                 "the WARN must not attach the exception, whose stack trace prints the raw message");
+    }
+
+    /**
+     * Asserts that the WARN of a benign-issuer failure names the issuer, which the exception-sanitising tests
+     * do not otherwise check.
+     */
+    private static void assertWarnNamesIssuer() {
+        LogAsserts.assertLogMessagePresentContaining(TestLogLevel.WARN, BENIGN_ISSUER);
     }
 
     /**
