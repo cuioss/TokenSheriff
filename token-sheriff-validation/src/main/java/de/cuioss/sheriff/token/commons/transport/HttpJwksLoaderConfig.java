@@ -954,7 +954,11 @@ public class HttpJwksLoaderConfig {
          * {@linkplain #scheduledExecutorService(ScheduledExecutorService) caller-supplied executor} must run
          * or reject every task it accepts: the fetch holds the loader's in-flight guard until it runs, so a
          * task the executor silently discards leaves the guard held and no further unknown-{@code kid}
-         * fetch is scheduled. A rejected hand-off releases the guard and never throws on the lookup.
+         * fetch is scheduled. A rejected hand-off, or one that fails with any other
+         * {@link RuntimeException}, releases the guard and never throws on the lookup. A failed hand-off
+         * burns the window: the window it claimed stays claimed, so the next on-demand fetch can be claimed
+         * only in the next window. An {@link Error} thrown by the executor's {@code execute} releases the
+         * guard as well, burns the window and propagates to the caller of the lookup.
          *
          * @param unknownKidRefreshWindow the window, from {@link #MIN_UNKNOWN_KID_REFRESH_WINDOW 5 seconds}
          *                                to {@link #MAX_UNKNOWN_KID_REFRESH_WINDOW 3600 seconds} inclusive

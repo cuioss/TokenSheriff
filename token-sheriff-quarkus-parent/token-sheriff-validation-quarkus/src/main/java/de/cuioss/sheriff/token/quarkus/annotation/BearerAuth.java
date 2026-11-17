@@ -161,9 +161,10 @@ public @interface BearerAuth {
      * {@code %x21 / %x23-5B / %x5D-7E} (printable ASCII except space, {@code "} and {@code \}). The set
      * enforced for a method - its own scopes merged with the class-level annotation of the bean class that
      * runs it, which for an inherited method is the subclass, since this annotation is not inherited - may
-     * hold at most 64 distinct scopes, and the {@code insufficient_scope} challenge sent for it, realm and
-     * {@code error_description} included, may be at most 8192 characters long; these are the bounds of the
-     * challenge. A violation of any of the three rules fails the deployment.
+     * hold at most {@value de.cuioss.sheriff.token.commons.http.BearerChallenge#MAX_SCOPE_TOKENS} distinct
+     * scopes, and the {@code insufficient_scope} challenge sent for it, realm and {@code error_description}
+     * included, may be at most {@value de.cuioss.sheriff.token.commons.http.BearerChallenge#MAX_LENGTH}
+     * characters long; these are the bounds of the challenge. A violation of any of the three rules fails the deployment.
      * <p>
      * The deployment check has two known limits, accepted as such: it checks a method-level annotation on an
      * interface default method on its own, although the interceptor merges it with the class-level annotation

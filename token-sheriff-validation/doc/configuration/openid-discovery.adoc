@@ -239,11 +239,14 @@ periodic refresh. With `unknownKidRefreshWindow(Duration)` set:
   window as claimed therefore never holds the in-flight guard and never makes a periodic cycle skip its
   fetch; a miss while a fetch is in flight leaves the window untouched, and a lost window claim releases the
   guard it had taken. The read does not hold the window, so a miss that read it as open can lose it to
-  another miss that claims it first; the first miss then holds the guard from taking it until its second
-  window check releases it, and a periodic cycle that falls into that interval skips its fetch;
-* when the refresh executor rejects the scheduled fetch, the in-flight guard is released and the failure is
-  logged at DEBUG, but the window stays claimed: a failed hand-off burns the window, and the next on-demand
-  fetch can be claimed only in the next window.
+  another miss that claims it first; the miss that lost the window then holds the guard from taking it
+  until its second window check releases it, and a periodic cycle that falls into that interval skips its
+  fetch;
+* when the refresh executor rejects the scheduled fetch, or fails the hand-off with any other
+  `RuntimeException`, the in-flight guard is released and the failure is logged at DEBUG, but the window
+  stays claimed: a failed hand-off burns the window, and the next on-demand fetch can be claimed only in the
+  next window. An `Error` thrown by the executor's `execute` releases the guard as well, burns the window
+  and propagates to the caller of the lookup.
 
 The lookup is reachable before any signature check, so an attacker presenting an invented key ID consumes
 the window. An attacker who does so in every window defers the on-demand pickup of a legitimate rotation

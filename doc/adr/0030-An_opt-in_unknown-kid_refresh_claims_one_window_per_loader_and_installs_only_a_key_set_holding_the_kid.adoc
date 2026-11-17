@@ -175,13 +175,15 @@ orphaned-configuration rule of ADR-0026.
   window claim releases the guard it had taken, so a held guard never burns a window and a lost claim never
   leaks a guard. The pre-check is a plain read and does not hold the window, so it is not a guarantee for
   every miss: a miss that read the window as open can lose it to another miss that claims it and finishes
-  its fetch first, and that first miss then holds the guard from taking it until its window re-check
-  releases it. A periodic cycle that falls into that interval skips its fetch, and a rotation that depended
+  its fetch first, and the miss that lost the window then holds the guard from taking it until its window
+  re-check releases it. A periodic cycle that falls into that interval skips its fetch, and a rotation that depended
   on it is picked up one refresh interval later, as in the first negative consequence above.
 * The hand-off releases the guard on every outcome other than an accepted task. An executor that rejects
   the fetch, or fails with any other `RuntimeException`, releases the guard in the scheduling method; the
   failure is logged at DEBUG and never thrown on the lookup that only missed. This is a deliberate boundary
-  catch around a caller-supplied executor. The window is not refunded: a failed hand-off burns the window it
+  catch around a caller-supplied executor. An `Error` thrown by the executor's `execute` is not caught: the
+  guard is released in a `finally` block and the `Error` propagates to the caller of the lookup. The window is
+  not refunded: a failed hand-off burns the window it
   claimed, so the next on-demand fetch can be claimed only in the next window.
 * Requirement on a caller-supplied executor: it must run or reject every task it accepts. An accepted fetch
   releases the guard only when it runs, so an executor that accepts a task and silently discards it leaves

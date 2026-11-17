@@ -185,6 +185,18 @@ Each change below alters what an existing deployment observes:
   (`Response body exceeds maximum allowed size of N bytes (origin)`); the lower-case client form is retired.
   On the validation path, a negative ceiling or one above `MAX_CEILING` is refused when the handler is
   created; `ParserConfig` already refuses non-positive sizes, so no configuration reaches that refusal.
+* **Client body buffer** — the client's back-channel reads no longer collect the body in a
+  `ByteArrayOutputStream`; they keep it in the shared handler's one doubling array, so their memory bound is
+  the one COMMONS-17 states for every bounded read.
+* **Logout freshness window** — `LogoutTokenValidator`'s builder refuses a freshness window longer than
+  `LogoutTokenValidator.MAX_FRESHNESS_WINDOW` (100 years); ADR-0029 records that bound in its amendment
+  "`iat` / `exp` reading and the freshness window are bounded".
+* **Unchanged unknown-`kid` fetch** — an unknown-`kid` fetch that returns the installed key set unchanged is
+  logged at DEBUG instead of through the `UNKNOWN_KID_REFRESH_DISCARDED` warning; ADR-0030 records it under
+  Risks.
+* **Health-check loader failure** — when the JWKS readiness probe fails to read an issuer's loader status, its
+  `ERROR_CHECKING_JWKS_LOADER` warning carries the issuer and the exception message through
+  `ErrorTextSanitizer` (ADR-0022) and no longer attaches the exception, so no stack trace is logged.
 
 == Consequences
 
@@ -315,8 +327,10 @@ received buffer, and its own read of an unparsable `Content-Length` threw a `Num
   in every case the check covers. This matches the fail-at-startup stance of ADR-0019 and ADR-0026. The two
   accepted limits of the check fail differently. A merged set over the bounds on an interface default method
   passes the deployment, reaches a request, is answered with a 500 and is logged as `TokenSheriff_Q-201`
-  instead of escaping as an unhandled exception; the request-time answer applies to sets that pass the
-  deployment only. A concrete-typed override of a generic base method can instead make the check refuse a
+  instead of escaping as an unhandled exception. The request-time answer applies to every set that reaches
+  `BearerTokenResult.createErrorResponse()` without the deployment check having refused it: a set that passes
+  the deployment, and a set supplied programmatically through the public
+  `BearerTokenProducer.getBearerTokenResult`, which no deployment check sees. A concrete-typed override of a generic base method can instead make the check refuse a
   deployment that is valid at run time: that refusal happens when the application is built, never reaches a
   request, and so has no 500 response.
 * The challenge builder retains at most `MAX_SCOPE_TOKENS + 1` distinct scope names and scans at most

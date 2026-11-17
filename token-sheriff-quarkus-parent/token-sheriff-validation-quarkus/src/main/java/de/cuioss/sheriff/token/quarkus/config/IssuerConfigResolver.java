@@ -700,6 +700,13 @@ public class IssuerConfigResolver {
      * {@link HttpJwksLoaderConfig} it is built from, so the settings threaded in here are not
      * observable through {@link #resolveIssuerConfigs()}.
      * </p>
+     *
+     * @throws IllegalStateException    naming the property, for a misconfiguration this resolver checks
+     *                                  itself, among them an unknown-{@code kid} refresh window combined with
+     *                                  a refresh interval of {@code 0}
+     * @throws IllegalArgumentException if {@link HttpJwksLoaderConfig}'s builder refuses the configuration,
+     *                                  among them an initial-load retry of {@code true} combined with a
+     *                                  refresh interval of {@code 0}
      */
     HttpJwksLoaderConfig createHttpJwksLoaderConfig(String issuerName, @Nullable String jwksUrl,
             @Nullable String wellKnownUrl, Optional<String> resolvedIssuerIdentifier) {

@@ -94,6 +94,8 @@ public final class BoundedBodyHandler {
 
     /**
      * The largest accepted ceiling in bytes: the largest array the result can hold.
+     *
+     * @since 1.0
      */
     public static final long MAX_CEILING = Integer.MAX_VALUE - 8L;
 
