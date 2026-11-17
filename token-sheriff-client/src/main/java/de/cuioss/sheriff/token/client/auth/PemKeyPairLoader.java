@@ -114,7 +114,10 @@ public final class PemKeyPairLoader {
     /** Refusal text for a block without an {@code END} line. */
     static final String UNTERMINATED_BLOCK = "PEM key file contains an unterminated PEM block";
 
-    /** Refusal text for a block body that is not canonical base64. */
+    /**
+     * Refusal text for a block body the JDK base64 decoder rejects (a character outside the base64 alphabet
+     * or invalid padding), for an empty body, and for a blank line inside a body.
+     */
     static final String INVALID_BASE64 = "PEM key block body is not valid base64";
 
     /** Refusal text for a file lacking the private-key or the public-key block. */
