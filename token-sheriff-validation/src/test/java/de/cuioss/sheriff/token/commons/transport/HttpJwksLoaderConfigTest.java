@@ -24,6 +24,8 @@ import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import javax.net.ssl.SSLContext;
 import java.net.URI;
@@ -153,6 +155,52 @@ class HttpJwksLoaderConfigTest {
         assertDoesNotThrow(
                 () -> config.getEgressPolicy().check(URI.create("https://localhost:8443/certs")),
                 "An allow-listed host must bypass the egress address-range checks");
+    }
+
+    @Test
+    @DisplayName("Should refuse a null egress allow-list entry at the setter")
+    void shouldRefuseNullAllowedEgressHost() {
+        var builder = HttpJwksLoaderConfig.builder()
+                .jwksUrl(VALID_URL)
+                .issuerIdentifier("test-issuer");
+
+        var exception = assertThrows(IllegalArgumentException.class, () -> builder.allowedEgressHost(null),
+                "a null entry must be refused at the setter instead of being ignored");
+        assertEquals(EgressHostValidator.NULL_ENTRY, exception.getMessage());
+    }
+
+    @ParameterizedTest(name = "refuses [{0}]")
+    @ValueSource(strings = {"", "   ", "localhost:8443", "[::1]:8443"})
+    @DisplayName("Should refuse a blank or port-carrying egress allow-list entry at the setter")
+    void shouldRefuseMalformedAllowedEgressHost(String entry) {
+        var builder = HttpJwksLoaderConfig.builder()
+                .jwksUrl(VALID_URL)
+                .issuerIdentifier("test-issuer");
+
+        var exception = assertThrows(IllegalArgumentException.class, () -> builder.allowedEgressHost(entry),
+                "a malformed entry must be refused at the setter, before build()");
+        assertEquals(EgressHostValidator.refusal(entry).orElseThrow(), exception.getMessage());
+        if (!entry.isBlank()) {
+            for (Throwable current = exception; current != null; current = current.getCause()) {
+                String message = current.getMessage();
+                assertFalse(message != null && message.contains(entry),
+                        "no exception in the cause chain may echo the entry, but found: " + message);
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("Should store a bare IPv6 egress allow-list entry so it matches the bracketed URL host")
+    void shouldMatchBareIpv6AllowedEgressHost() {
+        HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder()
+                .jwksUrl(VALID_URL)
+                .issuerIdentifier("test-issuer")
+                .allowedEgressHost("::1")
+                .build();
+
+        assertDoesNotThrow(
+                () -> config.getEgressPolicy().check(URI.create("https://[::1]:8443/certs")),
+                "a bare ::1 entry must match the [::1] host URI.getHost() reports");
     }
 
     @Test

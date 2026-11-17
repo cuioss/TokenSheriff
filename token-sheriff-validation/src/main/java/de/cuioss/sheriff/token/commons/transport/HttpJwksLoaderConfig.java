@@ -609,13 +609,19 @@ public class HttpJwksLoaderConfig {
          * local/dev topologies; it must be scoped narrowly and never used to allow-list
          * attacker-influenceable hosts in production.
          *
-         * @param host the host name to allow-list; ignored when {@code null} or blank
+         * <p>
+         * The entry must be a bare host (see {@link EgressHostValidator}). It is checked here, at
+         * the setter, so a malformed entry is refused before {@link #build()} and never travels in
+         * the cause chain of its configuration exception.
+         *
+         * @param host the host to allow-list — a host name, a dotted IPv4 literal or an IPv6 literal,
+         *             bare or bracketed
          * @return this builder instance
+         * @throws IllegalArgumentException if {@code host} is {@code null}, blank or not a bare host;
+         *                                  the message is a fixed text that does not echo the entry
          */
         public HttpJwksLoaderConfigBuilder allowedEgressHost(String host) {
-            if (host != null && !host.isBlank()) {
-                allowedEgressHosts.add(host);
-            }
+            allowedEgressHosts.add(EgressHostValidator.requireBareHost(host));
             return this;
         }
 
