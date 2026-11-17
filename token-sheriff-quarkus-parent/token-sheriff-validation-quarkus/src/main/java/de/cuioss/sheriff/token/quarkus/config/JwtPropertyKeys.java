@@ -696,6 +696,13 @@ public final class JwtPropertyKeys {
          * be reached despite the secure-by-default egress policy. Matching is case-insensitive.
          * </p>
          * <p>
+         * Each element is a bare host name exactly as the URL host reads — an ASCII host name, a dotted
+         * IPv4 literal, or an IPv6 literal, bare ({@code ::1}) or bracketed ({@code [::1]}) — never with a
+         * port. Blank elements are dropped. An element carrying a port ({@code keycloak:8080},
+         * {@code [::1]:443}) or otherwise not a bare host fails startup with an
+         * {@link IllegalStateException} that names this property but not the element.
+         * </p>
+         * <p>
          * Unlike {@link #ALLOW_LOOPBACK_EGRESS} — which only permits {@code 127.0.0.0/8} / {@code ::1}
          * loopback resolutions — this allow-list is the mechanism for reaching Docker-internal service
          * names whose bridge-network addresses fall in the private (site-local) ranges.

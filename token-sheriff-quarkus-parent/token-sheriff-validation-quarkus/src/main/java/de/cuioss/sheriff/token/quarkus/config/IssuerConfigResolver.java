@@ -536,6 +536,39 @@ public class IssuerConfigResolver {
     }
 
     /**
+     * Maps the explicit egress host allow-list onto the loader configuration — needed to reach
+     * Docker-internal service names (site-local bridge addresses) that {@code allow-loopback-egress}
+     * does not cover.
+     * <p>
+     * Blank CSV elements are dropped by {@link ConfigValueParser#splitCsv(String)}. Every remaining
+     * element must be a bare host without a port; the builder refuses any other entry, and that refusal
+     * fails startup with the property named. The failure text never contains the refused entry.
+     * </p>
+     *
+     * @throws IllegalStateException naming the property if an element is not a bare host
+     */
+    private void configureAllowedEgressHosts(HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder builder,
+            String issuerName) {
+        String property = JwtPropertyKeys.ISSUERS.ALLOWED_EGRESS_HOSTS.formatted(issuerName);
+        config.getOptionalValue(property, String.class).ifPresent(hostsCsv -> {
+            List<String> hosts = ConfigValueParser.splitCsv(hostsCsv);
+            for (String host : hosts) {
+                try {
+                    builder.allowedEgressHost(host);
+                } catch (IllegalArgumentException e) {
+                    // The builder's refusal is a fixed text that never echoes the entry, so it may be chained.
+                    throw new IllegalStateException(
+                            "Property '%s' must list bare host names without a port, but an entry was refused"
+                                    .formatted(property), e);
+                }
+            }
+            if (!hosts.isEmpty()) {
+                LOGGER.debug("Allow-listed egress hosts for %s: %s", issuerName, hosts);
+            }
+        });
+    }
+
+    /**
      * Maps the opt-in maximum key staleness onto the loader configuration.
      * <p>
      * The builder is only called when the property is present, so the default stays off: installed keys
@@ -712,18 +745,7 @@ public class IssuerConfigResolver {
             LOGGER.debug("Enabled loopback egress for %s (allow-loopback-egress=true)", issuerName);
         }
 
-        // Explicit egress host allow-list — needed to reach Docker-internal service names
-        // (site-local bridge addresses) that allow-loopback-egress does NOT cover.
-        config.getOptionalValue(
-                JwtPropertyKeys.ISSUERS.ALLOWED_EGRESS_HOSTS.formatted(issuerName),
-                String.class
-        ).ifPresent(hostsCsv -> {
-            List<String> hosts = ConfigValueParser.splitCsv(hostsCsv);
-            hosts.forEach(builder::allowedEgressHost);
-            if (!hosts.isEmpty()) {
-                LOGGER.debug("Allow-listed egress hosts for %s: %s", issuerName, hosts);
-            }
-        });
+        configureAllowedEgressHosts(builder, issuerName);
 
         // Configure HTTP timeouts (use builder defaults if not specified)
         config.getOptionalValue(
