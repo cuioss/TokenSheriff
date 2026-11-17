@@ -139,9 +139,10 @@ The one rule
 is `commons.transport.EgressHostValidator`; `EgressPolicy.EgressPolicyBuilder.allowedHost`,
 `WellKnownConfig.WellKnownConfigBuilder.allowedEgressHost`,
 `HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder.allowedEgressHost` and the client's
-`ClientConfiguration` all apply it. An admitted entry is stored lower-cased, a bare IPv6 literal in
-bracketed form, so a bare IPv6 entry matches the bracketed host of an IPv6 URL; matching stays
-case-insensitive. Under
+`ClientConfiguration` all apply it. All four builders store an admitted entry in the canonical form
+`EgressHostValidator.requireBareHost` returns — lower-cased, a bare IPv6 literal in bracketed form — so
+a bare IPv6 entry matches the bracketed host of an IPv6 URL, and `ClientConfiguration` reports,
+compares and prints its list in that form; matching stays case-insensitive. Under
 Quarkus a port-carrying element of `sheriff.token.issuers.<name>.jwks.http.allowed-egress-hosts`
 fails startup naming the property; on this issuer path blank CSV elements are dropped and the
 whitespace around an element is trimmed before the rule runs, so `keycloak, dex` admits both hosts. The

@@ -69,6 +69,18 @@ import java.util.Objects;
  * {@link de.cuioss.sheriff.token.client.dpop.DpopProofGenerator} ({@code RS256}, {@code ES256},
  * {@code EdDSA}) and, for RSA and EC keys, by {@link PrivateKeyJwtAuth}. The class is stateless and
  * safe for concurrent use; it uses the JDK only.
+ * <p>
+ * Three properties of the file handling are accepted rather than prevented:
+ * <ul>
+ *   <li>The regular-file check ({@link Files#isRegularFile(Path, java.nio.file.LinkOption...)}) follows
+ *       symbolic links, so a symlink to a regular file is followed and loaded. That is what lets a
+ *       mounted secret that is a symlink to a regular file load.</li>
+ *   <li>The check and the open are two steps. A FIFO or other special file swapped in at the path after
+ *       the check is not refused: the open blocks until the special file delivers data or end of file.
+ *       The path is expected to be one only the deployment can write.</li>
+ *   <li>The key text is held in a {@link String} and the decoded key material in byte arrays. The loader
+ *       cannot wipe either; they stay in memory until the garbage collector reclaims them.</li>
+ * </ul>
  *
  * @since 1.0
  * @author Oliver Wolff

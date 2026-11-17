@@ -29,6 +29,7 @@ import org.jspecify.annotations.Nullable;
 import javax.net.ssl.SSLContext;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -337,7 +338,10 @@ public class ClientConfiguration {
      * IPv6 entry matches the bracketed host of a contacted URL. A {@code null}, blank or port-carrying
      * entry ({@code host:8080}, {@code [::1]:443}), and any entry carrying whitespace, control or
      * non-ASCII characters or URL syntax, is refused at construction with an
-     * {@link IllegalArgumentException} that names the entry index but never the entry.
+     * {@link IllegalArgumentException} that names the entry index but never the entry. Entries are not
+     * trimmed. An admitted entry is stored in the canonical form
+     * {@link EgressHostValidator#requireBareHost(String)} returns — lower-case, a bare IPv6 literal in
+     * brackets — so {@code Keycloak} is stored as {@code keycloak} and {@code ::1} as {@code [::1]}.
      */
     @Singular
     List<String> allowedEgressHosts;
@@ -441,16 +445,20 @@ public class ClientConfiguration {
      * <p>
      * A refusal names the zero-based entry index and the validator's fixed reason, never the entry itself,
      * so an untrusted or control-character-bearing value can never reach an exception message and from
-     * there a log. The stored list keeps the entries as configured; {@link #getEgressPolicy()} hands them
-     * to {@link EgressPolicy.EgressPolicyBuilder#allowedHost(String)}, which canonicalises them.
+     * there a log. Each admitted entry is stored in the canonical form
+     * {@link EgressHostValidator#requireBareHost(String)} returns — lower-case, a bare IPv6 literal in
+     * brackets — the form {@link EgressPolicy}, {@code WellKnownConfig} and {@code HttpJwksLoaderConfig}
+     * store, so {@link #getAllowedEgressHosts()}, {@code equals} and {@code toString} show that form and two
+     * configurations differing only in an entry's spelling are equal.
      *
      * @param allowedEgressHosts the configured allow-list; must not be {@code null}
-     * @return an immutable copy of the validated list
+     * @return an immutable list of the canonical forms, in the configured order
      * @throws NullPointerException     if {@code allowedEgressHosts} is {@code null}
      * @throws IllegalArgumentException if an entry is not a bare host
      */
     private static List<String> validateAllowedEgressHosts(List<String> allowedEgressHosts) {
         Objects.requireNonNull(allowedEgressHosts, "allowedEgressHosts must not be null");
+        List<String> canonical = new ArrayList<>(allowedEgressHosts.size());
         int index = 0;
         for (String host : allowedEgressHosts) {
             Optional<String> refusal = EgressHostValidator.refusal(host);
@@ -458,9 +466,10 @@ public class ClientConfiguration {
                 throw new IllegalArgumentException(
                         "allowedEgressHosts entry %d is refused: %s".formatted(index, refusal.get()));
             }
+            canonical.add(EgressHostValidator.requireBareHost(host));
             index++;
         }
-        return List.copyOf(allowedEgressHosts);
+        return List.copyOf(canonical);
     }
 
     /**
