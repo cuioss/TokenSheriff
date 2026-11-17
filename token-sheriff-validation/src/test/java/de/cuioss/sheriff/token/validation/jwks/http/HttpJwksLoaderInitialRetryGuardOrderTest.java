@@ -45,7 +45,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * re-check, and the attempt fetches nothing.
  * <p>
  * The periodic cycle is placed at exactly that point through the package-private seam
- * {@code HttpJwksLoader#beforeInitialLoadRetryClaim}, which runs right before the claim, and the
+ * {@code HttpJwksLoader#beforeInitialLoadRetryClaim}, whose action runs right before the claim, and the
  * {@link RecordingScheduler} of {@link HttpJwksLoaderInitialRetryTest}, whose recorded periodic task the
  * seam runs on the attempt's own thread, so no sleep is involved. Were the eligibility check moved back
  * in front of the claim, it would run before the seam and the attempt would fetch after the periodic
@@ -82,7 +82,7 @@ class HttpJwksLoaderInitialRetryGuardOrderTest {
                 LoaderStatus.UNDEFINED);
         moduleDispatcher.serve(UnknownKidJwksDispatcher.Mode.DEFAULT_KEY);
         int afterInit = moduleDispatcher.getRequestCount();
-        loader.beforeInitialLoadRetryClaim = () -> scheduler.getPeriodicTask().run();
+        loader.beforeInitialLoadRetryClaim.set(() -> scheduler.getPeriodicTask().run());
 
         assertTrue(scheduler.runNextOneShot(), "the attempt scheduled at initialization is due");
 
@@ -105,7 +105,7 @@ class HttpJwksLoaderInitialRetryGuardOrderTest {
             HttpJwksLoader loader = initializedLoader(wellKnownConfig(server), LoaderStatus.UNDEFINED);
             dispatcher.foreignIssuer = true;
             int discoveriesAfterInit = dispatcher.discoveries.get();
-            loader.beforeInitialLoadRetryClaim = () -> scheduler.getPeriodicTask().run();
+            loader.beforeInitialLoadRetryClaim.set(() -> scheduler.getPeriodicTask().run());
 
             assertTrue(scheduler.runNextOneShot(), "the attempt scheduled at initialization is due");
 

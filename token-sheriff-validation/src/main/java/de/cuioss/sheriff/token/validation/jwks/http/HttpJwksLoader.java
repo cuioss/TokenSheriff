@@ -322,13 +322,13 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     private final AtomicBoolean fetchInFlight = new AtomicBoolean();
 
     /**
-     * Package-private test seam, run by an initial-load retry attempt right before it claims
-     * {@link #fetchInFlight}; a no-op otherwise. It lets a test complete another fetch at exactly that
-     * point without a sleep, to prove the eligibility re-check runs after the claim
-     * (see {@link #performInitialLoadRetryCycle(long)}).
+     * Package-private test seam, an {@link AtomicReference} holding the action an initial-load retry
+     * attempt runs right before it claims {@link #fetchInFlight}; it holds a no-op otherwise. A test
+     * sets its own action to complete another fetch at exactly that point without a sleep, to prove
+     * the eligibility re-check runs after the claim (see {@link #performInitialLoadRetryCycle(long)}).
      */
-    volatile Runnable beforeInitialLoadRetryClaim = () -> {
-    };
+    final AtomicReference<Runnable> beforeInitialLoadRetryClaim = new AtomicReference<>(() -> {
+    });
 
     /**
      * The {@link #epoch} of the initialization whose background refresh task was scheduled last,
@@ -1407,7 +1407,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * @param startEpoch the {@link #epoch} of the initialization whose initial load failed
      */
     private void performInitialLoadRetryCycle(long startEpoch) {
-        beforeInitialLoadRetryClaim.run();
+        beforeInitialLoadRetryClaim.get().run();
         if (!fetchInFlight.compareAndSet(false, true)) {
             LOGGER.debug("Skipping an initial-load retry cycle, another JWKS fetch is in flight");
             return;

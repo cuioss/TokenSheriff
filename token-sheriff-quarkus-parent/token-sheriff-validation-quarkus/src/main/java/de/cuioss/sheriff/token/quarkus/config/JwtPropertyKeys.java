@@ -23,6 +23,7 @@ import lombok.experimental.UtilityClass;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -393,8 +394,8 @@ public final class JwtPropertyKeys {
          * being ignored, so a new {@code dpop.*} key is covered as soon as it is declared here.
          * </p>
          */
-        public static final List<String> DPOP_SUB_PROPERTIES = declaredKeysUnder(ISSUERS.class, DPOP_BASE,
-                Set.of(DPOP_ENABLED));
+        public static final List<String> DPOP_SUB_PROPERTIES = Collections.unmodifiableList(
+                declaredKeysUnder(ISSUERS.class, DPOP_BASE, Set.of(DPOP_ENABLED)));
 
         // === JWKS Source Configuration (Mutually Exclusive) ===
 
