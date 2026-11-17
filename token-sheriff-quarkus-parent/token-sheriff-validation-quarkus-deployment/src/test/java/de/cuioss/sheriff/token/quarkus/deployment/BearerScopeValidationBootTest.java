@@ -31,8 +31,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * valid scope names and a class-level plus method-level {@code @BearerAuth} union of exactly 64 distinct
  * scopes.
  * <p>
- * The fixtures are the valid ones of {@link BearerScopeValidationBuildStepTest}, which pins the refusals.
- * The refused fixtures are deliberately not in this archive: they would fail the very boot asserted here.
+ * The fixtures are the valid ones of {@link BearerScopeValidationBuildStepTest}, which pins the full refusal
+ * matrix by calling the build step directly. The refused fixtures are deliberately not in this archive: they
+ * would fail the very boot asserted here. That a refusal fails Quarkus augmentation itself is pinned by
+ * {@link BearerScopeValidationRefusalBootTest}.
  */
 @Tag("quarkus-boot")
 @DisplayName("An application with valid annotation-declared required scopes builds and boots")

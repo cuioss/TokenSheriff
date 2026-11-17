@@ -39,7 +39,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * The fixtures are indexed into a Jandex index of their own and checked through the scan the build step
  * runs and through the build step itself. The test runs on the application class loader together with the
  * processor, so no call crosses into a Quarkus class loader. That the valid fixtures also build and boot a
- * Quarkus application is pinned by {@link BearerScopeValidationBootTest}.
+ * Quarkus application is pinned by {@link BearerScopeValidationBootTest}, and that a refusal fails Quarkus
+ * augmentation itself - the build step wired through its {@code @BuildStep} - is pinned by
+ * {@link BearerScopeValidationRefusalBootTest} with one of the invalid fixtures here.
  */
 @DisplayName("Deployment-time validation of annotation-declared required scopes")
 class BearerScopeValidationBuildStepTest {
