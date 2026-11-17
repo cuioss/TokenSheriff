@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import javax.net.ssl.SSLContext;
@@ -657,6 +658,24 @@ class ClientConfigurationTest {
                 "non breaking");
     }
 
+    /**
+     * Allow-list entries that are not a bare host: blank, port-carrying, carrying a control
+     * character, whitespace, a non-ASCII character or URL syntax.
+     */
+    static Stream<String> nonBareEgressHosts() {
+        return Stream.of(
+                "",
+                "   ",
+                "keycloak:8080",
+                "[::1]:443",
+                "keycloak\r\nX-Injected: yes",
+                "key\u0000cloak",
+                "key\tcloak",
+                "kéycloak",
+                "https://keycloak",
+                "user@keycloak");
+    }
+
     @Nested
     @DisplayName("Back-channel origin (backChannelOrigin)")
     class BackChannelOriginValidation {
@@ -847,14 +866,52 @@ class ClientConfigurationTest {
                     () -> assertThrows(UnsupportedOperationException.class, () -> hosts.add("extra")));
         }
 
-        @ParameterizedTest(name = "rejects \"{0}\"")
-        @ValueSource(strings = {"", "   "})
-        @DisplayName("Should reject a blank allow-listed host at construction")
-        void shouldRejectBlankAllowedHost(String host) {
-            var builder = minimalBuilder().allowedEgressHost(host);
+        @ParameterizedTest(name = "rejects allow-list entry #{index}")
+        @NullSource
+        @MethodSource("de.cuioss.sheriff.token.client.config.ClientConfigurationTest#nonBareEgressHosts")
+        @DisplayName("Should reject a null, blank, port-carrying or malformed allow-listed host without echoing it")
+        void shouldRejectNonBareAllowedHost(String host) {
+            var hosts = new ArrayList<String>();
+            hosts.add(host);
+            var builder = minimalBuilder().allowedEgressHosts(hosts);
 
-            assertThrows(IllegalArgumentException.class, builder::build,
-                    "a blank allow-list entry matches nothing and only hides a misconfiguration");
+            var exception = assertThrows(IllegalArgumentException.class, builder::build,
+                    "an entry that is not a bare host matches no contacted host and only hides a misconfiguration");
+
+            String message = exception.getMessage();
+            assertAll("the refusal names the field and the entry index, never the entry",
+                    () -> assertTrue(message.startsWith("allowedEgressHosts entry 0 is refused: "),
+                            "the message must name the field and the zero-based index, but was: " + message),
+                    () -> assertTrue(host == null || host.isBlank() || !message.contains(host),
+                            "the rejected entry must never be echoed into the exception message"),
+                    () -> assertTrue(message.chars().noneMatch(Character::isISOControl),
+                            "the message must not carry any control character, but was: " + message),
+                    () -> assertNull(exception.getCause(), "no cause may carry the entry"));
+        }
+
+        @Test
+        @DisplayName("Should name the zero-based index of the first refused allow-list entry")
+        void shouldNameIndexOfRefusedAllowedHost() {
+            var builder = minimalBuilder().allowedEgressHost("keycloak").allowedEgressHost("keycloak:8080");
+
+            var exception = assertThrows(IllegalArgumentException.class, builder::build);
+
+            assertAll("the index points at the refused entry",
+                    () -> assertTrue(exception.getMessage().startsWith("allowedEgressHosts entry 1 is refused: "),
+                            "the second entry is the refused one, but was: " + exception.getMessage()),
+                    () -> assertFalse(exception.getMessage().contains("keycloak"),
+                            "neither entry may be echoed, but was: " + exception.getMessage()));
+        }
+
+        @Test
+        @DisplayName("Should accept bare host names, IPv4 and IPv6 literals and store them as configured")
+        void shouldAcceptBareAllowedHostsAsConfigured() {
+            var configured = List.of("Keycloak", "idp.internal", "10.0.0.5", "::1", "[2001:db8::1]");
+
+            var config = minimalBuilder().allowedEgressHosts(configured).build();
+
+            assertEquals(configured, config.getAllowedEgressHosts(),
+                    "the stored list keeps the configured spelling; only the egress policy canonicalises it");
         }
 
         @Test

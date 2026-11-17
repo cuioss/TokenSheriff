@@ -208,6 +208,24 @@ class BackChannelEgressPolicyTest {
     }
 
     @Test
+    @DisplayName("A bare IPv6 allow-list entry matches the bracketed host of a contacted URL")
+    void shouldMatchBareIpv6AllowListEntryAgainstBracketedUrlHost() {
+        var loopbackV6 = URI.create("http://[::1]:8080" + TOKEN_PATH);
+        var refusing = baseBuilder(PUBLIC_ISSUER).build().getEgressPolicy();
+        var allowing = baseBuilder(PUBLIC_ISSUER).allowedEgressHost("::1").build().getEgressPolicy();
+        var allowingUpperCase = baseBuilder(PUBLIC_ISSUER).allowedEgressHost("2001:DB8::1").build()
+                .getEgressPolicy();
+
+        assertAll("URI.getHost() reports an IPv6 host bracketed; the bare entry must still match it",
+                () -> assertThrows(TransportException.class, () -> refusing.check(loopbackV6),
+                        "without the entry the IPv6 loopback address is refused"),
+                () -> assertDoesNotThrow(() -> allowing.check(loopbackV6),
+                        "the bare entry ::1 must admit http://[::1]"),
+                () -> assertDoesNotThrow(() -> allowingUpperCase.check(URI.create("https://[2001:db8::1]/token")),
+                        "the match stays case-insensitive for an IPv6 literal"));
+    }
+
+    @Test
     @DisplayName("A refusal carries no part of the contacted URL, neither in its message nor in its cause chain")
     void shouldNotEchoTheContactedUrlInTheRefusal() {
         var client = new TokenEndpointClient(mappedConfiguration(METADATA_ADDRESS));
