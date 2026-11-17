@@ -307,13 +307,22 @@ received buffer, and its own read of an unparsable `Content-Length` threw a `Num
 === Consequences
 
 * A misconfigured required scope is found when the application is built, with the member that declares it,
-  in every case the check covers. This matches the fail-at-startup stance of ADR-0019 and ADR-0026. In the
-  two accepted uncovered cases the misconfiguration reaches a request, where it is answered with a 500 and
-  logged as `TokenSheriff_Q-201` instead of escaping as an unhandled exception.
-* The work and memory of the challenge builder are bounded by `MAX_SCOPE_TOKENS + 1` scopes and
-  `MAX_LENGTH` characters whatever the caller feeds it; the body handler's byte bound of COMMONS-17 is
-  unchanged, its object count no longer grows with the buffer count, and the price of the one growable
-  array is a streaming peak below twice the ceiling while a growth step copies it.
+  in every case the check covers. This matches the fail-at-startup stance of ADR-0019 and ADR-0026. The two
+  accepted limits of the check fail differently. A merged set over the bounds on an interface default method
+  passes the deployment, reaches a request, is answered with a 500 and is logged as `TokenSheriff_Q-201`
+  instead of escaping as an unhandled exception; the request-time answer applies to sets that pass the
+  deployment only. A concrete-typed override of a generic base method can instead make the check refuse a
+  deployment that is valid at run time: that refusal happens when the application is built, never reaches a
+  request, and so has no 500 response.
+* The challenge builder retains at most `MAX_SCOPE_TOKENS + 1` distinct scope names and scans at most
+  `MAX_LENGTH` characters of a `realm` or an `error_description`; `build()` refuses an over-long value before
+  copying it, so the output is written only from values of at most `MAX_LENGTH` characters each. The bound is
+  not one on the builder's input work or on the text it holds: `scope()` checks every character of the name
+  it is given and `scopes()` visits every name supplied, so that work grows with the input, and the up to 65
+  retained names are the caller's own strings, of any length, held until `build()` refuses them for their
+  joined length. The body handler's byte bound of COMMONS-17 is unchanged, its object count no longer grows
+  with the buffer count, and the price of the one growable array is a streaming peak below twice the ceiling
+  while a growth step copies it.
 * A control character in a `realm` or `error_description` past `MAX_LENGTH` characters is not reported by
   the setter; the value is refused by `build()` for its length instead.
 * The client's own parse of a malformed `Content-Length` can still surface its own exception: the JDK

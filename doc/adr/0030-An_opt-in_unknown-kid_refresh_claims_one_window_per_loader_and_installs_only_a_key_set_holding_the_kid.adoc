@@ -169,11 +169,15 @@ orphaned-configuration rule of ADR-0026.
   executor and a slow identity provider, a caller who claims a window in every window can keep the guard held
   and so defer the `maxStaleness` degradation. No production caller supplies such an executor today.
 * The order is fixed: a read-only pre-check of the window, then the guard, then the window claim. The
-  pre-check returns while the window is still claimed and takes nothing, so a miss inside a claimed window
-  never holds the guard and never makes a periodic cycle skip its fetch. Past the pre-check the guard is
-  taken before the window: a miss while the guard is already held leaves the window untouched, and a lost
+  pre-check returns while the window is still claimed and takes nothing, so a miss that reads the window as
+  claimed never holds the guard and never makes a periodic cycle skip its fetch. Past the pre-check the guard
+  is taken before the window: a miss while the guard is already held leaves the window untouched, and a lost
   window claim releases the guard it had taken, so a held guard never burns a window and a lost claim never
-  leaks a guard.
+  leaks a guard. The pre-check is a plain read and does not hold the window, so it is not a guarantee for
+  every miss: a miss that read the window as open can lose it to another miss that claims it and finishes
+  its fetch first, and that first miss then holds the guard from taking it until its window re-check
+  releases it. A periodic cycle that falls into that interval skips its fetch, and a rotation that depended
+  on it is picked up one refresh interval later, as in the first negative consequence above.
 * The hand-off releases the guard on every outcome other than an accepted task. An executor that rejects
   the fetch, or fails with any other `RuntimeException`, releases the guard in the scheduling method; the
   failure is logged at DEBUG and never thrown on the lookup that only missed. This is a deliberate boundary
@@ -247,9 +251,10 @@ hand-off: the guard is released, but the window claim is kept.
 
 === Consequences
 
-* A miss inside a claimed window no longer touches the guard, so the invented-`kid` spray no longer makes
-  periodic cycles skip their fetch. A periodic cycle still skips while a real on-demand fetch or an
-  initial-load retry holds the guard, as the decision states.
+* A miss that reads the window as claimed no longer touches the guard, so the invented-`kid` spray no longer
+  makes periodic cycles skip their fetch, apart from the one interval at the opening of a window that the
+  risk above states. A periodic cycle still skips while a real on-demand fetch or an initial-load retry holds
+  the guard, as the decision states.
 * An executor that rejects one hand-off costs the on-demand pickup of that window; the next window can be
   claimed as usual, and the periodic refresh is not affected.
 
