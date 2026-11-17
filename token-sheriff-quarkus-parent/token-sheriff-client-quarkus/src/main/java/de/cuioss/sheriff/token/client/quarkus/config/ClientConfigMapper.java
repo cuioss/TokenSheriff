@@ -290,7 +290,8 @@ public final class ClientConfigMapper {
             return optionalDuration(config, key);
         } catch (IllegalArgumentException e) {
             throw new IllegalStateException("Token-Sheriff client property '" + key
-                    + "' is not a valid duration. Set it to an ISO-8601 duration such as PT5M.", e);
+                    + "' is not a valid duration. Set it to an ISO-8601 duration such as PT5M, a number of"
+                    + " seconds such as 300, or a number with one of the units ms, s, m, h or d such as 5m.", e);
         }
     }
 
