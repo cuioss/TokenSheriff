@@ -210,36 +210,6 @@ public final class PemKeyPairLoader {
     }
 
     /**
-     * Reads the label of a {@code BEGIN} line, admitting only {@code PRIVATE KEY} and
-     * {@code PUBLIC KEY}.
-     */
-    private static String beginLabel(String line) {
-        if (!line.startsWith(BEGIN_PREFIX) || !line.endsWith(BOUNDARY_DASHES)
-                || line.length() < BEGIN_PREFIX.length() + BOUNDARY_DASHES.length()) {
-            throw new IllegalArgumentException(TEXT_OUTSIDE_BLOCK);
-        }
-        String label = line.substring(BEGIN_PREFIX.length(), line.length() - BOUNDARY_DASHES.length());
-        return switch (label) {
-            case PRIVATE_KEY_LABEL, PUBLIC_KEY_LABEL -> label;
-            case "ENCRYPTED PRIVATE KEY", "RSA PRIVATE KEY", "EC PRIVATE KEY" ->
-                throw new IllegalArgumentException(UNSUPPORTED_PRIVATE_KEY_ENCODING);
-            default -> throw new IllegalArgumentException(UNKNOWN_LABEL);
-        };
-    }
-
-    private static byte[] decodeBase64(String body) {
-        if (body.isEmpty()) {
-            throw new IllegalArgumentException(INVALID_BASE64);
-        }
-        try {
-            return Base64.getDecoder().decode(body);
-        } catch (IllegalArgumentException e) {
-            // The decoder's message names the offending character; it is not propagated.
-            throw new IllegalArgumentException(INVALID_BASE64);
-        }
-    }
-
-    /**
      * Decodes both halves with the key factory of the admitted key type the public half belongs to,
      * applies the policy and probes that the halves form one key pair.
      */
@@ -406,6 +376,36 @@ public final class PemKeyPairLoader {
                 throw new IllegalArgumentException(MISSING_BLOCK);
             }
             return new PemBlocks(privateKey, publicKey);
+        }
+
+        /**
+         * Reads the label of a {@code BEGIN} line, admitting only {@code PRIVATE KEY} and
+         * {@code PUBLIC KEY}.
+         */
+        private static String beginLabel(String line) {
+            if (!line.startsWith(BEGIN_PREFIX) || !line.endsWith(BOUNDARY_DASHES)
+                    || line.length() < BEGIN_PREFIX.length() + BOUNDARY_DASHES.length()) {
+                throw new IllegalArgumentException(TEXT_OUTSIDE_BLOCK);
+            }
+            String label = line.substring(BEGIN_PREFIX.length(), line.length() - BOUNDARY_DASHES.length());
+            return switch (label) {
+                case PRIVATE_KEY_LABEL, PUBLIC_KEY_LABEL -> label;
+                case "ENCRYPTED PRIVATE KEY", "RSA PRIVATE KEY", "EC PRIVATE KEY" ->
+                    throw new IllegalArgumentException(UNSUPPORTED_PRIVATE_KEY_ENCODING);
+                default -> throw new IllegalArgumentException(UNKNOWN_LABEL);
+            };
+        }
+
+        private static byte[] decodeBase64(String body) {
+            if (body.isEmpty()) {
+                throw new IllegalArgumentException(INVALID_BASE64);
+            }
+            try {
+                return Base64.getDecoder().decode(body);
+            } catch (IllegalArgumentException e) {
+                // The decoder's message names the offending character; it is not propagated.
+                throw new IllegalArgumentException(INVALID_BASE64);
+            }
         }
     }
 
