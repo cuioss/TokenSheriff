@@ -218,7 +218,7 @@ class BearerScopeValidationBuildStepTest {
     private static void assertMergedOverLength(List<String> violations, Class<?> beanClass) {
         assertEquals(1, violations.size(), "exactly the merge in " + beanClass.getName() + ": " + violations);
         assertTrue(violations.getFirst().startsWith("@BearerAuth on method " + LengthBase.class.getName()
-                + "#endpoint together with the class-level @BearerAuth of bean class " + beanClass.getName() + " "),
+                        + "#endpoint together with the class-level @BearerAuth of bean class " + beanClass.getName() + " "),
                 violations.getFirst());
         assertTrue(violations.getFirst().contains(OVER_LENGTH), violations.getFirst());
     }
