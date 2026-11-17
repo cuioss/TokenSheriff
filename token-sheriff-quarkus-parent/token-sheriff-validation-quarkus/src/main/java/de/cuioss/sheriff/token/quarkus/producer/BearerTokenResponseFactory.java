@@ -15,14 +15,19 @@
  */
 package de.cuioss.sheriff.token.quarkus.producer;
 
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import de.cuioss.sheriff.token.commons.http.BearerChallenge;
+import de.cuioss.tools.logging.CuiLogger;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import lombok.experimental.UtilityClass;
 
 import java.util.Collection;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
+
+import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.ERROR;
 
 /**
  * Factory class for creating HTTP responses based on bearer token validation results.
@@ -37,6 +42,9 @@ import java.util.stream.Collectors;
  *   <li>NO_TOKEN_GIVEN: 401 (Unauthorized) - Missing Bearer token</li>
  *   <li>PARSING_ERROR: 401 (Unauthorized) - Invalid or expired token</li>
  *   <li>CONSTRAINT_VIOLATION: 401 (Unauthorized) for required scopes, 403 (Forbidden) for required roles/groups</li>
+ *   <li>CONSTRAINT_VIOLATION whose required scopes no {@code insufficient_scope} challenge can carry:
+ *       500 (Internal Server Error) without a {@code WWW-Authenticate} header - a server-side
+ *       misconfiguration, see {@link #createErrorResponse(BearerTokenResult)}</li>
  * </ul>
  *
  * @since 1.0
@@ -45,7 +53,11 @@ import java.util.stream.Collectors;
 @UtilityClass
 public class BearerTokenResponseFactory {
 
+    private static final CuiLogger LOGGER = new CuiLogger(BearerTokenResponseFactory.class);
+
     static final String TOKEN_NOT_PRESENT = "Bearer token validation failed or token not present";
+
+    static final String SERVER_MISCONFIGURATION = "Bearer token authorization could not be completed due to a server configuration error";
 
     // HTTP Header Constants
     private static final String HEADER_WWW_AUTHENTICATE = "WWW-Authenticate";
@@ -78,10 +90,59 @@ public class BearerTokenResponseFactory {
 
 
     /**
+     * Creates the HTTP error response for the given bearer token validation result, answering a required scope
+     * set that no {@code insufficient_scope} challenge can carry with a defined response instead of an exception.
+     * <p>
+     * {@link #createResponse(BearerTokenResult)} refuses such a scope set with the
+     * {@link IllegalArgumentException} of {@link BearerChallenge}: a scope name outside the RFC 6749 §3.3
+     * {@code scope-token} grammar, more than {@value BearerChallenge#MAX_SCOPE_TOKENS} distinct scopes, or a
+     * challenge longer than {@value BearerChallenge#MAX_LENGTH} characters. The deployment check of
+     * {@code @BearerAuth} and {@code @BearerToken} refuses most such sets at build time, but not every one (see
+     * the {@code requiredScopes} Javadoc of both annotations). A set it misses is a server-side
+     * misconfiguration, so this method answers it with 500 (Internal Server Error), the generic body
+     * {@value #SERVER_MISCONFIGURATION}, the cache headers of every other error response and no
+     * {@code WWW-Authenticate} header, and logs {@code TokenSheriff_Q-201} once at ERROR, naming the sanitised
+     * scopes. The token is not logged.
+     *
+     * @param result The bearer token validation result containing status and context information
+     * @return Response object with appropriate HTTP status code, headers, and body
+     * @throws IllegalStateException if the result is {@code FULLY_VERIFIED}
+     */
+    static Response createErrorResponse(BearerTokenResult result) {
+        try {
+            return createResponse(result);
+        } catch (IllegalArgumentException refusal) {
+            return createUnrepresentableScopeResponse(result.getRequiredScopes(), refusal);
+        }
+    }
+
+    /**
+     * Logs a required scope set the challenge cannot carry and answers it as a server misconfiguration.
+     *
+     * @param requiredScopes the scopes the challenge refused
+     * @param refusal        the refusal of {@link BearerChallenge}
+     * @return the 500 response without a {@code WWW-Authenticate} header
+     */
+    private static Response createUnrepresentableScopeResponse(Collection<String> requiredScopes,
+            IllegalArgumentException refusal) {
+        LOGGER.error(ERROR.UNREPRESENTABLE_REQUIRED_SCOPES, requiredScopes.size(),
+                ErrorTextSanitizer.sanitize(String.join(" ", new TreeSet<>(requiredScopes))),
+                ErrorTextSanitizer.sanitize(refusal.getMessage()));
+        return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                .type(MediaType.APPLICATION_JSON)
+                .header(HEADER_CACHE_CONTROL, CACHE_CONTROL_VALUE)
+                .header(HEADER_PRAGMA, PRAGMA_VALUE)
+                .entity(createErrorEntity(SERVER_MISCONFIGURATION))
+                .build();
+    }
+
+    /**
      * Creates an appropriate HTTP response for the given bearer token validation result.
      *
      * @param result The bearer token validation result containing status and context information
      * @return Response object with appropriate HTTP status code, headers, and body
+     * @throws IllegalArgumentException if the required scopes cannot be carried by the {@code insufficient_scope}
+     *                                  challenge; {@link #createErrorResponse(BearerTokenResult)} answers that case
      */
     static Response createResponse(BearerTokenResult result) {
         return switch (result.getStatus()) {
@@ -158,13 +219,7 @@ public class BearerTokenResponseFactory {
         if (hasScopeViolation) {
             // OAuth Step-Up Authentication Challenge for insufficient scope (RFC 9470)
             // RFC 6750 Section 3.1: scope parameter contains the full scope necessary for access
-            // Scope names outside the RFC 6749 §3.3 scope-token grammar are refused by BearerChallenge
-            // (IllegalArgumentException) rather than escaped into the header
-            String wwwAuthenticate = BearerChallenge.insufficientScope()
-                    .realm(PROTECTED_RESOURCE_REALM)
-                    .errorDescription(ERROR_MSG_HIGHER_PRIVILEGES)
-                    .scopes(result.getRequiredScopes())
-                    .build();
+            String wwwAuthenticate = insufficientScopeChallenge(result.getRequiredScopes());
             return Response.status(Response.Status.UNAUTHORIZED)
                     .type(MediaType.APPLICATION_JSON)
                     .header(HEADER_WWW_AUTHENTICATE, wwwAuthenticate)
@@ -183,6 +238,33 @@ public class BearerTokenResponseFactory {
                     .entity(createErrorEntity(TOKEN_NOT_PRESENT))
                     .build();
         }
+    }
+
+    /**
+     * Builds the {@code WWW-Authenticate} value of the {@code insufficient_scope} challenge this factory sends
+     * when required scopes are missing: realm {@code protected-resource}, the fixed {@code error_description}
+     * and the given scopes, through {@link BearerChallenge}.
+     * <p>
+     * {@link BearerChallenge} refuses a scope name outside the RFC 6749 §3.3 {@code scope-token} grammar, more
+     * than {@value BearerChallenge#MAX_SCOPE_TOKENS} distinct scopes and a challenge longer than
+     * {@value BearerChallenge#MAX_LENGTH} characters, rather than escaping them into the header. The deployment
+     * check of {@code @BearerAuth} and {@code @BearerToken} builds its challenge through this method, so an
+     * annotation-declared scope set it checks is checked on exactly the value sent here. A set the deployment
+     * check does not cover (an interface default method, a concrete-typed override of a generic method) can
+     * still reach the refusal at request time; the request path answers it through
+     * {@link #createErrorResponse(BearerTokenResult)} with a defined 500 response. A direct caller passing such a
+     * set gets the {@link IllegalArgumentException}.
+     *
+     * @param requiredScopes the scopes the challenge names
+     * @return the {@code WWW-Authenticate} field value
+     * @throws IllegalArgumentException if {@link BearerChallenge} refuses the scopes or the resulting challenge
+     */
+    public static String insufficientScopeChallenge(Collection<String> requiredScopes) {
+        return BearerChallenge.insufficientScope()
+                .realm(PROTECTED_RESOURCE_REALM)
+                .errorDescription(ERROR_MSG_HIGHER_PRIVILEGES)
+                .scopes(requiredScopes)
+                .build();
     }
 
     /**

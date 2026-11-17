@@ -15,6 +15,10 @@
  */
 package de.cuioss.sheriff.token.quarkus.deployment;
 
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
+import de.cuioss.sheriff.token.commons.http.BearerChallenge;
+import de.cuioss.sheriff.token.quarkus.annotation.BearerAuth;
+import de.cuioss.sheriff.token.quarkus.annotation.BearerToken;
 import de.cuioss.sheriff.token.quarkus.config.AccessLogFilterConfigResolver;
 import de.cuioss.sheriff.token.quarkus.error.ProblemDetailExceptionMapper;
 import de.cuioss.sheriff.token.quarkus.health.JwksEndpointHealthCheck;
@@ -28,6 +32,7 @@ import de.cuioss.sheriff.token.quarkus.mapper.keycloak.KeycloakRolesMapperBean;
 import de.cuioss.sheriff.token.quarkus.metrics.JwtMetricsCollector;
 import de.cuioss.sheriff.token.quarkus.observability.ObservedValidatorResolver;
 import de.cuioss.sheriff.token.quarkus.producer.BearerTokenProducer;
+import de.cuioss.sheriff.token.quarkus.producer.BearerTokenResponseFactory;
 import de.cuioss.sheriff.token.quarkus.producer.JsonWebTokenAdapter;
 import de.cuioss.sheriff.token.quarkus.producer.TokenValidatorProducer;
 import de.cuioss.sheriff.token.quarkus.producer.TokenValidatorStartupInitializer;
@@ -42,9 +47,12 @@ import de.cuioss.tools.logging.LogRecordModel;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
+import io.quarkus.arc.deployment.ValidationPhaseBuildItem;
+import io.quarkus.arc.deployment.ValidationPhaseBuildItem.ValidationErrorBuildItem;
 import io.quarkus.deployment.IsDevelopment;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
@@ -52,8 +60,24 @@ import io.quarkus.devui.spi.JsonRPCProvidersBuildItem;
 import io.quarkus.devui.spi.page.CardPageBuildItem;
 import io.quarkus.devui.spi.page.Page;
 import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
+import jakarta.enterprise.inject.spi.DeploymentException;
 import org.eclipse.microprofile.jwt.JsonWebToken;
+import org.jboss.jandex.AnnotationInstance;
+import org.jboss.jandex.AnnotationTarget;
+import org.jboss.jandex.AnnotationValue;
+import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
+import org.jboss.jandex.IndexView;
+import org.jboss.jandex.MethodInfo;
+import org.jboss.jandex.MethodParameterInfo;
+
+import java.lang.reflect.Modifier;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Processor for the Token-Sheriff Quarkus extension.
@@ -91,6 +115,12 @@ public class TokenSheriffProcessor {
             .prefix("TokenSheriff_Q_D")
             .identifier(1)
             .build();
+
+    private static final DotName BEARER_AUTH = DotName.createSimple(BearerAuth.class.getName());
+
+    private static final DotName BEARER_TOKEN = DotName.createSimple(BearerToken.class.getName());
+
+    private static final String REQUIRED_SCOPES = "requiredScopes";
 
     /**
      * Register the Token-Sheriff feature.
@@ -243,6 +273,195 @@ public class TokenSheriffProcessor {
         ));
     }
 
+
+    /**
+     * Refuses the deployment when an annotation declares required scopes that cannot be sent in an RFC 6750
+     * {@code insufficient_scope} challenge.
+     * <p>
+     * {@link BearerTokenResponseFactory#insufficientScopeChallenge} builds that challenge through
+     * {@link BearerChallenge}, which refuses a scope name outside the RFC 6749 §3.3 {@code scope-token}
+     * grammar, more than {@value BearerChallenge#MAX_SCOPE_TOKENS} distinct scopes and a challenge longer than
+     * {@value BearerChallenge#MAX_LENGTH} characters once the realm and the {@code error_description} are
+     * added. Without this step such an annotation would surface as an unhandled
+     * {@link IllegalArgumentException} on the first request that misses a scope; with it, the
+     * misconfiguration fails the deployment, with one error per refused scope set naming its declaring class
+     * and member. Class-level and method-level {@code @BearerAuth} (merged per bean class as the interceptor
+     * merges them) and every {@code @BearerToken} injection point are checked.
+     *
+     * @param validationPhase  orders this step into the ArC validation phase; not otherwise read
+     * @param combinedIndex    the application's combined Jandex index
+     * @param validationErrors producer for the deployment errors, one per refused scope set
+     */
+    @BuildStep
+    public void validateAnnotationScopes(ValidationPhaseBuildItem validationPhase, CombinedIndexBuildItem combinedIndex,
+            BuildProducer<ValidationErrorBuildItem> validationErrors) {
+        List<String> violations = findScopeViolations(combinedIndex.getIndex());
+        if (!violations.isEmpty()) {
+            validationErrors.produce(new ValidationErrorBuildItem(violations.stream()
+                    .map(DeploymentException::new)
+                    .toArray(Throwable[]::new)));
+        }
+    }
+
+    /**
+     * Checks the required scopes of every {@link BearerAuth} and {@link BearerToken} annotation in the index.
+     * <p>
+     * A class-level {@code @BearerAuth} is checked on its own. A method-level {@code @BearerAuth} is checked
+     * once per bean class that runs the method, together with the class-level {@code @BearerAuth} of that bean
+     * class, as the union {@code BearerTokenInterceptor} enforces (ADR-0024): the interceptor reads the
+     * class-level annotation from the bean class, not from the class declaring the method, and
+     * {@code @BearerAuth} is not {@code @Inherited}, so an inherited method is merged with the subclass's own
+     * annotation only. A {@code @BearerToken} on a field, a method, a method parameter or a producer parameter
+     * is checked on its own. Each scope set is checked by building the challenge through
+     * {@link BearerTokenResponseFactory#insufficientScopeChallenge}, so the rule and the length bound are
+     * exactly the ones applied to the challenge that is sent.
+     * <p>
+     * Each message names the declaring class and member, for a merged method also the bean class whose
+     * class-level annotation was merged, and the reason. A scope name outside the grammar is rendered through
+     * {@link ErrorTextSanitizer#sanitize(String)}, never raw.
+     *
+     * @param index the index to scan
+     * @return one message per refused scope set, sorted; empty when every annotation is valid
+     */
+    static List<String> findScopeViolations(IndexView index) {
+        Set<String> violations = new TreeSet<>();
+        for (AnnotationInstance bearerAuth : index.getAnnotations(BEARER_AUTH)) {
+            AnnotationTarget target = bearerAuth.target();
+            if (target.kind() == AnnotationTarget.Kind.METHOD) {
+                checkMethodLevel(index, target.asMethod(), requiredScopes(bearerAuth), violations);
+            } else {
+                refusal(requiredScopes(bearerAuth)).ifPresent(reason -> violations.add(
+                        declaresMessage("@BearerAuth", target, reason)));
+            }
+        }
+        for (AnnotationInstance bearerToken : index.getAnnotations(BEARER_TOKEN)) {
+            refusal(requiredScopes(bearerToken)).ifPresent(reason -> violations.add(
+                    declaresMessage("@BearerToken", bearerToken.target(), reason)));
+        }
+        return new ArrayList<>(violations);
+    }
+
+    /**
+     * Checks a method-level {@code @BearerAuth} once per bean class that runs the method, merged with that bean
+     * class's own class-level {@code @BearerAuth} as {@code BearerTokenInterceptor} merges them.
+     * <p>
+     * A bean class runs the method when it is the declaring class or a subclass of it that neither it nor a
+     * class between it and the declaring class overrides; abstract classes and interfaces are no bean classes.
+     * When no such bean class is in the index, the method's own scopes are checked alone. A bean class whose
+     * class-level annotation is refused on its own is already reported at that class, so for it only the
+     * method's own scopes are checked: a bad class-level scope is never reported as the method's.
+     */
+    private static void checkMethodLevel(IndexView index, MethodInfo method, Set<String> methodScopes,
+            Set<String> violations) {
+        List<ClassInfo> beanClasses = beanClassesRunning(index, method);
+        boolean checkedAlone = beanClasses.isEmpty();
+        for (ClassInfo beanClass : beanClasses) {
+            AnnotationInstance classLevel = beanClass.declaredAnnotation(BEARER_AUTH);
+            Set<String> classScopes = classLevel == null ? Set.of() : requiredScopes(classLevel);
+            if (classScopes.isEmpty() || refusal(classScopes).isPresent()) {
+                checkedAlone = true;
+                continue;
+            }
+            Set<String> union = new TreeSet<>(methodScopes);
+            union.addAll(classScopes);
+            refusal(union).ifPresent(reason -> violations.add("@BearerAuth on " + describe(method)
+                    + " together with the class-level @BearerAuth of bean class " + beanClass.name()
+                    + " requires scopes that an insufficient_scope challenge cannot carry: " + reason));
+        }
+        if (checkedAlone) {
+            refusal(methodScopes).ifPresent(reason -> violations.add(declaresMessage("@BearerAuth", method,
+                    reason)));
+        }
+    }
+
+    private static List<ClassInfo> beanClassesRunning(IndexView index, MethodInfo method) {
+        ClassInfo declaringClass = method.declaringClass();
+        List<ClassInfo> beanClasses = new ArrayList<>();
+        if (isBeanClassCandidate(declaringClass)) {
+            beanClasses.add(declaringClass);
+        }
+        if (declaringClass.isInterface()) {
+            return beanClasses;
+        }
+        for (ClassInfo subclass : index.getAllKnownSubclasses(declaringClass.name())) {
+            if (isBeanClassCandidate(subclass) && inheritsUnchanged(index, subclass, method)) {
+                beanClasses.add(subclass);
+            }
+        }
+        return beanClasses;
+    }
+
+    private static boolean isBeanClassCandidate(ClassInfo classInfo) {
+        return !classInfo.isInterface() && !Modifier.isAbstract(classInfo.flags());
+    }
+
+    private static boolean inheritsUnchanged(IndexView index, ClassInfo subclass, MethodInfo method) {
+        DotName declaringClass = method.declaringClass().name();
+        ClassInfo current = subclass;
+        while (current != null && !current.name().equals(declaringClass)) {
+            if (current.method(method.name(), method.parameterTypes()) != null) {
+                return false;
+            }
+            DotName superName = current.superName();
+            current = superName == null ? null : index.getClassByName(superName);
+        }
+        return current != null;
+    }
+
+    private static Set<String> requiredScopes(AnnotationInstance annotation) {
+        AnnotationValue value = annotation.value(REQUIRED_SCOPES);
+        return value == null ? Set.of() : new TreeSet<>(Arrays.asList(value.asStringArray()));
+    }
+
+    private static String declaresMessage(String annotation, AnnotationTarget target, String reason) {
+        return annotation + " on " + describe(target)
+                + " declares requiredScopes that an insufficient_scope challenge cannot carry: " + reason;
+    }
+
+    /**
+     * Builds the challenge the producer sends for the given scopes, through
+     * {@link BearerTokenResponseFactory#insufficientScopeChallenge}, so the length bound is checked on the
+     * value that carries the realm and the {@code error_description} as well.
+     *
+     * @return the reason the challenge is refused, or empty when it builds
+     */
+    private static Optional<String> refusal(Set<String> scopes) {
+        try {
+            BearerTokenResponseFactory.insufficientScopeChallenge(scopes);
+            return Optional.empty();
+        } catch (IllegalArgumentException e) {
+            return Optional.of(reason(scopes, e));
+        }
+    }
+
+    private static String reason(Set<String> scopes, IllegalArgumentException refusal) {
+        for (String scope : scopes) {
+            try {
+                BearerChallenge.insufficientScope().scope(scope);
+            } catch (IllegalArgumentException e) {
+                return "the scope name '" + ErrorTextSanitizer.sanitize(scope)
+                        + "' is not an RFC 6749 section 3.3 scope-token";
+            }
+        }
+        return refusal.getMessage();
+    }
+
+    private static String describe(AnnotationTarget target) {
+        return switch (target.kind()) {
+            case CLASS -> "class " + target.asClass().name();
+            case METHOD -> "method " + methodName(target.asMethod());
+            case FIELD -> "field " + target.asField().declaringClass().name() + "#" + target.asField().name();
+            case METHOD_PARAMETER -> {
+                MethodParameterInfo parameter = target.asMethodParameter();
+                yield "parameter " + parameter.position() + " of method " + methodName(parameter.method());
+            }
+            default -> target.toString();
+        };
+    }
+
+    private static String methodName(MethodInfo method) {
+        return method.declaringClass().name() + "#" + method.name();
+    }
 
     /**
      * Create DevUI card page for JWT validation monitoring and debugging.

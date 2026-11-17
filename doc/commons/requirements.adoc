@@ -149,15 +149,31 @@ exhaust memory or block a caller indefinitely.
 
 The response-size limit of xref:#COMMONS-4[COMMONS-4] MUST be enforced by one public handler,
 `commons.transport.BoundedBodyHandler`, for the validation-side discovery and JWKS reads and for the
-client's back-channel reads alike. It counts bytes while the body streams, never buffers more than the
-ceiling plus the one chunk in flight while it streams (assembling and, for the string variant, decoding the
-result at completion peaks at a small constant multiple of the ceiling), and offers two policies:
+client's back-channel reads alike. It counts bytes while the body streams, never accepts more than the
+ceiling into the assembled body, and offers two policies:
 
 * *Fail* — a response advertising a `Content-Length` above the ceiling is refused before a byte of its
   body is read; a body crossing the ceiling while streaming is refused at the crossing. Both fail the
   read with an `IOException` whose message names the ceiling and its `boundOrigin`.
 * *Truncate* — the body is read up to the ceiling and the result carries exactly the first ceiling
   bytes with an explicit truncation signal.
+
+The handler bounds its own work as well as the bytes: the body read so far is kept in one array that
+grows by doubling and never beyond the ceiling, so the objects a body costs grow with the logarithm of its
+size, not with the number of buffers it arrives in, and an empty buffer costs nothing. During a growth
+step the old and the new array are both live, so the memory held while the body streams peaks below twice
+the ceiling plus the one chunk in flight; assembling and, for the string variant, decoding the result at
+completion peaks at a small constant multiple of the ceiling. Under the fail policy, when the handler
+observes a `Content-Length` header that is not a valid number, it cancels the subscription without
+requesting a byte, and the body future fails with an `IOException` carrying a fixed message that does not
+echo the header value.
+
+That guarantee is the handler's own. Whether the surrounding client reaches the handler, and whether it
+parses the header itself first, is the client's behaviour: the JDK HTTP/1.1 client (observed on JDK 25)
+parses `Content-Length` itself after the handler returned, so there the caller of `HttpClient.send`
+receives the JDK's own `IllegalArgumentException` (cause `NumberFormatException`) carrying the raw header
+value, and the handler's fixed message is not delivered. A caller therefore treats the message of any
+exception that comes out of an HTTP exchange as remote content and sanitises it before logging.
 
 The ceiling is accepted from 0 to `Integer.MAX_VALUE - 8` bytes; any other value is refused when the
 handler is created. The handler logs nothing. See

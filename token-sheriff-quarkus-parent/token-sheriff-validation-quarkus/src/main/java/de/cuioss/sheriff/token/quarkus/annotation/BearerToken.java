@@ -131,6 +131,20 @@ public @interface BearerToken {
      * <p>
      * All listed scopes must be present in the token's scope claim for successful validation.
      * If this array is empty, no scope validation is performed.
+     * <p>
+     * Every name must be an RFC 6749 §3.3 {@code scope-token}: at least one character, each in
+     * {@code %x21 / %x23-5B / %x5D-7E} (printable ASCII except space, {@code "} and {@code \}). The set may
+     * hold at most 64 distinct scopes, and the {@code insufficient_scope} challenge sent for it, realm and
+     * {@code error_description} included, may be at most 8192 characters long; these are the bounds of the
+     * challenge. A violation of any of the three rules fails the deployment.
+     * <p>
+     * Each {@code @BearerToken} is checked on its own. The deployment check has two known limits, accepted as
+     * such, both on the merging of {@link BearerAuth}: an interface default method is checked without the
+     * class-level scopes of the implementing bean class, and a concrete-typed override of a generic method is
+     * not recognised as an override (see {@link BearerAuth#requiredScopes()}). Should a scope set the challenge
+     * cannot carry reach the request path all the same, {@code createErrorResponse()} answers it with 500
+     * (Internal Server Error) without a {@code WWW-Authenticate} header and logs the misconfiguration at ERROR
+     * ({@code TokenSheriff_Q-201}) instead of throwing.
      *
      * @return array of required scope names
      */

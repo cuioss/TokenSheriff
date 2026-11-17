@@ -228,7 +228,7 @@ public final class TokenSheriffQuarkusLogMessages {
     }
 
     /**
-     * ERROR level log messages (200).
+     * ERROR level log messages (200-201).
      */
     @UtilityClass
     public static final class ERROR {
@@ -237,6 +237,12 @@ public final class TokenSheriffQuarkusLogMessages {
                 .template("Vertx HttpServerRequest context is unavailable - no active request context found")
                 .prefix(PREFIX)
                 .identifier(200)
+                .build();
+
+        public static final LogRecord UNREPRESENTABLE_REQUIRED_SCOPES = LogRecordModel.builder()
+                .template("Required scopes cannot be carried by an insufficient_scope challenge, answering 500 (server misconfiguration): %s scope(s) '%s': %s")
+                .prefix(PREFIX)
+                .identifier(201)
                 .build();
     }
 }

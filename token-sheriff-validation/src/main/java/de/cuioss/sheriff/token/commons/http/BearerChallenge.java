@@ -49,6 +49,16 @@ import java.util.TreeSet;
  *       beyond either is refused with {@link IllegalArgumentException} when it is built.</li>
  * </ul>
  * <p>
+ * The builder bounds its own work on hostile input as well. It holds at most
+ * {@value #MAX_SCOPE_TOKENS}{@code + 1} distinct scopes: every further name is still checked against the
+ * grammar but not kept, since one scope past the bound already makes {@link Builder#build()} refuse. It
+ * scans at most {@value #MAX_LENGTH} characters of a {@code realm} or {@code error_description}, and
+ * {@code build()} refuses a value longer than {@value #MAX_LENGTH} characters before copying it - a
+ * {@code realm}, an {@code error_description}, or a scope text whose space-joined length, computed without
+ * joining it, exceeds the bound. A control
+ * character past that point is therefore not reported by the setter; the value is refused by
+ * {@code build()} for its length instead.
+ * <p>
  * The class is framework-neutral (it depends on {@code java.util} and JSpecify only). The static entry
  * point is stateless and thread-safe; a {@link Builder} is a mutable, single-use object that must not be
  * shared between threads.
@@ -116,8 +126,8 @@ public final class BearerChallenge {
         /**
          * @param realm the protection realm, or {@code null} to omit the attribute
          * @return this builder
-         * @throws IllegalArgumentException if {@code realm} holds CR, LF, NUL, another C0 control
-         *                                  character or DEL
+         * @throws IllegalArgumentException if the first {@value BearerChallenge#MAX_LENGTH} characters of
+         *                                  {@code realm} hold CR, LF, NUL, another C0 control character or DEL
          */
         public Builder realm(@Nullable String realm) {
             this.realm = checkQuotable(realm, "realm");
@@ -128,7 +138,8 @@ public final class BearerChallenge {
          * @param errorDescription the human-readable {@code error_description}, or {@code null} to omit the
          *                         attribute
          * @return this builder
-         * @throws IllegalArgumentException if {@code errorDescription} holds CR, LF, NUL, another C0 control
+         * @throws IllegalArgumentException if the first {@value BearerChallenge#MAX_LENGTH} characters of
+         *                                  {@code errorDescription} hold CR, LF, NUL, another C0 control
          *                                  character or DEL
          */
         public Builder errorDescription(@Nullable String errorDescription) {
@@ -149,7 +160,11 @@ public final class BearerChallenge {
                 throw new IllegalArgumentException(
                         "Scope name is not an RFC 6749 section 3.3 scope-token (length " + scope.length() + ")");
             }
-            scopes.add(scope);
+            // One distinct scope past the bound is enough for build() to refuse; holding more would only
+            // let a hostile caller grow the set without limit before the refusal.
+            if (scopes.size() <= MAX_SCOPE_TOKENS) {
+                scopes.add(scope);
+            }
             return this;
         }
 
@@ -179,7 +194,15 @@ public final class BearerChallenge {
         public String build() {
             if (scopes.size() > MAX_SCOPE_TOKENS) {
                 throw new IllegalArgumentException("A challenge carries at most " + MAX_SCOPE_TOKENS
-                        + " scope tokens, got " + scopes.size());
+                        + " scope tokens, got more than " + MAX_SCOPE_TOKENS);
+            }
+            // The quoted values are only ever longer once written, so a value longer than the bound on its
+            // own - the realm, the error_description or the space-joined scope text - is refused before it
+            // is copied.
+            if (length(realm) > MAX_LENGTH || length(errorDescription) > MAX_LENGTH
+                    || scopeTextLength() > MAX_LENGTH) {
+                throw new IllegalArgumentException("A challenge is at most " + MAX_LENGTH
+                        + " characters long, got more than " + MAX_LENGTH);
             }
             StringBuilder value = new StringBuilder(SCHEME).append(' ');
             if (realm != null) {
@@ -199,11 +222,36 @@ public final class BearerChallenge {
             return value.toString();
         }
 
+        private static int length(@Nullable String value) {
+            return value == null ? 0 : value.length();
+        }
+
+        /**
+         * @return the length of the space-joined scope text, computed without building it; a {@code long} so
+         *         that the sum of up to {@value BearerChallenge#MAX_SCOPE_TOKENS} very long names cannot
+         *         overflow
+         */
+        private long scopeTextLength() {
+            if (scopes.isEmpty()) {
+                return 0;
+            }
+            long total = scopes.size() - 1L;
+            for (String scope : scopes) {
+                total += scope.length();
+            }
+            return total;
+        }
+
+        /**
+         * Checks the characters of a quoted value. Only the first {@value BearerChallenge#MAX_LENGTH}
+         * characters are scanned: a longer value is refused by {@link #build()} whatever it holds.
+         */
         private static @Nullable String checkQuotable(@Nullable String value, String attribute) {
             if (value == null) {
                 return null;
             }
-            for (int i = 0; i < value.length(); i++) {
+            int scanned = Math.min(value.length(), MAX_LENGTH);
+            for (int i = 0; i < scanned; i++) {
                 char c = value.charAt(i);
                 if (c < 0x20 || c == DELETE) {
                     throw new IllegalArgumentException(

@@ -233,7 +233,17 @@ periodic refresh. With `unknownKidRefreshWindow(Duration)` set:
   forged key ID, is logged at DEBUG; every other discard is logged as `TokenSheriff-173`
   (`UNKNOWN_KID_REFRESH_DISCARDED`);
 * at most one such fetch runs per window and per loader, whatever the request rate and the number of
-  distinct key IDs presented; further misses inside the window log at DEBUG only.
+  distinct key IDs presented; further misses inside the window log at DEBUG only;
+* a miss first reads the window, without taking anything, and returns while the window is still claimed;
+  only then does it take the in-flight guard and claim the window, in that order. A miss that reads the
+  window as claimed therefore never holds the in-flight guard and never makes a periodic cycle skip its
+  fetch; a miss while a fetch is in flight leaves the window untouched, and a lost window claim releases the
+  guard it had taken. The read does not hold the window, so a miss that read it as open can lose it to
+  another miss that claims it first; the first miss then holds the guard from taking it until its second
+  window check releases it, and a periodic cycle that falls into that interval skips its fetch;
+* when the refresh executor rejects the scheduled fetch, the in-flight guard is released and the failure is
+  logged at DEBUG, but the window stays claimed: a failed hand-off burns the window, and the next on-demand
+  fetch can be claimed only in the next window.
 
 The lookup is reachable before any signature check, so an attacker presenting an invented key ID consumes
 the window. An attacker who does so in every window defers the on-demand pickup of a legitimate rotation

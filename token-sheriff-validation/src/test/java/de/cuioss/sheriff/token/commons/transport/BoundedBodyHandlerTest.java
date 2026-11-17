@@ -23,6 +23,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -31,6 +32,8 @@ import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -38,8 +41,9 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Tests the fail policy of {@link BoundedBodyHandler}: one named case per row of the pinned-difference
  * table that replaced the validation {@code BoundedBodyHandlers} and the client
- * {@code BoundedContentBodyHandler} (ADR-0031), then the fail-policy edges. The truncate policy lives in
- * {@link BoundedBodyHandlerTruncateTest}.
+ * {@code BoundedContentBodyHandler} (ADR-0031), then the fail-policy edges, then hostile input (a body
+ * of one-byte and empty buffers under both policies, an unparsable {@code Content-Length}). The other
+ * truncate-policy cases live in {@link BoundedBodyHandlerTruncateTest}.
  */
 @DisplayName("BoundedBodyHandler fail policy")
 class BoundedBodyHandlerTest {
@@ -316,6 +320,111 @@ class BoundedBodyHandlerTest {
                     () -> assertEquals("BoundedBody[length=6, truncated=false]", body.toString(),
                             "toString never shows the content"),
                     () -> assertThrows(NullPointerException.class, () -> body.asString(null)));
+        }
+    }
+
+    @Nested
+    @DisplayName("Hostile input")
+    class HostileInput {
+
+        private static final int CEILING = 3000;
+
+        /** Feeds {@code body} one byte per buffer, with an empty buffer before every byte. */
+        private static void feedOneByteAndEmpty(ManualDrive<?> drive, byte[] body) {
+            for (byte b : body) {
+                drive.feed(new byte[0]);
+                drive.feed(new byte[]{b});
+            }
+            drive.feed(new byte[0]);
+        }
+
+        private static byte[] pattern(int length) {
+            byte[] body = new byte[length];
+            for (int i = 0; i < length; i++) {
+                body[i] = (byte) ('a' + i % 26);
+            }
+            return body;
+        }
+
+        @ParameterizedTest(name = "policy {0}")
+        @EnumSource(OverLimitPolicy.class)
+        @DisplayName("should read a body of one-byte and empty buffers as the same body in one buffer")
+        void shouldReadOneByteAndEmptyBuffers(OverLimitPolicy policy) {
+            byte[] body = pattern(CEILING);
+            ManualDrive<BoundedBody> fragmented = BoundedBodyHandlerTestSupport.subscribe(
+                    BoundedBodyHandler.ofBytes(CEILING, policy, ORIGIN), null);
+            feedOneByteAndEmpty(fragmented, body);
+            fragmented.complete();
+            ManualDrive<BoundedBody> whole = BoundedBodyHandlerTestSupport.subscribe(
+                    BoundedBodyHandler.ofBytes(CEILING, policy, ORIGIN), null);
+            whole.feed(body.clone());
+            whole.complete();
+
+            BoundedBody fragmentedBody = fragmented.body().join();
+            assertAll("Fragmented body at the ceiling",
+                    () -> assertArrayEquals(body, fragmentedBody.bytes(), "the content is unchanged"),
+                    () -> assertFalse(fragmentedBody.truncated(), "a body of exactly the ceiling is not truncated"),
+                    () -> assertFalse(fragmented.cancelled(), "a body of exactly the ceiling is not cancelled"),
+                    () -> assertArrayEquals(whole.body().join().bytes(), fragmentedBody.bytes(),
+                            "control: the same bytes in one buffer give the same body"));
+        }
+
+        @Test
+        @DisplayName("should keep the ceiling for one-byte buffers under the fail policy")
+        void shouldFailOneByteBuffersPastCeiling() {
+            ManualDrive<BoundedBody> drive = BoundedBodyHandlerTestSupport.subscribe(
+                    BoundedBodyHandler.ofBytes(CEILING, OverLimitPolicy.FAIL, ORIGIN), null);
+            feedOneByteAndEmpty(drive, pattern(CEILING + 1));
+            drive.complete();
+
+            assertAll("One byte past the ceiling",
+                    () -> assertTrue(drive.cancelled(), "the byte past the ceiling cancels the subscription"),
+                    () -> assertOverLimit(drive.failure(), CEILING));
+        }
+
+        @Test
+        @DisplayName("should keep the ceiling for one-byte buffers under the truncate policy")
+        void shouldTruncateOneByteBuffersAtCeiling() {
+            byte[] body = pattern(CEILING + 1);
+            ManualDrive<BoundedBody> drive = BoundedBodyHandlerTestSupport.subscribe(
+                    BoundedBodyHandler.ofBytes(CEILING, OverLimitPolicy.TRUNCATE, ORIGIN), null);
+            feedOneByteAndEmpty(drive, body);
+            drive.complete();
+
+            BoundedBody truncated = drive.body().join();
+            assertAll("One byte past the ceiling",
+                    () -> assertTrue(truncated.truncated(), "the byte past the ceiling is dropped"),
+                    () -> assertArrayEquals(Arrays.copyOf(body, CEILING), truncated.bytes(),
+                            "exactly the bytes up to the ceiling are kept"),
+                    () -> assertTrue(drive.cancelled(), "the crossing cancels the subscription"));
+        }
+
+        @ParameterizedTest(name = "Content-Length \"{0}\"")
+        @ValueSource(strings = {"not-a-number", "12abc", "99999999999999999999999"})
+        @DisplayName("should fail a non-numeric Content-Length with an IOException before reading a byte")
+        void shouldFailNonNumericContentLength(String contentLength) {
+            ManualDrive<String> drive = BoundedBodyHandlerTestSupport.subscribeTo(utf8(10),
+                    BoundedBodyHandlerTestSupport.responseInfoWithHeaders(
+                            Map.of("Content-Length", List.of(contentLength))));
+
+            IOException failure = assertInstanceOf(IOException.class, drive.failure(),
+                    "an unparsable length is a normal failure, not an escaping NumberFormatException");
+            assertAll("Unparsable Content-Length",
+                    () -> assertEquals("Response Content-Length header is not a valid number", failure.getMessage()),
+                    () -> assertFalse(failure.getMessage().contains(contentLength), "the header value is not echoed"),
+                    () -> assertTrue(drive.cancelled(), "the subscription is cancelled in onSubscribe"),
+                    () -> assertFalse(drive.requested(), "no byte is ever requested"));
+        }
+
+        @Test
+        @DisplayName("control: a numeric Content-Length within the ceiling reads the body")
+        void shouldReadNumericContentLength() {
+            ManualDrive<String> drive = BoundedBodyHandlerTestSupport.subscribeTo(utf8(10),
+                    BoundedBodyHandlerTestSupport.responseInfoWithHeaders(Map.of("Content-Length", List.of("10"))));
+            drive.feed(bytes(10));
+            drive.complete();
+
+            assertEquals("a".repeat(10), drive.body().join(), "a valid header is read as before");
         }
     }
 }

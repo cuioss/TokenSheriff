@@ -632,7 +632,14 @@ public class IssuerConfigResolver {
      * The builder is only called for an explicit {@code true}, so the default path keeps the builder
      * default (off). The value must be {@code true} or {@code false}, ignoring case and surrounding
      * whitespace; anything else fails startup with the property named rather than being read as
-     * {@code false}. The combination with a refresh interval of {@code 0} is validated by the builder.
+     * {@code false}.
+     * </p>
+     * <p>
+     * The retries run on the loader's background refresh executor, so {@code true} combined with a
+     * configured refresh interval of {@code 0} is refused at startup: {@link HttpJwksLoaderConfig}'s
+     * builder rejects that combination with an {@link IllegalArgumentException} when
+     * {@link #createHttpJwksLoaderConfig} builds the configuration (ADR-0030, ADR-0026). {@code false} is
+     * accepted with any refresh interval, including {@code 0}, because it never reaches the builder.
      * </p>
      *
      * @throws IllegalStateException if the configured value is not a boolean

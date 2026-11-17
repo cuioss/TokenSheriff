@@ -169,4 +169,23 @@ class InsufficientScopeChallengeRoundTripTest {
                         .scopes(atBound).build()).orElseThrow().scopes().size(),
                 "control: 64 scopes round-trip");
     }
+
+    @Test
+    @DisplayName("A challenge of exactly the length bound round-trips; one character more is refused by both ends")
+    void shouldAgreeOnHeaderLengthBound() {
+        int overhead = BearerChallenge.insufficientScope().scope("s").build().length() - 1;
+        String atBoundScope = "s".repeat(BearerChallenge.MAX_LENGTH - overhead);
+        String atBound = BearerChallenge.insufficientScope().scope(atBoundScope).build();
+        BearerChallenge.Builder overBound = BearerChallenge.insufficientScope().scope(atBoundScope + "s");
+        String overBoundHeader = "Bearer error=\"insufficient_scope\", scope=\"" + atBoundScope + "s\"";
+
+        assertEquals(BearerChallengeParams.MAX_HEADER_LENGTH, BearerChallenge.MAX_LENGTH,
+                "the builder and the parser share one header length bound");
+        assertEquals(BearerChallenge.MAX_LENGTH, atBound.length(), "the built challenge is exactly the bound long");
+        assertEquals(List.of(atBoundScope), List.copyOf(parser.parse(atBound).orElseThrow().scopes()),
+                "a challenge of exactly the bound parses back to its scope");
+        assertThrows(IllegalArgumentException.class, overBound::build, "the builder refuses one character more");
+        assertEquals(BearerChallenge.MAX_LENGTH + 1, overBoundHeader.length());
+        assertTrue(parser.parse(overBoundHeader).isEmpty(), "the parser refuses one character more");
+    }
 }

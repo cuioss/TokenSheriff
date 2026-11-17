@@ -189,12 +189,13 @@ This section documents log messages specific to the Quarkus integration module (
 |TokenSheriff_Q-104 |OBSERVABILITY |Multiple external TokenValidator beans found (%s) - unable to select one, reporting NOT_CONFIGURED |Indicates that the issuer property namespace is unpopulated and several external TokenValidator beans are present, so the observability beans cannot select one and report NOT_CONFIGURED
 |===
 
-=== Quarkus ERROR Level (200)
+=== Quarkus ERROR Level (200-201)
 
 [cols="1,1,2,2", options="header"]
 |===
 |ID |Component |Message |Description
 |TokenSheriff_Q-200 |VERTX |Vertx HttpServerRequest context is unavailable - no active request context found |Indicates that the Vertx HTTP server request context could not be resolved
+|TokenSheriff_Q-201 |BEARER |Required scopes cannot be carried by an insufficient_scope challenge, answering 500 (server misconfiguration): %s scope(s) '%s': %s |Logged once per refused response when a required scope set reaches the request path that no RFC 6750 `insufficient_scope` challenge can carry (a name outside the RFC 6749 §3.3 `scope-token` grammar, more than 64 distinct scopes, or a challenge longer than 8192 characters) and that the deployment check of `@BearerAuth` / `@BearerToken` did not refuse: an interface default method or a concrete-typed override of a generic method, both accepted known limits of that check. The request is answered with 500 and no `WWW-Authenticate` header instead of an unhandled exception. Names the scope count, the sorted scopes and the refusal reason, each sanitised against log injection (CWE-117); no token is logged
 |===
 
 == Client Engine Messages

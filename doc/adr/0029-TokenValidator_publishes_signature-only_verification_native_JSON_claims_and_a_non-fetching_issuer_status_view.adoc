@@ -9,7 +9,7 @@
 // Progressive-disclosure metadata block (see manage-adr SKILL.md → "ADR Template
 // Structure"). Read by `manage-adr.py scan` so a caller can assess an ADR's
 // relevance without reading the full file. List fields are comma-separated.
-// summary: TokenValidator gains three additive, opt-in seams - verifySignature returning a SignatureVerifiedToken outside both sealed token hierarchies, a validator-owned native-JSON claim reader, and a read-only non-fetching IssuerStatusView list - plus an opt-in external-validator report in the JWKS readiness probe and a token-type-free back-channel logout-token validator with a bounded fail-closed replay guard; the three create methods and every shipped probe keep their default behaviour
+// summary: TokenValidator gains three additive, opt-in seams - verifySignature returning a SignatureVerifiedToken outside both sealed token hierarchies, a validator-owned native-JSON claim reader, and a read-only non-fetching IssuerStatusView list - plus an opt-in external-validator report in the JWKS readiness probe and a token-type-free back-channel logout-token validator with a bounded fail-closed replay guard; the three create methods and every shipped probe keep their default behaviour; amendments refuse an exp exactly now, make the replay guard clockless, and bound iat / exp reading and the freshness window
 // tags: public-api, signature, claims, observability, health-checks, back-channel-logout, replay-protection, fail-closed
 // affects: token-sheriff-validation, token-sheriff-validation-quarkus
 // supersedes:
@@ -196,34 +196,9 @@ The validator's design:
   beyond is refused; an `exp` exactly now is refused and one second later is accepted, as RFC 7519 §4.1.4
   requires the current time to be before `exp`.
 
-==== Revision: `exp` exactly now, and the guard's time source
-
-The decision as first accepted differed in two points, both revised before release in response to review of
-the change that introduced the package:
-
-* It accepted an `exp` exactly now and refused one second earlier. That boundary contradicted RFC 7519 §4.1.4
-  ("the current date/time MUST be before the expiration date/time") and the verdict pipeline's own
-  `ValidationContext.isExpired`, which already refuses equality. The decision is changed to refuse an `exp`
-  that is not after now, so the logout validator and the verdict pipeline share one expiry boundary.
-* It let the caller build the replay guard with its own `Clock` and required, in Javadoc only, that this be
-  the validator's time source. The decision was first changed so that the validator built the guard from its
-  own clock. Review then showed that one shared clock still leaves two reads of it, which can straddle the
-  `iat` plus window edge and admit a replay. The decision is changed again: the guard holds no clock, and the
-  validator passes the single instant it judged freshness on into every admission.
-
-==== Revision: bounded `iat` / `exp` reading and a bounded freshness window
-
-Review after release found two inputs the validator did not bound; both are closed without changing a check
-or its order:
-
-* `iat` and `exp` were expanded to an instant whatever their exponent, so a NumericDate such as `1e99999999`
-  held the validator's critical section for as long as the expansion took. The magnitude is now bounded
-  before any scaling, for both exponent signs: a value outside the `Instant` second range is refused by the
-  check that owns the claim, and a value below one nanosecond is read without expansion.
-* The freshness window was only required to be positive, so a window too long for the `Instant` arithmetic
-  made `validate` throw. The builder now refuses a window longer than
-  `LogoutTokenValidator.MAX_FRESHNESS_WINDOW` (100 years), and the instants derived from the window saturate
-  at the ends of the `Instant` range.
+The expiry boundary and the guard's time source stated above are already in their amended form. The two
+amendments at the end of this record state what they replaced, and add the bounds on reading `iat` and `exp`
+and on the freshness window.
 
 The HTTP receiver endpoint for back-channel logout and the termination of the affected sessions stay with
 the consuming application. The library validates the token; it does not receive it or act on it.
@@ -309,6 +284,61 @@ rejected because an attacker who floods the guard could then evict a live `jti` 
 
 The rejected options share one flaw: each either places an unvalidated or validator-owned object where a
 caller can misuse it, or moves security-relevant checks out of the one tested place that owns them.
+
+== Amendment: `exp` exactly now is refused, and the replay guard reads no clock
+
+=== Context
+
+The decision as first accepted differed from OD-8 in two points, both revised before release in response to
+review of the change that introduced the `logout` package:
+
+* It accepted an `exp` exactly now and refused one second earlier. That boundary contradicted RFC 7519 §4.1.4
+  ("the current date/time MUST be before the expiration date/time") and the verdict pipeline's own
+  `ValidationContext.isExpired`, which already refuses equality.
+* It let the caller build the replay guard with its own `Clock` and required, in Javadoc only, that this be
+  the validator's time source. A first revision had the validator build the guard from its own clock. Review
+  then showed that one shared clock still leaves two reads of it, which can straddle the `iat` plus window
+  edge and admit a replay.
+
+=== Decision
+
+* An `exp` that is not after now is refused, so the logout validator and the verdict pipeline share one
+  expiry boundary.
+* The guard holds no clock. The validator passes the single instant it judged freshness on into every
+  admission, as OD-8 states under "Guard owned by the validator, decided on one instant".
+
+=== Consequences
+
+* A logout token and an access token expire at the same instant for the same `exp`.
+* The single-instant rule is held by the validator's code rather than by an obligation documented for the
+  caller, so no caller configuration can reopen the replay window.
+
+== Amendment: `iat` / `exp` reading and the freshness window are bounded
+
+=== Context
+
+Review after release found two inputs the validator did not bound:
+
+* `iat` and `exp` were expanded to an instant whatever their exponent, so a NumericDate such as `1e99999999`
+  held the validator's critical section for as long as the expansion took.
+* The freshness window was only required to be positive, so a window too long for the `Instant` arithmetic
+  made `validate` throw.
+
+=== Decision
+
+Both inputs are bounded without changing a check or its order:
+
+* The magnitude of `iat` and `exp` is bounded before any scaling, for both exponent signs: a value outside
+  the `Instant` second range is refused by the check that owns the claim, and a value below one nanosecond is
+  read without expansion.
+* The builder refuses a freshness window longer than `LogoutTokenValidator.MAX_FRESHNESS_WINDOW` (100 years),
+  and the instants derived from the window saturate at the ends of the `Instant` range.
+
+=== Consequences
+
+* A hostile NumericDate costs bounded work inside the validator's critical section, so it cannot stall the
+  validations queued behind it.
+* A misconfigured freshness window fails when the validator is built, not on the first token it validates.
 
 == References
 
