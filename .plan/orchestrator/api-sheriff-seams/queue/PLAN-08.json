@@ -2,10 +2,10 @@
   "id": "PLAN-08",
   "slug": "discovery-cache-and-verifier-hardening",
   "workstream": "WS-01",
-  "status": "running",
+  "status": "shipped",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
-  "pr": "",
-  "landing": "",
+  "plan_marshall_plan_id": "discovery-cache-verifier-hardening",
+  "pr": "#912",
+  "landing": "landings/PLAN-08.md",
   "seq": 8
 }
