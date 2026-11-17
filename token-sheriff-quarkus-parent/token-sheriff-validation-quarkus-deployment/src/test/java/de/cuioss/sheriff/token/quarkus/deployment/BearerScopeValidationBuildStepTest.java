@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.quarkus.deployment;
 
+import de.cuioss.sheriff.token.commons.http.BearerChallenge;
 import de.cuioss.sheriff.token.quarkus.annotation.BearerAuth;
 import de.cuioss.sheriff.token.quarkus.annotation.BearerToken;
 import de.cuioss.sheriff.token.quarkus.producer.BearerTokenResult;
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -45,6 +47,34 @@ class BearerScopeValidationBuildStepTest {
     private static final String NOT_A_SCOPE_TOKEN = "is not an RFC 6749 section 3.3 scope-token";
 
     private static final String OVER_BOUND = "at most 64 scope tokens";
+
+    private static final String OVER_LENGTH = "at most 8192 characters long";
+
+    private static final String DIGITS = "0123456789";
+
+    private static final String CHARS_100 = DIGITS + DIGITS + DIGITS + DIGITS + DIGITS + DIGITS + DIGITS + DIGITS
+            + DIGITS + DIGITS;
+
+    private static final String CHARS_1000 = CHARS_100 + CHARS_100 + CHARS_100 + CHARS_100 + CHARS_100 + CHARS_100
+            + CHARS_100 + CHARS_100 + CHARS_100 + CHARS_100;
+
+    private static final String CHARS_4000 = CHARS_1000 + CHARS_1000 + CHARS_1000 + CHARS_1000;
+
+    /**
+     * Two scopes joined to 8103 characters: a bare challenge is 8146 characters long, the one sent with the
+     * realm and the error_description 8268.
+     */
+    private static final String OVER_LENGTH_A = "a" + CHARS_4000;
+
+    private static final String OVER_LENGTH_B = "b" + CHARS_4000 + CHARS_100;
+
+    private static final Set<String> OVER_LENGTH_SCOPES = Set.of(OVER_LENGTH_A, OVER_LENGTH_B);
+
+    /**
+     * Two scopes joined to 8003 characters: the challenge sent with the realm and the error_description is
+     * 8168 characters long.
+     */
+    private static final String WITHIN_LENGTH_B = "b" + CHARS_4000;
 
     @Test
     @DisplayName("Should accept valid scopes and a class plus method union of exactly 64")
@@ -98,6 +128,66 @@ class BearerScopeValidationBuildStepTest {
         assertTrue(violations.getFirst().startsWith("@BearerAuth on method "
                 + ScopeUnionOverBound.class.getName() + "#endpoint "), violations.getFirst());
         assertTrue(violations.getFirst().contains(OVER_BOUND), violations.getFirst());
+    }
+
+    @Test
+    @DisplayName("Should refuse scopes that fit a bare challenge but not the one sent with realm and description")
+    void shouldRefuseScopesTooLongOnceRealmAndDescriptionAreAdded() throws Exception {
+        assertDoesNotThrow(() -> BearerChallenge.insufficientScope().scopes(OVER_LENGTH_SCOPES).build(),
+                "precondition: the scopes alone must fit a challenge without realm and error_description");
+
+        List<String> violations = TokenSheriffProcessor
+                .findScopeViolations(Index.of(ChallengeOverLengthWithRealm.class));
+
+        assertEquals(1, violations.size(), "exactly the class-level annotation must be refused: " + violations);
+        assertTrue(violations.getFirst().startsWith("@BearerAuth on class "
+                + ChallengeOverLengthWithRealm.class.getName() + " "), violations.getFirst());
+        assertTrue(violations.getFirst().contains(OVER_LENGTH), violations.getFirst());
+    }
+
+    @Test
+    @DisplayName("Should accept scopes whose challenge with realm and description stays within the length bound")
+    void shouldAcceptScopesWithinLengthWithRealmAndDescription() throws Exception {
+        assertEquals(List.of(), TokenSheriffProcessor.findScopeViolations(
+                        Index.of(ChallengeWithinLengthWithRealm.class)),
+                "a challenge of at most 8192 characters with realm and error_description must not be refused");
+    }
+
+    @Test
+    @DisplayName("Should merge an inherited method with the bean class's own class-level scopes, naming both")
+    void shouldRefuseInheritedMethodMergedWithBeanClassScopes() throws Exception {
+        List<String> violations = TokenSheriffProcessor
+                .findScopeViolations(Index.of(InheritedEndpointBase.class, InheritingOverBound.class));
+
+        // The base class runs the method with its 32 scopes alone; only the subclass's union of 65 is refused.
+        assertEquals(1, violations.size(), "exactly the merge in the subclass must be refused: " + violations);
+        assertTrue(violations.getFirst().startsWith("@BearerAuth on method "
+                + InheritedEndpointBase.class.getName() + "#endpoint together with the class-level @BearerAuth"
+                + " of bean class " + InheritingOverBound.class.getName() + " "), violations.getFirst());
+        assertTrue(violations.getFirst().contains(OVER_BOUND), violations.getFirst());
+    }
+
+    @Test
+    @DisplayName("Should accept inherited methods whose run-time union fits, ignoring a non-bean declaring class")
+    void shouldAcceptInheritedMethodsWhoseRunTimeUnionFits() throws Exception {
+        assertAll("inherited methods merged as the interceptor merges them",
+                () -> assertEquals(List.of(), TokenSheriffProcessor.findScopeViolations(
+                                Index.of(InheritedEndpointBase.class, InheritingAtBound.class)),
+                        "a subclass union of exactly 64 must not be refused"),
+                () -> assertEquals(List.of(), TokenSheriffProcessor.findScopeViolations(
+                                Index.of(AbstractDeclaringBase.class, PlainSubclass.class)),
+                        "the class-level scopes of an abstract declaring class never reach the request path"));
+    }
+
+    @Test
+    @DisplayName("Should report a bad class-level scope at the class, not at its methods")
+    void shouldReportBadClassLevelScopeAtTheClassOnly() throws Exception {
+        List<String> violations = TokenSheriffProcessor
+                .findScopeViolations(Index.of(InvalidClassLevelScopeWithMethod.class));
+
+        assertEquals(1, violations.size(), "only the class-level annotation must be refused: " + violations);
+        assertTrue(violations.getFirst().startsWith("@BearerAuth on class "
+                + InvalidClassLevelScopeWithMethod.class.getName() + " "), violations.getFirst());
     }
 
     @Test
@@ -205,6 +295,87 @@ class BearerScopeValidationBuildStepTest {
         @BearerAuth(requiredScopes = {"m01", "m02", "m03", "m04", "m05", "m06", "m07", "m08", "m09", "m10", "m11",
                 "m12", "m13", "m14", "m15", "m16", "m17", "m18", "m19", "m20", "m21", "m22", "m23", "m24", "m25",
                 "m26", "m27", "m28", "m29", "m30", "m31", "m32"})
+        public String endpoint() {
+            return "refused";
+        }
+    }
+
+    /**
+     * Valid scope names that fit a bare challenge but not the one sent with the realm and the error_description.
+     */
+    @BearerAuth(requiredScopes = {OVER_LENGTH_A, OVER_LENGTH_B})
+    static class ChallengeOverLengthWithRealm {
+    }
+
+    /**
+     * Valid scope names whose challenge with the realm and the error_description stays within 8192 characters.
+     */
+    @BearerAuth(requiredScopes = {OVER_LENGTH_A, WITHIN_LENGTH_B})
+    static class ChallengeWithinLengthWithRealm {
+    }
+
+    /**
+     * Declares a method-level {@code @BearerAuth} of 32 scopes and carries no class-level annotation itself.
+     */
+    static class InheritedEndpointBase {
+
+        @BearerAuth(requiredScopes = {"m01", "m02", "m03", "m04", "m05", "m06", "m07", "m08", "m09", "m10", "m11",
+                "m12", "m13", "m14", "m15", "m16", "m17", "m18", "m19", "m20", "m21", "m22", "m23", "m24", "m25",
+                "m26", "m27", "m28", "m29", "m30", "m31", "m32"})
+        public String endpoint() {
+            return "inherited";
+        }
+    }
+
+    /**
+     * Inherits the 32-scope method and adds 33 class-level scopes the declaring class does not carry: 65 at run
+     * time.
+     */
+    @BearerAuth(requiredScopes = {"c01", "c02", "c03", "c04", "c05", "c06", "c07", "c08", "c09", "c10", "c11",
+            "c12", "c13", "c14", "c15", "c16", "c17", "c18", "c19", "c20", "c21", "c22", "c23", "c24", "c25", "c26",
+            "c27", "c28", "c29", "c30", "c31", "c32", "c33"})
+    static class InheritingOverBound extends InheritedEndpointBase {
+    }
+
+    /**
+     * Inherits the 32-scope method and adds 32 class-level scopes: exactly 64 at run time.
+     */
+    @BearerAuth(requiredScopes = {"c01", "c02", "c03", "c04", "c05", "c06", "c07", "c08", "c09", "c10", "c11",
+            "c12", "c13", "c14", "c15", "c16", "c17", "c18", "c19", "c20", "c21", "c22", "c23", "c24", "c25", "c26",
+            "c27", "c28", "c29", "c30", "c31", "c32"})
+    static class InheritingAtBound extends InheritedEndpointBase {
+    }
+
+    /**
+     * An abstract class whose 33 class-level scopes plus its method's 32 would be 65; it is no bean class, so the
+     * interceptor never merges its class-level annotation.
+     */
+    @BearerAuth(requiredScopes = {"c01", "c02", "c03", "c04", "c05", "c06", "c07", "c08", "c09", "c10", "c11",
+            "c12", "c13", "c14", "c15", "c16", "c17", "c18", "c19", "c20", "c21", "c22", "c23", "c24", "c25", "c26",
+            "c27", "c28", "c29", "c30", "c31", "c32", "c33"})
+    abstract static class AbstractDeclaringBase {
+
+        @BearerAuth(requiredScopes = {"m01", "m02", "m03", "m04", "m05", "m06", "m07", "m08", "m09", "m10", "m11",
+                "m12", "m13", "m14", "m15", "m16", "m17", "m18", "m19", "m20", "m21", "m22", "m23", "m24", "m25",
+                "m26", "m27", "m28", "m29", "m30", "m31", "m32"})
+        public String endpoint() {
+            return "inherited";
+        }
+    }
+
+    /**
+     * The bean class running {@link AbstractDeclaringBase#endpoint()}, without a class-level annotation.
+     */
+    static class PlainSubclass extends AbstractDeclaringBase {
+    }
+
+    /**
+     * A class-level scope name outside the grammar on a class whose method declares valid scopes only.
+     */
+    @BearerAuth(requiredScopes = {"quote\"d"})
+    static class InvalidClassLevelScopeWithMethod {
+
+        @BearerAuth(requiredScopes = {"read"})
         public String endpoint() {
             return "refused";
         }

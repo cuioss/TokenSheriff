@@ -158,16 +158,7 @@ public class BearerTokenResponseFactory {
         if (hasScopeViolation) {
             // OAuth Step-Up Authentication Challenge for insufficient scope (RFC 9470)
             // RFC 6750 Section 3.1: scope parameter contains the full scope necessary for access
-            // Scope names outside the RFC 6749 §3.3 scope-token grammar, and more than 64 distinct scopes,
-            // are refused by BearerChallenge (IllegalArgumentException) rather than escaped into the header.
-            // The requiredScopes of @BearerAuth and @BearerToken are checked against that rule at deployment
-            // (TokenSheriffProcessor), so an annotation-declared scope set never reaches this refusal; a
-            // direct caller passing such a set still gets the IllegalArgumentException
-            String wwwAuthenticate = BearerChallenge.insufficientScope()
-                    .realm(PROTECTED_RESOURCE_REALM)
-                    .errorDescription(ERROR_MSG_HIGHER_PRIVILEGES)
-                    .scopes(result.getRequiredScopes())
-                    .build();
+            String wwwAuthenticate = insufficientScopeChallenge(result.getRequiredScopes());
             return Response.status(Response.Status.UNAUTHORIZED)
                     .type(MediaType.APPLICATION_JSON)
                     .header(HEADER_WWW_AUTHENTICATE, wwwAuthenticate)
@@ -186,6 +177,30 @@ public class BearerTokenResponseFactory {
                     .entity(createErrorEntity(TOKEN_NOT_PRESENT))
                     .build();
         }
+    }
+
+    /**
+     * Builds the {@code WWW-Authenticate} value of the {@code insufficient_scope} challenge this factory sends
+     * when required scopes are missing: realm {@code protected-resource}, the fixed {@code error_description}
+     * and the given scopes, through {@link BearerChallenge}.
+     * <p>
+     * {@link BearerChallenge} refuses a scope name outside the RFC 6749 §3.3 {@code scope-token} grammar, more
+     * than {@value BearerChallenge#MAX_SCOPE_TOKENS} distinct scopes and a challenge longer than
+     * {@value BearerChallenge#MAX_LENGTH} characters, rather than escaping them into the header. The deployment
+     * check of {@code @BearerAuth} and {@code @BearerToken} builds its challenge through this method, so an
+     * annotation-declared scope set is checked on exactly the value sent here and never reaches the refusal at
+     * request time; a direct caller passing such a set still gets the {@link IllegalArgumentException}.
+     *
+     * @param requiredScopes the scopes the challenge names
+     * @return the {@code WWW-Authenticate} field value
+     * @throws IllegalArgumentException if {@link BearerChallenge} refuses the scopes or the resulting challenge
+     */
+    public static String insufficientScopeChallenge(Collection<String> requiredScopes) {
+        return BearerChallenge.insufficientScope()
+                .realm(PROTECTED_RESOURCE_REALM)
+                .errorDescription(ERROR_MSG_HIGHER_PRIVILEGES)
+                .scopes(requiredScopes)
+                .build();
     }
 
     /**

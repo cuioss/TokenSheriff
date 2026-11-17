@@ -134,8 +134,9 @@ public @interface BearerToken {
      * <p>
      * Every name must be an RFC 6749 §3.3 {@code scope-token}: at least one character, each in
      * {@code %x21 / %x23-5B / %x5D-7E} (printable ASCII except space, {@code "} and {@code \}). The set may
-     * hold at most 64 distinct scopes, the bound of the {@code insufficient_scope} challenge. A violation of
-     * either rule fails the deployment.
+     * hold at most 64 distinct scopes, and the {@code insufficient_scope} challenge sent for it, realm and
+     * {@code error_description} included, may be at most 8192 characters long; these are the bounds of the
+     * challenge. A violation of any of the three rules fails the deployment.
      *
      * @return array of required scope names
      */

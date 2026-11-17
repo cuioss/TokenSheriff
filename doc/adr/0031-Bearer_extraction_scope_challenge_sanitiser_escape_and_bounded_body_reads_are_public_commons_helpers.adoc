@@ -165,7 +165,8 @@ Each change below alters what an existing deployment observes:
   `INVALID_REQUEST` and the cookie is not consulted; before, it reached the validator and was answered 401
   `PARSING_ERROR`.
 * **OD-3** — a required scope of a `@BearerAuth` or `@BearerToken` whose name is outside the `scope-token`
-  grammar, or a merged required-scope set of more than 64 distinct scopes, now fails the deployment: the
+  grammar, a merged required-scope set of more than 64 distinct scopes, or a set whose challenge would be
+  longer than 8192 characters, now fails the deployment: the
   extension checks every annotation at build time and names the declaring class and member (see the
   amendment below). Before, such a name was escaped into the header. A direct call of the challenge builder
   with such a scope set is still refused with `IllegalArgumentException`. A
@@ -203,8 +204,9 @@ Each change below alters what an existing deployment observes:
 
 * The itemised default changes can turn a request a deployment answered before into a different answer: a
   lower-case scheme is now validated, and a token with an internal space is now a 400.
-* A scope name outside the grammar, or a merged set of more than 64 scopes, now fails the deployment instead
-  of producing a header; an application that declared such a name must rename it before it builds.
+* A scope name outside the grammar, a merged set of more than 64 scopes, or a set whose challenge exceeds
+  8192 characters, now fails the deployment instead of producing a header; an application that declared
+  such a set must change it before it builds.
 * The public API of the validation module grows by three classes and one method.
 
 === Risks
@@ -252,13 +254,20 @@ received buffer and let an unparsable `Content-Length` escape as a `NumberFormat
 
 * **Annotation scopes are checked at deployment.** A build step of the validation extension reads the
   combined Jandex index and collects the required scopes of every `@BearerAuth` on a class and on a method
-  — for a method of an annotated class, the union of the class-level and the method-level scopes of the
-  bean class, as ADR-0024 merges them at run time — and of every `@BearerToken` injection point. It checks
-  each set by building a challenge from it, so the rule is the builder's own and no new public API is
-  added. A refusal fails the build with an error that names the declaring class and member and the reason
-  (grammar or count); the scope value is rendered through `ErrorTextSanitizer` (ADR-0022), not echoed raw.
-  The producer's challenge build is unchanged: a direct call with such a set is still refused with
-  `IllegalArgumentException`.
+  and of every `@BearerToken` injection point. A method-level `@BearerAuth` is checked once per bean class
+  that runs the method, merged with that bean class's own class-level `@BearerAuth`, as ADR-0024 merges them
+  at run time: the interceptor reads the class-level annotation from the bean class, and `@BearerAuth` is
+  not `@Inherited`, so an inherited method is merged with the subclass's annotation, never with the
+  declaring class's. Each set is checked by building the challenge the producer sends, through the one
+  public method `BearerTokenResponseFactory.insufficientScopeChallenge(Collection)` that the producer uses
+  as well, so the rule is the builder's own and the length bound is checked with the realm and the
+  `error_description` included. Three rules are enforced: every name is a `scope-token`, a set holds at
+  most 64 distinct scopes, and the challenge is at most 8192 characters long. A refusal fails the build
+  with an error that names the declaring class and member — for a merged method also the bean class whose
+  annotation was merged — and the reason; a class-level set refused on its own is reported at the class
+  only, never as a scope its methods declare. The scope value is rendered through `ErrorTextSanitizer`
+  (ADR-0022), not echoed raw. A direct call of the producer's challenge build with such a set is still
+  refused with `IllegalArgumentException`.
 * **OD-D: the `error_description` grammar is kept.** `realm` and `error_description` stay RFC 9110 §5.6.4
   quoted strings that escape `"` and `\` and refuse CR, LF, NUL, the other C0 controls and DEL. The builder's
   output is unchanged, and the round trip of builder and client parser stays pinned by test.
