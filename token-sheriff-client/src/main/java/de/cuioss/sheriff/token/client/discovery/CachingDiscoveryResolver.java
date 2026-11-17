@@ -71,6 +71,9 @@ import java.util.concurrent.atomic.AtomicReference;
  * the authorization server. No state is written, so neither the status nor the retry backoff changes;
  * the delegate's exception propagates to the interrupted caller with its interrupt flag kept, and
  * every caller that joined the aborted refresh re-evaluates, so one of them starts a fresh refresh.
+ * This includes a caller whose interrupt flag is already set when it calls {@link #resolve()}: a
+ * failing delegate's refusal is rethrown to it unrecorded, so that thread never writes a failure state
+ * or a retry backoff, however often it calls; the next caller without a set flag records the failure.
  * An {@link Error} thrown by the delegate aborts the refresh in the same way, and so does a superseded
  * read: a caller that claims the slot but finds that another caller published a newer state since its
  * read does not call the delegate, and no joined caller is handed that newer state, because a different
@@ -84,26 +87,37 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p>
  * <strong>Accepted behaviours.</strong> A caller that joins an in-flight refresh waits for the whole
  * refresh, even when a stale document could be served; this bounds the upstream load to one request
- * per refresh. A compare-and-set lost while recording the grace-period expiry, or a refresh that
- * started from an older state, can log
- * {@link ClientLogMessages.WARN#DISCOVERY_CACHE_EXPIRED_FAILING_CLOSED} more than once in one failure
- * episode; this affects the log volume only and never an answer.
+ * per refresh. {@link ClientLogMessages.WARN#DISCOVERY_CACHE_EXPIRED_FAILING_CLOSED} can be logged
+ * more than once in one failure episode: a caller past the grace period marks the current state as
+ * having logged the expiry, but a refresh winner that read the state before that mark derives its
+ * failed state from its own read and publishes it with an unconditional {@code state.set(refreshed)},
+ * replacing the marked state with one that is not marked, so the next caller past the grace period
+ * logs the expiry again. This affects the log volume only and never an answer.
  * <p>
  * <strong>Status.</strong> {@link #status()} and {@link #getLoaderStatus()} read an immutable
  * in-memory snapshot; they never perform I/O and never wait for an in-flight refresh.
  * <p>
  * <strong>Logging.</strong> Every refresh runs through the delegate, which logs
- * {@link ClientLogMessages.INFO#DISCOVERY_RESOLVED} at {@code INFO} on every successful refresh and
- * its own line for most failed attempts, such as {@link ClientLogMessages.WARN#DISCOVERY_STATUS} or
- * {@link ClientLogMessages.ERROR#DISCOVERY_FAILED}, but not for every one: some refusals, for example an
- * unexpected content type, an empty body or an interrupt, are thrown without a delegate line and leave
- * only the cache's own {@code DEBUG} line. The cache adds a {@code DEBUG} line per successful
- * and per failed refresh, plus three records per failure episode: entering a failure episode while a
- * document is still servable logs {@link ClientLogMessages.WARN#DISCOVERY_REFRESH_FAILED_SERVING_STALE};
- * the end of the grace period logs {@link ClientLogMessages.WARN#DISCOVERY_CACHE_EXPIRED_FAILING_CLOSED};
- * the first successful refresh after a failure logs
- * {@link ClientLogMessages.INFO#DISCOVERY_CACHE_RECOVERED}. A failure cause is rendered as its
- * exception class name; a message only ever reaches the {@code DEBUG} log through
+ * {@link ClientLogMessages.INFO#DISCOVERY_RESOLVED} at {@code INFO} on every successful refresh. Of
+ * the thirteen refusals {@link DiscoveryResolver#resolve()} throws itself, five log a delegate line
+ * first: a non-TLS issuer ({@link ClientLogMessages.WARN#NON_TLS_ISSUER}), a non-success status
+ * ({@link ClientLogMessages.WARN#DISCOVERY_STATUS}), an I/O failure and an unparseable document (both
+ * {@link ClientLogMessages.ERROR#DISCOVERY_FAILED}) and an issuer mismatch
+ * ({@link ClientLogMessages.WARN#ISSUER_MISMATCH}). The other eight are thrown without a delegate
+ * line: a malformed issuer URL, a content type other than {@code application/json}, an interrupt, an
+ * empty body, a body the size check after the read refuses, a document that parses to nothing, a
+ * non-{@code https} endpoint in an {@code https} issuer's document and a missing
+ * {@code token_endpoint}. A body the bounded read stops is an I/O failure and is logged as one. The
+ * refusals of the shared back-channel transport — a malformed endpoint URL, a path that fails the
+ * egress validation, a host the egress policy refuses and an endpoint the HTTP handler refuses — log
+ * at most a {@code DEBUG} line of the transport. The cache adds a {@code DEBUG} line per recorded
+ * failed refresh and per successful refresh, except that the first successful refresh after a
+ * failure logs {@link ClientLogMessages.INFO#DISCOVERY_CACHE_RECOVERED} instead of the {@code DEBUG}
+ * line. An interrupted refresh is not recorded and writes no cache line at all. Two more records
+ * mark a failure episode: entering it while a document is still servable logs
+ * {@link ClientLogMessages.WARN#DISCOVERY_REFRESH_FAILED_SERVING_STALE}, and the end of the grace
+ * period logs {@link ClientLogMessages.WARN#DISCOVERY_CACHE_EXPIRED_FAILING_CLOSED}. A failure cause
+ * is rendered as its exception class name; a message only ever reaches the {@code DEBUG} log through
  * {@link LogSanitizer}, and no response body is ever logged.
  *
  * @since 1.0

@@ -360,9 +360,12 @@ cost: the engine does not guess how to read a response that does not follow its 
   rotated successor and a clear are attempted only when the authorization server rotated the
   refresh token, and otherwise nothing is revoked or cleared. The original refusal reaches the
   caller unchanged unless that cleanup throws an uncaught exception (from a revocation call or the
-  store removal), which replaces it. An unbound session whose refreshed access token carries no
-  `sub` adopts no subject and its ID token's `sub` is compared with nothing — accepted, because
-  nothing is bound and there is no principal to protect; with a bound subject the gap cannot occur
+  store removal), which replaces it. For an unbound session, `StoredToken.refreshed` replaces the
+  stored ID token with the refreshed one unchecked: it compares the refreshed ID token with neither
+  the stored one nor a bound subject, so after the refresh the stored ID token can name a different
+  principal than before; and when the refreshed access token carries no `sub`, the session adopts
+  no subject and its ID token's `sub` is compared with nothing — accepted, because nothing is bound
+  and there is no principal to protect; with a bound subject the gap cannot occur
   (xref:specification/token-handling.adoc#_refresh_result_verifier[refresh-result verifier]).
 | https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse[OIDC Core §12.2]
 | xref:requirements.adoc#CLIENT-15[CLIENT-15], xref:requirements.adoc#CLIENT-17[CLIENT-17], xref:requirements.adoc#CLIENT-28[CLIENT-28]

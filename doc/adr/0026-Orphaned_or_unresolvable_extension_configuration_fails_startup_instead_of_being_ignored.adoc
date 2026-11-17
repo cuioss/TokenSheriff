@@ -6,8 +6,8 @@
 :source-highlighter: highlight.js
 
 // adr-metadata
-// summary: The validation extension's configuration resolvers throw an IllegalStateException naming the offending property when a property is set without the switch or key source it belongs to, or names something that cannot be resolved, so a security setting that would otherwise be silently ignored fails the validator build, which runs at startup
-// tags: quarkus-extension, configuration, fail-closed, startup, dpop, jwe
+// summary: The validation and client extensions' configuration checks throw an IllegalStateException naming the offending property when a property is set without the switch or key source it belongs to, or names something that cannot be resolved, so a security setting that would otherwise be silently ignored fails the validator build or the client extension's startup check, both of which run at startup
+// tags: quarkus-extension, configuration, fail-closed, startup, dpop, jwe, client, discovery-cache
 // affects: token-sheriff-validation-quarkus, token-sheriff-client-quarkus
 // supersedes:
 // end-adr-metadata

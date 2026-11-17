@@ -265,8 +265,10 @@ a stale document could be served; this bounds the upstream load to one request p
 that claims the slot but finds that another caller published a newer state since its own read does
 not refresh: the claim is aborted, and that caller and every caller that joined it re-evaluate
 against the current state. The aborted claim hands none of them the newer state, because a
-different state is not necessarily a fresh one: a newer state that is still fresh is then served
-without a refresh, and an expired one makes the first caller that claims the slot refresh it.
+different state is not necessarily a fresh one. Re-evaluating the newer state has one of three
+outcomes: a state that is still fresh is served without a refresh; a `FAILED` state whose failure
+lies inside the minimum refresh interval is answered by the stale policy below with no claim at all;
+and any other state makes the first caller that claims the slot refresh it.
 
 *Every check runs again.* A refresh is an ordinary `DiscoveryResolver.resolve()`, so every check an
 uncached resolution performs — TLS, the `issuer` match, the endpoint schemes, the egress policy, the
@@ -292,7 +294,10 @@ minimum refresh interval; the cache never mutates it. Past the grace period the 
 thread's interrupt flag is set, the interrupt belongs to the caller and not to the authorization
 server: no state is written, so neither the status nor the retry backoff changes. The delegate's
 exception reaches the interrupted caller with its interrupt flag kept, and every caller that joined
-the aborted refresh re-evaluates, so one of them starts a fresh refresh. An `Error` thrown by the
+the aborted refresh re-evaluates, so one of them starts a fresh refresh. This includes a caller
+whose interrupt flag is already set when it calls `resolve()`: a failing delegate's refusal is
+rethrown to it unrecorded, so that thread never writes a failure state or a retry backoff, however
+often it calls; the next caller without a set flag records the failure. An `Error` thrown by the
 delegate aborts the refresh in the same way.
 
 *Defensive copy.* Every `resolve()` returns an independent copy (`ProviderMetadata.copy()`). The
@@ -316,21 +321,36 @@ failed the most recent attempt — never its message or a response body.
 
 *Logging.* Every refresh runs through the delegate, which logs its discovery `INFO` line
 (`TokenSheriffClient-1`) on every successful refresh — so once per TTL period while refreshes
-succeed — and its own line for most failed attempts (for example an unexpected HTTP status, an I/O
-failure, an unparseable body, an issuer mismatch or a non-TLS issuer), but not for every one: some
-refusals, for example a wrong content type, an empty body or an interrupt, are thrown without a
-delegate line. With the default `minRefreshInterval` of `PT0S` a failed refresh is retried on the
-next call, so a failing provider usually produces one delegate line per call. The cache itself adds a `DEBUG` line per successful and per failed refresh, and three records
-that are logged once per failure episode, not per attempt:
+succeed. Of the thirteen refusals `DiscoveryResolver.resolve()` throws itself, five log a delegate
+line first: a non-TLS issuer (`TokenSheriffClient-100`), an unexpected HTTP status
+(`TokenSheriffClient-101`), an I/O failure and an unparseable document (both
+`TokenSheriffClient-200`) and an issuer mismatch (`TokenSheriffClient-103`). The other eight are
+thrown without a delegate line: a malformed issuer URL, a content type other than
+`application/json`, an interrupt, an empty body, a body the size check after the read refuses, a
+document that parses to nothing, a non-`https` endpoint in an `https` issuer's document and a missing
+`token_endpoint`. A body the bounded read stops is an I/O failure and is logged as one. The refusals
+of the shared back-channel transport — a malformed endpoint URL, a path that fails the egress
+validation, a host the egress policy refuses and an endpoint the HTTP handler refuses — log at most a
+`DEBUG` line of the transport. With the default `minRefreshInterval` of `PT0S` a failed refresh is
+retried on the next call, so a provider failing with a logged refusal produces one delegate line per
+call.
+
+The cache itself adds a `DEBUG` line per recorded failed refresh and per successful refresh, except
+that the first successful refresh after a failure logs `TokenSheriffClient-4` at `INFO` instead of the
+`DEBUG` line. An interrupted refresh is not recorded and writes no cache line at all. Three records
+are logged once per failure episode, not per attempt:
 
 * entering it while a document is still servable logs `TokenSheriffClient-115` at `WARN`;
 * the end of the grace period, on the first resolution refused after it, logs
   `TokenSheriffClient-116` at `WARN`;
 * the first successful refresh after a failure logs `TokenSheriffClient-4` at `INFO`.
 
-The one accepted exception: a compare-and-set lost while recording the grace-period expiry, or a
-refresh that started from an older state, can log `TokenSheriffClient-116` more than once in one
-failure episode. This affects the log volume only, never an answer.
+The one accepted exception: `TokenSheriffClient-116` can be logged more than once in one failure
+episode. A caller past the grace period marks the current state as having logged the expiry, but a
+refresh winner that read the state before that mark derives its failed state from its own read and
+publishes it with an unconditional `state.set(refreshed)`, replacing the marked state with one that
+is not marked, so the next caller past the grace period logs the expiry again. This affects the log
+volume only, never an answer.
 
 A failure cause is logged as its exception class name. A failure message reaches the `DEBUG` log only
 through `LogSanitizer`, and no response body is logged
