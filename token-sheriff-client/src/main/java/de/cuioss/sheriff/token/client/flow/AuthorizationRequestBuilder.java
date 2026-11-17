@@ -59,6 +59,17 @@ import java.util.Objects;
  * {@link #parameters(ClientConfiguration, ProviderMetadata, FlowContext, AuthorizationRequestOptions)}
  * exposes the validated parameter set as an ordered, unmodifiable map, for example for a pushed
  * authorization request (RFC 9126).
+ * <p>
+ * <strong>Overriding:</strong> the four-argument
+ * {@link #build(ClientConfiguration, ProviderMetadata, FlowContext, AuthorizationRequestOptions)} is the
+ * one overridable entry point for the front-channel URL — the three-argument
+ * {@link #build(ClientConfiguration, ProviderMetadata, FlowContext)} delegates to it with
+ * {@link AuthorizationRequestOptions#DEFAULTS}, so a subclass that overrides the four-argument form
+ * reaches every front-channel caller. A pushed authorization request does not go through {@code build}:
+ * {@link AuthorizationCodeFlow#authorizePushed(ProviderMetadata,
+ * de.cuioss.sheriff.token.client.auth.ClientAuthentication, AuthorizationRequestOptions)} reads
+ * {@link #parameters(ClientConfiguration, ProviderMetadata, FlowContext, AuthorizationRequestOptions)},
+ * so a subclass that customises the pushed request overrides {@code parameters}.
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -86,6 +97,10 @@ public class AuthorizationRequestBuilder {
     /**
      * Builds the authorization request URL for the given flow context, with the configured scopes and
      * {@code response_mode=form_post}.
+     * <p>
+     * Delegates to {@link #build(ClientConfiguration, ProviderMetadata, FlowContext,
+     * AuthorizationRequestOptions)} with {@link AuthorizationRequestOptions#DEFAULTS}, so an override of
+     * the four-argument form also governs this one.
      *
      * @param configuration the client configuration; must not be {@code null}
      * @param metadata      the resolved provider metadata carrying the authorization endpoint; must
@@ -98,10 +113,7 @@ public class AuthorizationRequestBuilder {
      *                               advertise PKCE {@code S256}
      */
     public String build(ClientConfiguration configuration, ProviderMetadata metadata, FlowContext context) {
-        String authorizationEndpoint = validatedEndpoint(configuration, metadata, context);
-        // The query goes in front of any #fragment, or state, nonce and PKCE would never reach the AS.
-        return EndpointQuery.append(authorizationEndpoint,
-                FormEncoder.encode(assemble(configuration, context, AuthorizationRequestOptions.DEFAULTS)));
+        return build(configuration, metadata, context, AuthorizationRequestOptions.DEFAULTS);
     }
 
     /**
@@ -126,6 +138,7 @@ public class AuthorizationRequestBuilder {
             AuthorizationRequestOptions options) {
         Objects.requireNonNull(options, "options must not be null");
         String authorizationEndpoint = validatedEndpoint(configuration, metadata, context);
+        // The query goes in front of any #fragment, or state, nonce and PKCE would never reach the AS.
         return EndpointQuery.append(authorizationEndpoint, FormEncoder.encode(assemble(configuration, context, options)));
     }
 
@@ -188,11 +201,11 @@ public class AuthorizationRequestBuilder {
     /**
      * Assembles the ordered parameter map.
      * <p>
-     * The insertion order is the order in which the request has always been emitted, so a request
-     * without options stays byte-for-byte identical: {@code max_age}, {@code scope},
-     * {@code acr_values}, {@code response_type}, {@code redirect_uri}, {@code state},
-     * {@code code_challenge_method}, {@code nonce}, {@code client_id}, {@code code_challenge},
-     * {@code response_mode}, followed by the opt-in {@code prompt}.
+     * The parameters are inserted in this order: {@code max_age}, {@code scope}, {@code acr_values},
+     * {@code response_type}, {@code redirect_uri}, {@code state}, {@code code_challenge_method},
+     * {@code nonce}, {@code client_id}, {@code code_challenge}, {@code response_mode}, followed by the
+     * opt-in {@code prompt}. A request with {@link AuthorizationRequestOptions#DEFAULTS} carries no
+     * {@code prompt}.
      */
     private static Map<String, String> assemble(ClientConfiguration configuration, FlowContext context,
             AuthorizationRequestOptions options) {

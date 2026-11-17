@@ -75,18 +75,24 @@ them. The entry points that take options are:
 | `StepUpHandler.initiate(configuration, metadata, challenge, options)`
 | The step-up opt-in: the challenge's `acr_values` / `max_age` are carried as by the three-argument
   `initiate`, with the options applied. The three-argument `initiate(configuration, metadata,
-  challenge)` is unchanged and always requests `form_post`.
+  challenge)` requests `form_post`.
 | `RefreshFlow.refresh(metadata, refreshToken, scopes)`
 | Refreshes with the given scopes as the `scope` parameter and as the reconciliation baseline
-  (xref:token-handling.adoc[token handling]). The two-argument `refresh(metadata, refreshToken)` keeps
-  the configured scopes as both and remains the one entry point the lifecycle calls.
+  (xref:token-handling.adoc[token handling]). The two-argument `refresh(metadata, refreshToken)` uses
+  the configured scopes as both and is the one entry point the lifecycle calls.
 |===
 
-The request parameters are emitted in this order, which is the order the request had before the
-options existed, so a request without options is byte-for-byte unchanged: `max_age`, `scope`,
-`acr_values`, `response_type`, `redirect_uri`, `state`, `code_challenge_method`, `nonce`,
-`client_id`, `code_challenge`, `response_mode`, followed by the opt-in `prompt`. An absent optional
-parameter (`max_age`, `scope`, `acr_values`, `prompt`) is omitted.
+The request parameters are emitted in this order: `max_age`, `scope`, `acr_values`,
+`response_type`, `redirect_uri`, `state`, `code_challenge_method`, `nonce`, `client_id`,
+`code_challenge`, `response_mode`, followed by the opt-in `prompt`. An absent optional parameter
+(`max_age`, `scope`, `acr_values`, `prompt`) is omitted, so a request with
+`AuthorizationRequestOptions.DEFAULTS` carries no `prompt`.
+
+The three-argument `AuthorizationRequestBuilder.build(configuration, metadata, context)` delegates
+to the four-argument `build` with `AuthorizationRequestOptions.DEFAULTS`, so a subclass that
+overrides the four-argument `build` governs every front-channel URL. The pushed path reads
+`parameters(...)` rather than `build`, so a subclass that customises the pushed request overrides
+`parameters`.
 
 === [[_pushed_authorization_requests]] Pushed authorization requests (PAR)
 
@@ -101,7 +107,7 @@ authorization parameters off the browser and tamper-proof.
 `AuthorizationCodeFlow.authorizePushed(metadata, clientAuthentication, options)` is the opt-in
 pushed path of the built-in flow (xref:../requirements.adoc#CLIENT-27[CLIENT-27]). It mints the flow
 context, pushes exactly the parameters `AuthorizationRequestBuilder.parameters(...)` returns — so the
-authorization-endpoint TLS check and the PKCE `S256` check apply unchanged — and returns a redirect to
+authorization-endpoint TLS check and the PKCE `S256` check apply as on the front channel — and returns a redirect to
 the authorization endpoint that carries only `client_id` and the issued `request_uri`. When the AS
 advertises no `pushed_authorization_request_endpoint` the call is refused with
 `ClientProtocolException` before any HTTP request; it never falls back to a front-channel request.
@@ -232,8 +238,8 @@ passes the in-module egress / path control before the fetch
 
 == [[_discovery_cache]] Opt-in discovery cache
 
-`DiscoveryResolver` fetches the issuer's `.well-known/openid-configuration` on every call, and stays
-that way. `CachingDiscoveryResolver` is an opt-in wrapper around it that serves the last resolved
+`DiscoveryResolver` fetches the issuer's `.well-known/openid-configuration` on every call.
+`CachingDiscoveryResolver` is an opt-in wrapper around it that serves the last resolved
 document while it is fresh and refreshes it on demand once it is stale
 (xref:../requirements.adoc#CLIENT-29[CLIENT-29],
 xref:../threat-model.adoc#T-DISCOVERY-STALE[T-DISCOVERY-STALE]). It is constructed with the

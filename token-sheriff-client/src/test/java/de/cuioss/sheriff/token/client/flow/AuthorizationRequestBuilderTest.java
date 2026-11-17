@@ -18,7 +18,11 @@ package de.cuioss.sheriff.token.client.flow;
 import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.discovery.ProviderMetadata;
+import de.cuioss.sheriff.token.client.token.IdTokenValidationBridge;
+import de.cuioss.sheriff.token.client.token.TokenValidationBridge;
 import de.cuioss.sheriff.token.commons.error.ClientProtocolException;
+import de.cuioss.sheriff.token.validation.TokenValidator;
+import de.cuioss.sheriff.token.validation.test.generator.TestTokenGenerators;
 import de.cuioss.test.generator.Generators;
 import de.cuioss.test.generator.junit.EnableGeneratorController;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
@@ -32,6 +36,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -47,9 +52,13 @@ class AuthorizationRequestBuilderTest {
     private final AuthorizationRequestBuilder builder = new AuthorizationRequestBuilder();
 
     private static ClientConfiguration config() {
+        return config(Generators.nonBlankStrings().next());
+    }
+
+    private static ClientConfiguration config(String clientId) {
         return ClientConfiguration.builder()
                 .issuer("https://issuer.example.com")
-                .clientId(Generators.nonBlankStrings().next())
+                .clientId(clientId)
                 .clientSecret(Generators.nonBlankStrings().next())
                 .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
                 .scope("openid")
@@ -355,6 +364,131 @@ class AuthorizationRequestBuilderTest {
             assertThrows(ClientProtocolException.class,
                     () -> builder.build(configuration, metadata, context),
                     "a schemeless (relative) authorization endpoint must be rejected");
+        }
+    }
+
+    @Nested
+    @DisplayName("Routing of the three-argument build (ADR-0006: one overridable entry point)")
+    class Routing {
+
+        private static ClientConfiguration fixedConfig() {
+            return config("client-1");
+        }
+
+        private static AuthorizationCodeFlow flow(ClientConfiguration configuration,
+                AuthorizationRequestBuilder requestBuilder) {
+            TokenValidator validator = TokenValidator.builder()
+                    .issuerConfig(TestTokenGenerators.accessTokens().next().getIssuerConfig()).build();
+            return new AuthorizationCodeFlow(configuration, new TokenEndpointClient(configuration),
+                    new TokenValidationBridge(validator), new IdTokenValidationBridge(validator), new IssValidator(),
+                    requestBuilder, new CallbackHandler(), null);
+        }
+
+        @Test
+        @DisplayName("Should emit the pinned default URL from the three-argument build, equal to the DEFAULTS call")
+        void shouldEmitPinnedDefaultUrl() {
+            var configuration = fixedConfig();
+            var metadata = metadataWithS256(AUTH_ENDPOINT);
+            var context = FlowContext.create(REDIRECT_URI);
+            String expected = AUTH_ENDPOINT
+                    + "?scope=openid+profile"
+                    + "&response_type=code"
+                    + "&redirect_uri=https%3A%2F%2Frp.example.com%2Fcallback"
+                    + "&state=" + context.state()
+                    + "&code_challenge_method=S256"
+                    + "&nonce=" + context.nonce()
+                    + "&client_id=client-1"
+                    + "&code_challenge=" + context.pkceChallenge().codeChallenge()
+                    + "&response_mode=" + RESPONSE_MODE_FORM_POST;
+
+            String threeArgument = builder.build(configuration, metadata, context);
+
+            assertAll("the three-argument build delegates without changing the default request",
+                    () -> assertEquals(expected, threeArgument, "the default URL keeps every byte"),
+                    () -> assertEquals(builder.build(configuration, metadata, context,
+                                    AuthorizationRequestOptions.DEFAULTS), threeArgument,
+                            "the three-argument build equals the four-argument build with DEFAULTS"));
+        }
+
+        @Test
+        @DisplayName("Should reach a four-argument override through the three-argument build, with DEFAULTS")
+        void shouldReachFourArgumentOverrideThroughThreeArgumentBuild() {
+            var overriding = new FourArgumentMarkerBuilder();
+            var context = FlowContext.create(REDIRECT_URI);
+
+            String url = overriding.build(fixedConfig(), metadataWithS256(AUTH_ENDPOINT), context);
+
+            assertAll("the four-argument override governs the three-argument callers",
+                    () -> assertEquals(FourArgumentMarkerBuilder.MARKER_URL, url, "the override supplied the URL"),
+                    () -> assertEquals(1, overriding.calls.get(), "the override ran once"),
+                    () -> assertSame(AuthorizationRequestOptions.DEFAULTS, overriding.lastOptions,
+                            "the three-argument build passes DEFAULTS"));
+        }
+
+        @Test
+        @DisplayName("Should reach a four-argument override through AuthorizationCodeFlow.authorize(metadata)")
+        void shouldReachFourArgumentOverrideThroughAuthorize() {
+            var overriding = new FourArgumentMarkerBuilder();
+            var configuration = fixedConfig();
+
+            var redirect = flow(configuration, overriding).authorize(metadataWithS256(AUTH_ENDPOINT));
+
+            assertAll("authorize(metadata) runs the four-argument override",
+                    () -> assertEquals(FourArgumentMarkerBuilder.MARKER_URL, redirect.authorizationUrl(),
+                            "the override supplied the authorization URL"),
+                    () -> assertEquals(1, overriding.calls.get(), "the override ran once"),
+                    () -> assertSame(AuthorizationRequestOptions.DEFAULTS, overriding.lastOptions,
+                            "authorize(metadata) requests the defaults"));
+        }
+
+        @Test
+        @DisplayName("Should leave the four-argument result alone when a subclass overrides only the three-argument build")
+        void shouldNotRouteFourArgumentBuildThroughThreeArgumentOverride() {
+            var overriding = new ThreeArgumentMarkerBuilder();
+            var configuration = fixedConfig();
+            var metadata = metadataWithS256(AUTH_ENDPOINT);
+            var context = FlowContext.create(REDIRECT_URI);
+
+            String fourArgument = overriding.build(configuration, metadata, context,
+                    AuthorizationRequestOptions.DEFAULTS);
+
+            assertAll("negative control: delegation runs from three to four arguments only",
+                    () -> assertEquals(builder.build(configuration, metadata, context,
+                                    AuthorizationRequestOptions.DEFAULTS), fourArgument,
+                            "the four-argument build is the unmodified one"),
+                    () -> assertEquals(0, overriding.calls.get(), "the three-argument override never ran"),
+                    () -> assertEquals(ThreeArgumentMarkerBuilder.MARKER_URL,
+                            overriding.build(configuration, metadata, context),
+                            "the three-argument override still answers its own callers"));
+        }
+    }
+
+    /** Test double that replaces the four-argument {@code build} and records the options it received. */
+    static final class FourArgumentMarkerBuilder extends AuthorizationRequestBuilder {
+
+        static final String MARKER_URL = "https://double.example.com/authorize?marker=four-argument";
+        final AtomicInteger calls = new AtomicInteger();
+        AuthorizationRequestOptions lastOptions;
+
+        @Override
+        public String build(ClientConfiguration configuration, ProviderMetadata metadata, FlowContext context,
+                AuthorizationRequestOptions options) {
+            calls.incrementAndGet();
+            lastOptions = options;
+            return MARKER_URL;
+        }
+    }
+
+    /** Test double that replaces only the three-argument {@code build}. */
+    static final class ThreeArgumentMarkerBuilder extends AuthorizationRequestBuilder {
+
+        static final String MARKER_URL = "https://double.example.com/authorize?marker=three-argument";
+        final AtomicInteger calls = new AtomicInteger();
+
+        @Override
+        public String build(ClientConfiguration configuration, ProviderMetadata metadata, FlowContext context) {
+            calls.incrementAndGet();
+            return MARKER_URL;
         }
     }
 }

@@ -506,7 +506,7 @@ an isolated-component or server-capability test alone does not qualify the row a
 | — (needs a private-CA / self-signed IdP fixture; not in the current provider set) | all
 
 | xref:../requirements.adoc#CLIENT-24[CLIENT-24] | T-SSRF-ADVERTISED
-| `ClientConfigurationTest` (`BackChannelOriginValidation`): only a bare http(s) origin is accepted
+| `ClientConfigurationTransportTest` (`BackChannelOriginValidation`): only a bare http(s) origin is accepted
   and no rejection echoes the value; `BackChannelOriginMappingTest`: same-origin endpoints are
   rewritten with path and query kept, other origins untouched; `BackChannelOriginRoutingTest`:
   the back-channel calls reach the configured origin, and a DPoP proof on a mapped token or
@@ -540,11 +540,14 @@ an isolated-component or server-capability test alone does not qualify the row a
 
 | xref:../requirements.adoc#CLIENT-27[CLIENT-27] | T-URL-LEAK, T-PARAM-INTEGRITY
 | `AuthorizationRequestBuilderParametersTest`: the ordered, unmodifiable parameter map equals what
-  `build` emits, and a request without options is unchanged; `AuthorizationRequestOptionsTest`: the
+  `build` emits, and a request without options carries the pinned parameter order and encoding;
+  `AuthorizationRequestBuilderTest` (`Routing`): the three-argument `build` delegates to the
+  four-argument one, so a four-argument override reaches it and `authorize(metadata)`, while a
+  three-argument override leaves the four-argument result alone; `AuthorizationRequestOptionsTest`: the
   closed `response_mode` / `prompt` sets and the scope-override validation, empty and
-  non-scope-token characters refused; `ClientConfigurationTest` (`IssuerAndScopeValidation`): the
+  non-scope-token characters refused; `ClientConfigurationScopeValidationTest`: the
   shared scope-token rule accepts exactly the RFC 6749 §3.3 character set and never echoes a rejected
-  entry;
+  entry, not even in its log-sanitized form;
   `AuthorizationRequestInjectionAttackDatabaseTest`: no payload adds, duplicates or splits a
   parameter; `AuthorizationCodeFlowOptionsTest`, `StepUpHandlerOptionsTest` and
   `AuthorizationCodeFlowPushedTest`: the options reach the front-channel, step-up and pushed
@@ -624,10 +627,10 @@ an isolated-component or server-capability test alone does not qualify the row a
   never echoing the entry, and admits a bare host), `IssuerConfigResolverEgressHostTest` (a
   port-carrying `allowed-egress-hosts` element fails startup naming the property, blank elements are
   dropped), `BackChannelEgressPolicyTest` (the client back channel applies the policy to the URL
-  actually contacted), `ClientConfigurationTest` (a port-carrying, control-character or Unicode
-  `allowedEgressHosts` entry refused without echoing it, and admitted entries stored in the canonical
-  form: lower case, a bare IPv6 literal in brackets, so two configurations whose entries differ only in
-  letter case are equal) and
+  actually contacted), `ClientConfigurationTransportTest` (a port-carrying, control-character or
+  Unicode `allowedEgressHosts` entry refused without echoing it, and admitted entries stored in the
+  canonical form: lower case, a bare IPv6 literal in brackets, so two configurations whose entries
+  differ only in letter case are equal) and
   `TokenSheriffClientProducerEgressTest` (the mapper passes `sheriff.client.allowed-egress-hosts`
   elements on untrimmed); `RevocationClientTest`: `revokeIfSupported`
   sends one request and returns `true` for an advertised endpoint, sends nothing and returns `false`

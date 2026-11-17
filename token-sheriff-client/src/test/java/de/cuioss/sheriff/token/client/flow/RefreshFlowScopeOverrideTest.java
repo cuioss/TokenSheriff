@@ -64,7 +64,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Tests the per-call scope overload {@link RefreshFlow#refresh(ProviderMetadata, String, List)}: the
  * per-call scopes are what the request sends and what the granted scope is reconciled against, the
- * shared configuration is never touched, and the two-argument call keeps its form unchanged.
+ * shared configuration is never touched, and the two-argument call sends exactly its pinned form.
  */
 @EnableTestLogger
 @EnableGeneratorController
@@ -324,13 +324,13 @@ class RefreshFlowScopeOverrideTest {
     }
 
     /**
-     * The two-argument call is unchanged by the overload: the form carries exactly the grant type, the
-     * presented token and the configured scopes, and client authentication stays in the header. The
+     * The two-argument call sends a form carrying exactly the grant type, the presented token and the
+     * configured scopes, with client authentication in the header. The
      * pairs are compared sorted because the form is built from an unordered map whose iteration order
      * is not specified.
      */
     @Test
-    @DisplayName("Should keep the two-argument refresh form unchanged (golden form)")
+    @DisplayName("Should send exactly the pinned two-argument refresh form (golden form)")
     void shouldKeepTwoArgumentFormUnchanged(URIBuilder uriBuilder, MockWebServer server) throws Exception {
         moduleDispatcher.respondWith(grantedScopeResponse(String.join(" ", CONFIGURED_SCOPES)));
         ClientConfiguration config = config(false);

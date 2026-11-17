@@ -174,11 +174,7 @@ public class AuthorizationCodeFlow {
      */
     public AuthorizationRedirect authorize(ProviderMetadata metadata) {
         Objects.requireNonNull(metadata, MSG_METADATA_NULL);
-        String redirectUri = configuration.getRedirectUri();
-        if (redirectUri == null || redirectUri.isBlank()) {
-            throw new IllegalArgumentException("client declares no redirect URI");
-        }
-        FlowContext context = FlowContext.create(redirectUri);
+        FlowContext context = FlowContext.create(requireRedirectUri());
         String url = authorizationRequestBuilder.build(configuration, metadata, context);
         return new AuthorizationRedirect(url, context);
     }
@@ -243,10 +239,13 @@ public class AuthorizationCodeFlow {
         FlowContext context = FlowContext.create(requireRedirectUri());
         Map<String, String> parameters = authorizationRequestBuilder.parameters(configuration, metadata, context,
                 options);
-        // parameters(...) has already verified the authorization endpoint is present and TLS.
+        // parameters(...) has already refused metadata without an authorization endpoint (or with a
+        // non-TLS one) with a ClientProtocolException, so the endpoint is present here. The guard below
+        // names a broken invariant — an override of parameters(...) that skipped that check — and is
+        // not a protocol refusal.
         String authorizationEndpoint = metadata.getAuthorizationEndpoint()
-                .orElseThrow(() -> new ClientProtocolException(
-                        "provider metadata is missing the authorization endpoint"));
+                .orElseThrow(() -> new IllegalStateException(
+                        "parameters(...) returned without verifying the authorization endpoint"));
         ParResponse parResponse = parClient.pushAuthorizationRequest(parEndpoint, parameters, clientAuthentication);
         Map<String, String> redirectParameters = new LinkedHashMap<>();
         redirectParameters.put(PARAM_CLIENT_ID, configuration.getClientId());
@@ -256,6 +255,18 @@ public class AuthorizationCodeFlow {
     }
 
     private String requireRedirectUri() {
+        return requireRedirectUri(configuration);
+    }
+
+    /**
+     * The one redirect-URI guard of the interactive flow, shared by every entry point that mints a
+     * {@link FlowContext} — this flow's and {@link StepUpHandler}'s.
+     *
+     * @param configuration the client configuration; must not be {@code null}
+     * @return the configured redirect URI; never {@code null} or blank
+     * @throws IllegalArgumentException if the client declares no redirect URI
+     */
+    static String requireRedirectUri(ClientConfiguration configuration) {
         String redirectUri = configuration.getRedirectUri();
         if (redirectUri == null || redirectUri.isBlank()) {
             throw new IllegalArgumentException("client declares no redirect URI");
