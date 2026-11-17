@@ -2,10 +2,10 @@
   "id": "PLAN-09",
   "slug": "public-helper-residuals",
   "workstream": "WS-02",
-  "status": "staged",
+  "status": "shipped",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
-  "pr": "",
-  "landing": "",
+  "plan_marshall_plan_id": "plan-09-public-helper-residuals",
+  "pr": "#916",
+  "landing": "landings/PLAN-09.md",
   "seq": 9
 }
