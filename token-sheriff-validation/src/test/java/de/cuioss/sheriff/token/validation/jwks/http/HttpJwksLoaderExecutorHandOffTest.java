@@ -191,13 +191,15 @@ class HttpJwksLoaderExecutorHandOffTest {
         drainExecutor();
         int afterClaim = moduleDispatcher.getRequestCount();
 
-        Thread insideWindowMiss = gatedClock.gateNextReadOf(
+        GatedRead insideWindowMiss = gatedClock.gateNextReadOf(
                 () -> assertTrue(loader.getKeyInfo("invented-inside-window").isEmpty()));
         assertTrue(gatedClock.arrived.await(10, TimeUnit.SECONDS), "the miss inside the window reads the clock");
         loader.performBackgroundRefresh();
         int afterPeriodicDuringMiss = moduleDispatcher.getRequestCount();
         gatedClock.release.countDown();
-        insideWindowMiss.join(TimeUnit.SECONDS.toMillis(30));
+        insideWindowMiss.thread().join(TimeUnit.SECONDS.toMillis(30));
+        assertFalse(insideWindowMiss.thread().isAlive(), "the miss inside the window returned");
+        insideWindowMiss.rethrowFailure();
         drainExecutor();
         int afterInsideWindowMiss = moduleDispatcher.getRequestCount();
 
@@ -213,7 +215,6 @@ class HttpJwksLoaderExecutorHandOffTest {
         drainExecutor();
 
         assertAll("only a miss that claims the window holds the guard",
-                () -> assertFalse(insideWindowMiss.isAlive(), "the miss inside the window returned"),
                 () -> assertEquals(2, afterClaim, "the first miss claimed the window and fetched"),
                 () -> assertEquals(3, afterPeriodicDuringMiss,
                         "a periodic cycle started while the miss inside the window runs still fetches"),
@@ -251,6 +252,32 @@ class HttpJwksLoaderExecutorHandOffTest {
     }
 
     /**
+     * One action run on its own thread by {@link GatedClock#gateNextReadOf(Runnable)}. The action runs
+     * inside {@link #outcome}, which records anything it throws - its own assertion, or the release timeout
+     * of the gated clock read - so the test thread can rethrow it instead of losing it with the thread.
+     *
+     * @param thread  the thread running the action, for a bounded {@code join} and an {@code isAlive} check
+     * @param outcome the action's result, holding any {@link Throwable} it threw
+     */
+    private record GatedRead(Thread thread, FutureTask<Void> outcome) {
+
+        /**
+         * Rethrows on the calling thread whatever the finished action threw, keeping its own message.
+         * Call only after {@link #thread()} has terminated.
+         */
+        void rethrowFailure() throws InterruptedException {
+            try {
+                outcome.get(1, TimeUnit.SECONDS);
+            } catch (ExecutionException e) {
+                Throwable cause = e.getCause();
+                throw new AssertionError("the gated worker failed: " + cause.getMessage(), cause);
+            } catch (TimeoutException e) {
+                throw new AssertionError("the gated worker left no outcome", e);
+            }
+        }
+    }
+
+    /**
      * The test clock, read through {@link #clock}, that can hold back the next read made by one chosen
      * thread until {@link #release} is counted down, counting {@link #arrived} down when that read starts.
      * Reads by every other thread, and every later read, return at once.
@@ -261,11 +288,12 @@ class HttpJwksLoaderExecutorHandOffTest {
         private final CountDownLatch release = new CountDownLatch(1);
         private volatile Thread gatedThread;
 
-        Thread gateNextReadOf(Runnable action) {
-            Thread thread = new Thread(action, "gated-clock-reader");
+        GatedRead gateNextReadOf(Runnable action) {
+            FutureTask<Void> outcome = new FutureTask<>(action, null);
+            Thread thread = new Thread(outcome, "gated-clock-reader");
             gatedThread = thread;
             thread.start();
-            return thread;
+            return new GatedRead(thread, outcome);
         }
 
         @Override
