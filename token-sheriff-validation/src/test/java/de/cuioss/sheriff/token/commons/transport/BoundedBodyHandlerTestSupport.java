@@ -166,6 +166,18 @@ final class BoundedBodyHandlerTestSupport {
             return buffer;
         }
 
+        /**
+         * Feeds every chunk as its own buffer in one {@code onNext} call, the way an HTTP client delivers
+         * several buffers at once.
+         *
+         * @return the buffers in delivery order, so a test can read how many bytes of each were consumed
+         */
+        List<ByteBuffer> feedInOneCall(byte[]... chunks) {
+            List<ByteBuffer> buffers = Arrays.stream(chunks).map(ByteBuffer::wrap).toList();
+            subscriber.onNext(buffers);
+            return buffers;
+        }
+
         void feedAll(byte[] body, int chunkSize) {
             for (int offset = 0; offset < body.length; offset += chunkSize) {
                 feed(Arrays.copyOfRange(body, offset, Math.min(offset + chunkSize, body.length)));

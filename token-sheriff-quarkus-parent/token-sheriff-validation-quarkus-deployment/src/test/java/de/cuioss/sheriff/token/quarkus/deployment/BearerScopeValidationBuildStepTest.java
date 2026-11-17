@@ -25,10 +25,14 @@ import jakarta.enterprise.inject.spi.DeploymentException;
 import org.jboss.jandex.Index;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -86,38 +90,31 @@ class BearerScopeValidationBuildStepTest {
                 "valid scope names and a union of exactly 64 distinct scopes must not be refused");
     }
 
-    @Test
-    @DisplayName("Should refuse a method-level scope name outside the grammar, naming the method")
-    void shouldRefuseInvalidMethodLevelScope() throws Exception {
-        List<String> violations = TokenSheriffProcessor.findScopeViolations(Index.of(InvalidMethodLevelScope.class));
-
-        assertEquals(1, violations.size(), "exactly the method-level annotation must be refused: " + violations);
-        assertTrue(violations.getFirst().startsWith("@BearerAuth on method "
-                + InvalidMethodLevelScope.class.getName() + "#endpoint "), violations.getFirst());
-        assertTrue(violations.getFirst().contains(NOT_A_SCOPE_TOKEN), violations.getFirst());
+    static Stream<Arguments> scopesOutsideGrammar() {
+        return Stream.of(
+                Arguments.of("space, method level", InvalidMethodLevelScope.class,
+                        "@BearerAuth on method " + InvalidMethodLevelScope.class.getName() + "#endpoint "),
+                Arguments.of("double quote, class level", InvalidClassLevelScope.class,
+                        "@BearerAuth on class " + InvalidClassLevelScope.class.getName() + " "),
+                Arguments.of("backslash, injection point", InvalidInjectionPointScope.class,
+                        "@BearerToken on field " + InvalidInjectionPointScope.class.getName() + "#tokenResult "),
+                Arguments.of("non-ASCII character, method level", NonAsciiScope.class,
+                        "@BearerAuth on method " + NonAsciiScope.class.getName() + "#endpoint "),
+                Arguments.of("control character, method level", ControlCharacterScope.class,
+                        "@BearerAuth on method " + ControlCharacterScope.class.getName() + "#endpoint "));
     }
 
-    @Test
-    @DisplayName("Should refuse a class-level scope name outside the grammar, naming the class")
-    void shouldRefuseInvalidClassLevelScope() throws Exception {
-        List<String> violations = TokenSheriffProcessor.findScopeViolations(Index.of(InvalidClassLevelScope.class));
+    @ParameterizedTest(name = "[{index}] {0}")
+    @MethodSource("scopesOutsideGrammar")
+    @DisplayName("Should refuse a scope name outside the grammar, naming the declaring member")
+    void shouldRefuseScopeOutsideGrammar(String name, Class<?> fixture, String expectedPrefix) throws Exception {
+        List<String> violations = TokenSheriffProcessor.findScopeViolations(Index.of(fixture));
+        List<String> control = TokenSheriffProcessor.findScopeViolations(Index.of(ValidScopesResource.class));
 
-        assertEquals(1, violations.size(), "exactly the class-level annotation must be refused: " + violations);
-        assertTrue(violations.getFirst().startsWith("@BearerAuth on class "
-                + InvalidClassLevelScope.class.getName() + " "), violations.getFirst());
+        assertEquals(1, violations.size(), "exactly the one annotation must be refused: " + violations);
+        assertTrue(violations.getFirst().startsWith(expectedPrefix), violations.getFirst());
         assertTrue(violations.getFirst().contains(NOT_A_SCOPE_TOKEN), violations.getFirst());
-    }
-
-    @Test
-    @DisplayName("Should refuse a scope name outside the grammar on a @BearerToken injection point, naming the field")
-    void shouldRefuseInvalidInjectionPointScope() throws Exception {
-        List<String> violations = TokenSheriffProcessor
-                .findScopeViolations(Index.of(InvalidInjectionPointScope.class));
-
-        assertEquals(1, violations.size(), "exactly the injection point must be refused: " + violations);
-        assertTrue(violations.getFirst().startsWith("@BearerToken on field "
-                + InvalidInjectionPointScope.class.getName() + "#tokenResult "), violations.getFirst());
-        assertTrue(violations.getFirst().contains(NOT_A_SCOPE_TOKEN), violations.getFirst());
+        assertEquals(List.of(), control, "control: valid scope names are not refused");
     }
 
     @Test
@@ -308,6 +305,28 @@ class BearerScopeValidationBuildStepTest {
     static class InvalidMethodLevelScope {
 
         @BearerAuth(requiredScopes = {"read", "has space"})
+        public String endpoint() {
+            return "refused";
+        }
+    }
+
+    /**
+     * A method-level {@code @BearerAuth} whose scope name holds a non-ASCII letter, next to a valid one.
+     */
+    static class NonAsciiScope {
+
+        @BearerAuth(requiredScopes = {"read", "café"})
+        public String endpoint() {
+            return "refused";
+        }
+    }
+
+    /**
+     * A method-level {@code @BearerAuth} whose scope name holds a control character, next to a valid one.
+     */
+    static class ControlCharacterScope {
+
+        @BearerAuth(requiredScopes = {"read", "line\u0007bell"})
         public String endpoint() {
             return "refused";
         }

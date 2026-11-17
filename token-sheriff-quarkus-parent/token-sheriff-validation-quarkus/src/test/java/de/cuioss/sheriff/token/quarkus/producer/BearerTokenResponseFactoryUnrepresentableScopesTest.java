@@ -15,16 +15,21 @@
  */
 package de.cuioss.sheriff.token.quarkus.producer;
 
+import de.cuioss.sheriff.token.commons.error.ErrorTextSanitizer;
 import de.cuioss.sheriff.token.commons.http.BearerChallenge;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import jakarta.ws.rs.core.Response;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.ERROR;
 import static de.cuioss.test.juli.LogAsserts.assertNoLogMessagePresent;
@@ -43,58 +48,33 @@ class BearerTokenResponseFactoryUnrepresentableScopesTest {
 
     private static final String WWW_AUTHENTICATE = "WWW-Authenticate";
 
-    @Test
-    @DisplayName("should answer a scope name holding a space with the defined 500 response")
-    void shouldAnswerScopeWithSpaceAsMisconfiguration() {
-        // Arrange
-        BearerTokenResult control = scopeViolation(Set.of("two-words"));
-        BearerTokenResult unrepresentable = scopeViolation(Set.of("two words"));
-
-        // Act
-        Response controlResponse = control.createErrorResponse();
-        assertNoLogMessagePresent(TestLogLevel.ERROR, ERROR.UNREPRESENTABLE_REQUIRED_SCOPES.resolveIdentifierString());
-        Response response = unrepresentable.createErrorResponse();
-
-        // Assert
-        assertInsufficientScopeChallenge(controlResponse);
-        assertMisconfigurationResponse(response);
-        assertSingleLogMessagePresentContaining(TestLogLevel.ERROR,
-                ERROR.UNREPRESENTABLE_REQUIRED_SCOPES.resolveIdentifierString());
-        assertSingleLogMessagePresentContaining(TestLogLevel.ERROR, "1 scope(s) 'two words'");
-    }
-
-    @Test
-    @DisplayName("should answer more than the maximum number of distinct scopes with the defined 500 response")
-    void shouldAnswerTooManyScopesAsMisconfiguration() {
-        // Arrange
-        BearerTokenResult control = scopeViolation(scopes(BearerChallenge.MAX_SCOPE_TOKENS));
-        BearerTokenResult unrepresentable = scopeViolation(scopes(BearerChallenge.MAX_SCOPE_TOKENS + 1));
-
-        // Act
-        Response controlResponse = control.createErrorResponse();
-        assertNoLogMessagePresent(TestLogLevel.ERROR, ERROR.UNREPRESENTABLE_REQUIRED_SCOPES.resolveIdentifierString());
-        Response response = unrepresentable.createErrorResponse();
-
-        // Assert
-        assertInsufficientScopeChallenge(controlResponse);
-        assertMisconfigurationResponse(response);
-        assertSingleLogMessagePresentContaining(TestLogLevel.ERROR,
-                ERROR.UNREPRESENTABLE_REQUIRED_SCOPES.resolveIdentifierString());
-        assertSingleLogMessagePresentContaining(TestLogLevel.ERROR,
-                (BearerChallenge.MAX_SCOPE_TOKENS + 1) + " scope(s)");
-    }
-
-    @Test
-    @DisplayName("should answer a scope that fits the bound only without realm and description with the defined 500 response")
-    void shouldAnswerChallengeOverLengthBoundAsMisconfiguration() {
-        // Arrange
+    private static String longestFittingScope() {
         int overhead = BearerTokenResponseFactory.insufficientScopeChallenge(Set.of("x")).length() - 1;
-        String longestFitting = "a".repeat(BearerChallenge.MAX_LENGTH - overhead);
-        String oneTooLong = longestFitting + "a";
-        assertDoesNotThrow(() -> BearerChallenge.insufficientScope().scopes(Set.of(oneTooLong)).build(),
-                "precondition: the scope fits the bound once realm and error_description are left out");
-        BearerTokenResult control = scopeViolation(Set.of(longestFitting));
-        BearerTokenResult unrepresentable = scopeViolation(Set.of(oneTooLong));
+        return "a".repeat(BearerChallenge.MAX_LENGTH - overhead);
+    }
+
+    static Stream<Arguments> unrepresentableScopeSets() {
+        String longestFitting = longestFittingScope();
+        return Stream.of(
+                Arguments.of("a scope name holding a space", Set.of("two-words"), Set.of("two words"),
+                        "1 scope(s) 'two words'"),
+                Arguments.of("a scope name holding a non-ASCII letter", Set.of("cafe"), Set.of("café"),
+                        "1 scope(s) 'café'"),
+                Arguments.of("more than the maximum number of distinct scopes",
+                        scopes(BearerChallenge.MAX_SCOPE_TOKENS), scopes(BearerChallenge.MAX_SCOPE_TOKENS + 1),
+                        (BearerChallenge.MAX_SCOPE_TOKENS + 1) + " scope(s)"),
+                Arguments.of("a scope that fits the bound only without realm and description",
+                        Set.of(longestFitting), Set.of(longestFitting + "a"), "1 scope(s)"));
+    }
+
+    @ParameterizedTest(name = "[{index}] {0}")
+    @MethodSource("unrepresentableScopeSets")
+    @DisplayName("should answer a scope set the challenge cannot carry with the defined 500 response")
+    void shouldAnswerUnrepresentableScopesAsMisconfiguration(String name, Set<String> controlScopes,
+            Set<String> unrepresentableScopes, String logFragment) {
+        // Arrange
+        BearerTokenResult control = scopeViolation(controlScopes);
+        BearerTokenResult unrepresentable = scopeViolation(unrepresentableScopes);
 
         // Act
         Response controlResponse = control.createErrorResponse();
@@ -103,11 +83,47 @@ class BearerTokenResponseFactoryUnrepresentableScopesTest {
 
         // Assert
         assertInsufficientScopeChallenge(controlResponse);
-        assertEquals(BearerChallenge.MAX_LENGTH, controlResponse.getHeaderString(WWW_AUTHENTICATE).length(),
-                "control: the longest scope that fits yields a challenge of exactly the bound");
         assertMisconfigurationResponse(response);
         assertSingleLogMessagePresentContaining(TestLogLevel.ERROR,
                 ERROR.UNREPRESENTABLE_REQUIRED_SCOPES.resolveIdentifierString());
+        assertSingleLogMessagePresentContaining(TestLogLevel.ERROR, logFragment);
+    }
+
+    @Test
+    @DisplayName("should answer the longest scope that fits with a challenge of exactly the bound")
+    void shouldAnswerLongestFittingScopeWithChallengeAtBound() {
+        // Arrange
+        String longestFitting = longestFittingScope();
+        assertDoesNotThrow(() -> BearerChallenge.insufficientScope().scopes(Set.of(longestFitting + "a")).build(),
+                "precondition: one character more fits the bound once realm and error_description are left out");
+
+        // Act
+        Response response = scopeViolation(Set.of(longestFitting)).createErrorResponse();
+
+        // Assert
+        assertInsufficientScopeChallenge(response);
+        assertEquals(BearerChallenge.MAX_LENGTH, response.getHeaderString(WWW_AUTHENTICATE).length(),
+                "the longest scope that fits yields a challenge of exactly the bound");
+    }
+
+    @Test
+    @DisplayName("should truncate the sanitised scope text of the logged ERROR at 256 characters")
+    void shouldTruncateLoggedScopesAt256Characters() {
+        // Arrange
+        String scope = "a".repeat(150) + " " + "b".repeat(150);
+        String kept = scope.substring(0, ErrorTextSanitizer.MAX_LENGTH);
+        BearerTokenResult unrepresentable = scopeViolation(Set.of(scope));
+
+        // Act
+        Response response = unrepresentable.createErrorResponse();
+
+        // Assert
+        assertEquals(256, ErrorTextSanitizer.MAX_LENGTH, "the logged scope text is cut at 256 characters");
+        assertMisconfigurationResponse(response);
+        assertSingleLogMessagePresentContaining(TestLogLevel.ERROR,
+                "1 scope(s) '" + kept + ErrorTextSanitizer.TRUNCATION_MARKER + "'");
+        assertNoLogMessagePresent(TestLogLevel.ERROR, scope);
+        assertNoLogMessagePresent(TestLogLevel.ERROR, kept + "b");
     }
 
     @Test

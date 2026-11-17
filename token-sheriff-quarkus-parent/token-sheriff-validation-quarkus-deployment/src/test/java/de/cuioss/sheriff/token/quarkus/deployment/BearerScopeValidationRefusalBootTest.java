@@ -16,6 +16,8 @@
 package de.cuioss.sheriff.token.quarkus.deployment;
 
 import de.cuioss.sheriff.token.quarkus.deployment.BearerScopeValidationBuildStepTest.InvalidMethodLevelScope;
+import de.cuioss.sheriff.token.quarkus.deployment.BearerScopeValidationBuildStepTest.NonAsciiScope;
+import de.cuioss.sheriff.token.quarkus.deployment.BearerScopeValidationBuildStepTest.ValidScopesResource;
 import io.quarkus.test.QuarkusExtensionTest;
 import jakarta.enterprise.inject.spi.DeploymentException;
 import org.junit.jupiter.api.DisplayName;
@@ -51,26 +53,36 @@ class BearerScopeValidationRefusalBootTest {
 
     private static final String REFUSED_MEMBER = " on method " + InvalidMethodLevelScope.class.getName() + "#endpoint ";
 
+    private static final String REFUSED_NON_ASCII_MEMBER = " on method " + NonAsciiScope.class.getName()
+            + "#endpoint ";
+
+    private static final String VALID_MEMBER = " " + ValidScopesResource.class.getName();
+
     @RegisterExtension
     static final QuarkusExtensionTest unitTest = new QuarkusExtensionTest()
-            .withApplicationRoot(jar -> jar.addClasses(InvalidMethodLevelScope.class))
+            .withApplicationRoot(jar -> jar.addClasses(InvalidMethodLevelScope.class, NonAsciiScope.class,
+                    ValidScopesResource.class))
             .withConfigurationResource("application-integration.properties")
             .assertException(BearerScopeValidationRefusalBootTest::assertScopeRefusal);
 
     private static void assertScopeRefusal(Throwable thrown) {
         assertNotNull(thrown, "augmentation must fail for a scope name outside the scope-token grammar");
-        Throwable refusal = findScopeRefusal(thrown);
+        Throwable refusal = findScopeRefusal(thrown, REFUSED_MEMBER);
         assertNotNull(refusal, "augmentation must fail with a DeploymentException naming " + REFUSED_MEMBER.strip()
                 + " and the scope-token reason, but the failure was: " + thrown);
         assertInstanceOf(DeploymentException.class, refusal,
                 "the scope refusal must be a DeploymentException, was: " + refusal);
+        assertNotNull(findScopeRefusal(thrown, REFUSED_NON_ASCII_MEMBER),
+                "a scope name holding a non-ASCII letter must be refused as well, but the failure was: " + thrown);
+        assertNull(findScopeRefusal(thrown, VALID_MEMBER),
+                "control: the fixture with valid scope names in the same archive must not be refused");
     }
 
     /**
      * Walks the cause chain, and the suppressed exceptions Quarkus attaches when it collects validation
-     * errors, for the DeploymentException whose message names the refused method and the reason.
+     * errors, for the DeploymentException whose message names {@code member} and the reason.
      */
-    private static Throwable findScopeRefusal(Throwable thrown) {
+    private static Throwable findScopeRefusal(Throwable thrown, String member) {
         Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<>());
         Deque<Throwable> pending = new ArrayDeque<>();
         pending.push(thrown);
@@ -80,7 +92,7 @@ class BearerScopeValidationRefusalBootTest {
                 continue;
             }
             String message = current.getMessage();
-            if (current instanceof DeploymentException && message != null && message.contains(REFUSED_MEMBER)
+            if (current instanceof DeploymentException && message != null && message.contains(member)
                     && message.contains(NOT_A_SCOPE_TOKEN)) {
                 return current;
             }

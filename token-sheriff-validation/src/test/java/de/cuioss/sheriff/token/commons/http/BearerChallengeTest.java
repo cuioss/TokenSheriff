@@ -287,11 +287,18 @@ class BearerChallengeTest {
         }
 
         @Test
-        @DisplayName("Far more than 64 scope tokens are refused at build() with the message of 65")
+        @DisplayName("Far more than 64 scope tokens are retained as 65 and refused at build() with the message of 65")
         void shouldRefuseFarTooManyScopesLikeOnePastTheBound() {
             BearerChallenge.Builder onePast = BearerChallenge.insufficientScope()
                     .scopes(scopes(BearerChallenge.MAX_SCOPE_TOKENS + 1));
             BearerChallenge.Builder farPast = BearerChallenge.insufficientScope().scopes(scopes(100_000));
+            BearerChallenge.Builder atBound = BearerChallenge.insufficientScope()
+                    .scopes(scopes(BearerChallenge.MAX_SCOPE_TOKENS));
+
+            assertEquals(BearerChallenge.MAX_SCOPE_TOKENS + 1, farPast.retainedScopeCount(),
+                    "100000 distinct tokens are retained as one past the bound, not all of them");
+            assertEquals(BearerChallenge.MAX_SCOPE_TOKENS, atBound.retainedScopeCount(),
+                    "control: 64 distinct tokens are all retained");
 
             String onePastMessage = assertThrows(IllegalArgumentException.class, onePast::build).getMessage();
             String farPastMessage = assertThrows(IllegalArgumentException.class, farPast::build,
