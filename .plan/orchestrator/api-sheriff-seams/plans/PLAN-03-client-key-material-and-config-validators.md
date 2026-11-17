@@ -281,6 +281,12 @@ dismissed with a recorded reason (`unknown` for a failed read, never `0`).
 - `parallelization_scope` is 1: plans of this epic run sequentially, one at a time, in ordinal order. This
   plan runs after PLAN-02.
 - Depends on: none by code (PLAN-01 and PLAN-02 are order only).
+- Update (2026-11-17, at emit): PLAN-01, 02, 04, 05, 06, 07 and 08 have shipped (#898, #901, #907, #899, #906, #908, #912; main is `dcbdcfb6`), and `parallelization_scope` is 2. Every line number
+  in this spec is from before those merges and is re-read at HEAD at outline; the moved anchors are listed in `epic.md` § Queue annotations. PLAN-08 moved the nearest ones:
+  `ClientConfigMapper` (`propertyOf(Setting)`, the duration parse, `validateDiscoveryCache`), `TokenSheriffClientProducer` (`cachingDiscoveryResolver`, `validateDiscoveryCacheOnStartup`),
+  `TokenSheriffClientProcessor` (a new `requireDiscoveryCacheForInjection` build step and a `TokenSheriffClientRecorder`), `ClientRuntimeConfig`, `quarkus-config-doc.adoc`, `requirements.adoc`
+  (`CLIENT-29` edited), `test-strategy.adoc`, `doc/LogMessages.adoc` (INFO `4` text only) and `AGENTS.md`. PLAN-09 (staged) shares `IssuerConfigResolver`, `HttpJwksLoaderConfig`, `doc/LogMessages.adoc`, `quarkus-config-doc.adoc`
+  and four more files with this plan and waits for it; PLAN-10 (staged) sequences after it and may close part of PLAN-01's and PLAN-02's residuals the epic ledger lists. This plan does not take them (scope guard).
 - Overlaps with: PLAN-02 and PLAN-04, all three in `token-sheriff-client`. Shared files: PLAN-02 and this plan
   both edit `ClientConfiguration` (PLAN-02 possibly adds a field; this plan changes two private validators);
   PLAN-04 and this plan both touch `TokenLifecycleManager`'s neighbourhood only if the revoke-if-supported

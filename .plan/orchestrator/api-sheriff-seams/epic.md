@@ -54,10 +54,21 @@ fail-closed posture is never loosened.
   `:178`, `:209`), `quarkus-config-doc.adoc`, `doc/client/requirements.adoc` (`CLIENT-28` and `CLIENT-29` taken; the next free is
   `CLIENT-30`), `doc/client/README.adoc` (range `CLIENT-1`–`CLIENT-29`), `test-strategy.adoc`, `doc/LogMessages.adoc` (INFO `4`, WARN
   `115` and `116` taken) and the `token-sheriff-client/pom.xml` coverage includes. Each outline re-reads them at HEAD.
-- PLAN-08 — staged on the operator's word from PLAN-04's analysis: the discovery cache's Quarkus startup validation, its failure and
-  interrupt handling, four test gaps, the cache's logging and configuration text, and the verifier's open `sub` question. Five
-  deliverables, workstream WS-01, ahead of the 0.9.10 release because API Sheriff's PLAN-34 adopts both classes. It shares surface
-  with PLAN-03 (`TokenSheriffClientProducer`, `ClientConfigMapper`, `ClientRuntimeConfig`, `requirements.adoc`, `test-strategy.adoc`).
+- PLAN-08 — shipped (#912, merge dcbdcfb6, `landings/PLAN-08.md`): the discovery cache's Quarkus startup validation (one `checkSettings` rule list,
+  a structured `Setting` identity, a build step that fails a disabled-cache injection at runtime init), its failure and interrupt handling (a
+  non-`TransportException` is a recorded failure, an interrupted caller aborts without state, a 365-day bound), the test gaps, the logging and
+  configuration text, and the verifier's `sub` decision (keep and document; `RefreshResultVerifier`, `StoredToken` and `TokenLifecycleManager` are
+  untouched). A 26-file merge (+2864/-205) for five deliverables. PLAN-03 inherits moved anchors: `ClientConfigMapper` (`propertyOf` `:126`, the
+  duration parse `:283`, `validateDiscoveryCache`), `TokenSheriffClientProducer` (`cachingDiscoveryResolver` `:188`, `validateDiscoveryCacheOnStartup`
+  `:207`), `TokenSheriffClientProcessor` (a new `requireDiscoveryCacheForInjection` build step `:144` and a new `TokenSheriffClientRecorder`),
+  `ClientRuntimeConfig`, `quarkus-config-doc.adoc`, `doc/client/requirements.adoc` (`CLIENT-29` edited), `doc/client/specification/test-strategy.adoc`,
+  `retrieval-flow.adoc`, `threat-model.adoc`, `doc/LogMessages.adoc` (INFO `4` row text only; no new record) and `AGENTS.md` (a new approved broad-catch
+  site). Each outline re-reads them at HEAD.
+- PLAN-10 — staged on the operator's word from PLAN-08's analysis ("one follow-up plan for the residuals and other left-overs and open issues"): the
+  discovery cache's residual text errors and test-rule deviations, PLAN-01's and PLAN-02's minor residuals, PLAN-04's two test-hardening nitpicks, and
+  a recorded disposition for every unsettled review-bot body finding on the shipped PRs. Five deliverables, workstream WS-01. It shares surface with
+  PLAN-03 (`ClientConfiguration`, `ClientConfigMapper`, `requirements.adoc`, `test-strategy.adoc`, `LogMessages.adoc`) and sequences after it; with
+  PLAN-09 it shares `LogMessages.adoc` only.
 - PLAN-09 — staged on the operator's word from PLAN-07's analysis: an invalid `@BearerAuth` scope escaping the scope-violation path, the
   unknown-`kid` claim path's guard order and burned window against what ADR-0030 says, the helpers' own work bounds (builder, body
   handler, `Content-Length`), stale hub docs and the ADR-0031 itemisation, and one health-check test that cannot fail. Five deliverables,
@@ -141,6 +152,21 @@ fail-closed posture is never loosened.
   `analyze and emit` the operator answered the overlap prompt for PLAN-03 and PLAN-08 (five shared files: `TokenLifecycleManager.java`,
   `TokenSheriffClientProducer.java`, `doc/client/requirements.adoc`, `doc/client/specification/test-strategy.adoc`, `doc/LogMessages.adoc`):
   **emit PLAN-08 only**; PLAN-03 waits for PLAN-08 to land.
+- 2026-11-17 — PLAN-08 shipped (PR #912, merge dcbdcfb6; `landings/PLAN-08.md`). Three-layer analysis: no blocker or major at any layer. Layer 3 carries
+  two minor points (a caller with an interrupt flag already set gets a failing provider's refusal rethrown unrecorded; `CachingDiscoveryResolver:407-411`) and
+  two not shown by reading (the build step matches by required-type name only, so ArC's removal of an unused injection point is untested; the duration parse
+  message names ISO-8601 only and Quarkus's converter was never run); layer 2 carries six residual text errors (the Javadoc Logging paragraph on interrupt and on a
+  recovering refresh, the single-flight paragraph's missing third case, mixed `-001`/`-4` identifier forms, "most failed attempts", the 12.2 rationale omitting the
+  unchecked stored ID token, the ADR-0026 summary); layer 1 one (the duplicate-WARN cause is the unconditional `state.set`, not a lost CAS). The lane's `weakened_test`
+  claim was verified (49 to 60 assertion call sites, 9 to 2 gate-pattern lines; the override was a false positive). The five operator decisions at outline were read off
+  the merged code: fail-fast injection at runtime init, interrupt aborts with no state, refuse (not saturate) at 365 days, no quiet resolve path, `sub` kept and
+  documented. Inbox drain: 11 candidate-lessons dispositioned: 2 promoted as lessons 2026-11-17-06-001 (from -001, with -002 to -005 aggregated into it) and
+  2026-11-17-06-002 (from -006, with -008 aggregated), two recurrences of existing lessons (-007, -009), two `script_failure` clusters classified from the archived work
+  log and absorbed into the Watch (-010, -011). The residuals were reported to the operator, who chose **one follow-up plan** for them and "other left-overs and open
+  issues": staged as **PLAN-10** (the discovery cache's residuals, PLAN-01's and PLAN-02's minor residuals, PLAN-04's two nitpicks, a disposition for every unsettled
+  review-bot body finding). The overlap prompt for PLAN-03 against PLAN-09 (seven shared files: `LogMessages.adoc`, `doc/commons/requirements.adoc`,
+  `IssuerConfigResolver`, `openid-discovery.adoc`, `BoundedBodyHandler`, `HttpJwksLoaderConfig`, `BoundedBodyHandlerTest`) was answered **emit PLAN-03 only**; PLAN-09 waits for
+  PLAN-03 to land and PLAN-10 sequences after PLAN-03.
 - 2026-11-12 — Not in this epic: anything API Sheriff can do with 0.9.9 as released (that is API
   Sheriff's PLAN-33); API Sheriff's own internal duplicates; `TokenLifecycleManager` as a replacement
   for the gateway's refresh coordinator (the manager is keyed on a server-side store and has no
@@ -152,8 +178,10 @@ fail-closed posture is never loosened.
 - Candidate defect from the audit, **not verified**: `RefreshFlow` (client) validates
   only the access token of a refresh response (`RefreshFlow` ~:196), so a consumer that does not
   use `TokenLifecycleManager` gets no ID-token or `sub` check. **Settled by PLAN-04 (#907)**: `RefreshResultVerifier.verify` is now
-  public and `TokenLifecycleManager` calls it, so the claim was true and the seam exists. What stays open is the unbound-session case
+  public and `TokenLifecycleManager` calls it, so the claim was true and the seam exists. What stayed open was the unbound-session case
   (the ID token's `sub` against nothing when no subject is bound and the access token has no `sub`), staged as PLAN-08 deliverable 5.
+  **Settled by PLAN-08 (#912)** as keep-and-document (`token-handling.adoc`, `threat-model.adoc:363-366`, re-read); the stated reason is partly overstated (the
+  stored ID token of an unbound session is replaced unchecked, `StoredToken.java:174-182`), now in PLAN-10 deliverable 1.
 - 2026-11-12 — PLAN-01 landing `client-native-image-registration-008.md` is **incomplete**
   (`inbox landing-check`: `complete: false`). Missing keys: `unresolved_review_threads`,
   `review_body_findings_total`, `review_body_findings_handled` (all `unknown`; no finalize step records
@@ -169,7 +197,8 @@ fail-closed posture is never loosened.
   static `Random`; (3) `NativeImageClassScanner:65,83` `@throws` omits `UncheckedIOException`;
   (4) two untested 400 branches in `ClientEngineNativeEndpoint:184,210`; (5) `ClientNativeImageSpecIT:23`
   imports Hamcrest against the spec constraint (module precedent). Becomes a plan only on the operator's word
-  (PLAN-07 has shipped, so it can no longer take them; PLAN-03 is at six deliverables).
+  (PLAN-07 has shipped, so it can no longer take them; PLAN-03 is at six deliverables). **Staged as PLAN-10 deliverable 3 on the operator's word
+  (2026-11-17)**; its line numbers have moved and were not re-read.
 
 - 2026-11-13 — PLAN-05 layer-3 defect, reported to the operator, **nothing staged** (see `landings/PLAN-05.md` § Layer 3):
   `LogoutTokenValidator.numericDate:311-312` runs `BigDecimal.setScale(0, FLOOR)` on an attacker-sized exponent
@@ -209,6 +238,7 @@ fail-closed posture is never loosened.
   (`ClientConfigurationTest:666`, `AuthorizationRequestOptionsTest:102`), `ClientConfigurationTest` at 904 lines, refusal
   tests that assert only the type and no test of the `LogSanitizer` output. Becomes a plan, or folds into PLAN-03
   (which shares `ClientConfiguration`, `requirements.adoc` and `test-strategy.adoc`), only on the operator's word.
+  **Staged as PLAN-10 deliverable 4 on the operator's word (2026-11-17)**; its line numbers have moved and were not re-read.
 - 2026-11-15 — PLAN-06 landing `jwks-loader-gateway-needs-014.md` is **incomplete** (`inbox landing-check`: `complete: false`;
   `unresolved_review_threads` and `sonar_open_new_issues` are `unknown`) and its review numbers are contradicted by the provider:
   the landing says `review_body_findings_total=1`, `handled=1` (from the plan findings store); `review-gate --pr-number 906`
@@ -242,7 +272,10 @@ fail-closed posture is never loosened.
   interrupt becomes a cache-wide failure episode (`DiscoveryResolver:190-193`); the four durations are unbounded; the delegate still logs
   INFO per refresh while the Javadoc, `LogMessages.adoc` and `retrieval-flow.adoc` imply it does not; the grace-period default, the
   disabled-cache injection and the `TokenSheriffClient-4` identifier statements disagree with the code; ADR-0026 does not cover the
-  client module. Nothing here has run; the leaf read code only.
+  client module. Nothing here has run; the leaf read code only. **Settled by PLAN-08 (#912)** except the residuals in the PLAN-08 entry below
+  (`landings/PLAN-08.md`): the startup check, the delegate-exception record, the interrupt handling, the 365-day bounds, the test gaps and the
+  injection statement are fixed and re-read; the logging, defaults, identifier and ADR-0026 statements were rewritten with six text errors left (PLAN-10 deliverable 1).
+  PLAN-04's two nitpicks (`DiscoverySpecIT:102-103`, `CachingDiscoveryResolverAdversarialTest:157-158`) are PLAN-10 deliverable 2.
 - 2026-11-15 — PLAN-04's `e2e-tests` CI job failed twice on `accessibility-wcag-compliance.spec.js:60` (a Playwright screenshot
   protocol error on the Token Debugger page; heads `fd77ed55` and `36b61921`) and passed on rerun both times. The lane says no branch
   code is implicated (the plan does not touch the Token Debugger UI); the orchestrator did not reproduce it. The lane's cause (a
@@ -272,6 +305,27 @@ fail-closed posture is never loosened.
   `error_description` grammar (operator decision OD-3 kept the RFC 9110 quoted string), and a one-byte-chunk test. **Staged as PLAN-09 on the operator's word (2026-11-16)**
   (`plans/PLAN-09-public-helper-residuals.md`, five deliverables, WS-02): all of the above except the `error_description` grammar, which stays the
   OD-3 contract unless the operator decides otherwise.
+- 2026-11-17 — PLAN-08 landing `discovery-cache-verifier-hardening-012.md` is **incomplete** (`inbox landing-check`: `complete: false`;
+  `unresolved_review_threads`, `review_body_findings_total` and `review_body_findings_handled` are `unknown`; no finalize step records them). No claim to
+  contradict. The provider re-read: `review-gate --pr-number 912` returns 0 open threads, 5 coderabbit body findings (`inline-1..5`), `handled` 0,
+  `merge_allowed: false, reason: body_findings_undisposed`; the five threads carry the lane's replies (four fixed with regression tests, one answered "not changed"
+  on the `token-handling.adoc` ordering sentence). `handled` is not re-verified. `ci pr comments` reports `unresolved: 7` of 18 beside the gate's 0 unresolved threads of 5;
+  the difference was not reconciled per item. Sonar is `undecidable` (`head_revision_unavailable`), recorded as unknown; the lane's `0` is the roundtrip's own count.
+  Settling the five findings (with those of the other shipped PRs) is **PLAN-10 deliverable 5**.
+- 2026-11-17 — PLAN-08 layer-3, layer-2 and layer-1 residuals, reported to the operator, **staged as PLAN-10 deliverables 1 and 2 on the operator's word** (see
+  `landings/PLAN-08.md` § Layer 1 to 3; the code points re-read at `dcbdcfb6`, the leaf's test-side points not): a caller with an interrupt flag already set gets a
+  failing provider's refusal rethrown unrecorded (`CachingDiscoveryResolver:407-411`, accepted by the stated design, no backoff from that thread);
+  `TokenSheriffClientProcessor:148-149` matches an injection point by required-type name only, so ArC's removal of an unused point and an `Instance<>` optional lookup are untested
+  (not shown by reading); `ClientConfigMapper:283-290` names ISO-8601 only and was never run under Quarkus's converter (not shown by reading); six text errors
+  (Javadoc `:95-102` and `retrieval-flow.adoc:323` on interrupt and on a recovering refresh; `retrieval-flow.adoc:268-269` omits the failed-in-backoff case; `LogMessages.adoc:209-212`
+  mixes `-001` and `-4`; "most failed attempts" (the leaf counted 5 of 13 sites, not re-read); `threat-model.adoc:363-366` omits that an unbound session's stored ID token is replaced
+  unchecked; ADR-0026's `summary` and `tags` still describe a validation-only ADR); the duplicate-WARN cause is wrong in the Javadoc and `retrieval-flow.adoc:331-333`; three unit-test helpers
+  catch `RuntimeException` under `cui-rewrite:disable` against AGENTS.md (`...FailureHandlingTest:321`, `...HookFailureTest:320`, `...RefreshRegressionTest:287`); the harness is copied into three classes
+  and `invalidSettings()` duplicates `invalidDurations()` (the leaf's reading); no test drives `resolve()` with 365-day values. Nothing here has run.
+- 2026-11-17 — Lessons named in this ledger are not in the lessons store: `2026-11-16-06-001` (promoted at the PLAN-07 drain; its file does not exist and `manage-lessons get` returns `not_found`,
+  `list --status all` shows 19 lessons and no tombstone) and `2026-11-02-14-001` (the lesson the Watch below asks the operator to review; absent from the listing). Lessons `2026-11-11-12-002`, `2026-11-11-12-003`,
+  `2026-11-13-06-005`, `2026-11-13-06-008` and `2026-11-15-18-001`, `-002`, `-004`, `-005` and `-006` are not listed either (`2026-11-15-18-003` is). The cause is not known (an explicit removal, a plan's lesson carry-back or a cleanup run); not recreated here. The operator
+  decides whether the missing lessons are re-promoted from the ledger text; every Watch below that names a missing lesson loses its owner until then.
 
 ## Watches
 
@@ -308,7 +362,11 @@ fail-closed posture is never loosened.
   question above stands), and one `phase_handshake` `drift` result at the 3-outline to 4-plan transition: the Q-Gate counts `qgate_open_count` and
   `pending_findings_blocking_count` were captured as 2 and observed as 0 after q-gate-validation resolved them (the safe direction). A search of the work logs of
   the six other archived plans found no other `phase_handshake` drift, so this is a single occurrence and a lead, not a lesson; the lane's two causes (a capture
-  taken before q-gate-validation and never refreshed, or any change read as drift) are hypotheses. — trigger: the next `analyze` of a landing, and any second `phase_handshake` drift.
+  taken before q-gate-validation and never refreshed, or any change read as drift) are hypotheses. **PLAN-08's drain carried two more, read from its archived work log
+  (`work.log:593`, `:609`) and both classified:** a `manage-status` exit 1 that is a guarded refusal working as designed (the pre-merge check "1 of 6 worktree-branch
+  commit(s) since diverging from main carry no kind=change ledger row", the same class as lesson 2026-11-15-11-004), and an invented `--deliverable all` on `manage-tasks list`
+  (an argparse rejection, `--deliverable` takes an int; a recurrence of 2026-11-11-12-003). PLAN-08's inbox carried no `no_sanction` cluster, so that count stays four plans (PLAN-01, PLAN-06,
+  PLAN-04, PLAN-07); whether the `phase_handshake` drift recurred in PLAN-08 was not checked (its archived log was searched for `script_failure` only). — trigger: the next `analyze` of a landing, and any second `phase_handshake` drift.
 - Four of PLAN-06's thirteen candidate lessons were the same defect class as lesson 2026-11-02-14-001 (a document states a rule more
   broadly than the code gives it, or describes a throttle as a deadline), one with an incomplete sweep. That lesson has now recurred
   in the PLAN-05 and the PLAN-06 drains; if PLAN-04 or PLAN-07 add another, the lesson's rule is not working as written and
@@ -321,12 +379,20 @@ fail-closed posture is never loosened.
   `openid-discovery.adoc` promised a two-interval pickup bound the loader does not enforce), both found by CodeRabbit and not blocked by the lane's two
   reviews, and the analysis found it again in shipped text (`landings/PLAN-07.md` L3-1: the docs say the guard is taken "when a window is claimed", the code takes it for
   every miss; L2-3: the defaults list is incomplete). The rule is not working as written; a review of 2026-11-02-14-001 is the operator's call and is now
-  overdue by this Watch's own test. — trigger: any decision on reviewing 2026-11-02-14-001.
+  overdue by this Watch's own test. **PLAN-08 adds a seventh plan**: its inbox carried none, but the analysis found the class again in text the lane had just rewritten to
+  fix it (`landings/PLAN-08.md` L2-1 to L2-5: the Javadoc Logging paragraph says an interrupt leaves a `DEBUG` line and a recovering refresh logs `DEBUG`, the single-flight paragraph
+  omits one outcome, "most failed attempts" overstates by site count, the 12.2 rationale omits the unchecked stored ID token), and the lane's own advisories named two of them as left unfixed.
+  Note: lesson 2026-11-02-14-001 is not in the lessons store (see the Open Defect of 2026-11-17), so the review has nothing to review until it is restored or re-promoted.
+  — trigger: any decision on reviewing 2026-11-02-14-001.
 - The mirrored-list defect class (lesson 2026-11-15-11-001) recurred in PLAN-04: a hand-kept key list in the Quarkus orphan test
   mirrored `ClientRuntimeConfig` and was caught only by CodeRabbit (fixed in `36b61921`); the production side still keeps
   `ClientConfigMapper.DISCOVERY_CACHE_SETTINGS` as a second list, guarded by that test. PLAN-04 and PLAN-06 ran in parallel, so the
   lesson did not exist when PLAN-04's lane ran. PLAN-07 ran after it existed: its inbox and the leaf's findings carry no mirrored-list instance
-  (the orchestrator did not search the diff for one). — trigger: the PLAN-03 landing, which is the next to run with the lesson.
+  (the orchestrator did not search the diff for one). **PLAN-08 recurred it twice, both caught by CodeRabbit and fixed** (inbox `-007`, `-009`): the Quarkus mapper kept
+  `DISCOVERY_CACHE_SETTINGS` beside a parameter-name map mirroring `checkSettings` (now one exhaustive `propertyOf(Setting)` switch, `ClientConfigMapper:126-133`, re-read),
+  and the guard test for the orphan check built its expected set from the same constants it looped over, so it could not catch an omission (now derived by reflection over
+  `ClientRuntimeConfig`, the leaf's reading). The second is a refinement the lesson's text does not carry: a completeness test needs an oracle independent of the registry it checks.
+  — trigger: the PLAN-03 landing, which is the next to run with the lesson; if the lesson is restored or re-promoted, add the independent-oracle sentence.
 - The Standing Constraint "never gate on `test-compile` or `test`" in every spec rests on a premise main no longer holds:
   PLAN-05's `AGENTS.md` rewrite says the fixtures resolve in the reactor through `<type>test-jar</type>`. The constraint stays
   safe; whether `test-compile` now builds is not shown by reading, and the reactor and published classpaths can diverge.
@@ -361,6 +427,12 @@ fail-closed posture is never loosened.
   `CachingDiscoveryResolver` is opt-in, requires a TTL, hands out a copy per call, fails closed after the grace period, blocks joiners
   on a slow refresh, logs the delegate's `DISCOVERY_RESOLVED` at INFO once per TTL and a failing provider once per attempt, and is
   not validated for value at Quarkus startup (PLAN-08 deliverable 1); the new `sheriff.client.discovery-cache.*` keys fail an orphan.
+  PLAN-08 adds (`landings/PLAN-08.md`): `CachingDiscoveryResolver` now validates `ttl`, `grace-period`, `min-refresh-interval` and `jitter` at Quarkus startup for an enabled cache (an invalid or
+  unparseable value fails naming the property; a disabled cache with the key still fails as an orphan) and refuses a value over 365 days at construction; an unexpected runtime exception from the delegate is
+  recorded as a failed refresh (status cause class only; the stale policy and backoff apply) instead of escaping with no state; a caller whose interrupt flag is set while the delegate fails aborts the refresh with no
+  state and keeps the flag, and joiners re-evaluate; a superseded claim is aborted so no joiner is handed an expired entry; injecting `CachingDiscoveryResolver` with the cache disabled now fails at runtime init (a
+  new build step and `TokenSheriffClientRecorder`), where it failed at first use; the delegate's `INFO` line stays one per TTL and one per failed attempt, now stated in the docs; the unbound-`sub` decision is
+  keep-and-document, and `TokenLifecycleManager` still passes `null` to `verify`; `AGENTS.md` lists one new approved broad-catch site.
   PLAN-07 adds: `Bearer` scheme matching is case-insensitive and the `Authorization` value is trimmed (OD-1, OD-2); a token with an internal space or a
   control character is answered 400 `INVALID_REQUEST` and the cookie is not consulted; a quoted all-blank cookie value is now no token; a required scope
   outside the RFC 6749 §3.3 grammar (or more than 64) throws `IllegalArgumentException` from the challenge build (OD-3) and, on the scope-violation path of
@@ -375,3 +447,7 @@ fail-closed posture is never loosened.
   that churn made the freshness stamp stale (lesson 2026-10-31-12-005); each fix commit after the PR opened re-staled both review steps and the pre-push gate, and a step
   whose last record is `loop_back` replays as a full round (lessons 2026-11-13-06-008 and 2026-11-15-18-002). All four are the lane's account of its own logs, not recounted here.
   — trigger: PLAN-03's landing; if the split-flag or the stale-stamp case repeats there, add the second trigger to the owning lesson.
+- PLAN-08's `weakened_test` rows had a different cause from the split flags above and were promoted as lesson 2026-11-17-06-001: the check's pattern `\.assert[A-Z]\w*` (`_review_support_integrity.py:66`,
+  plugin 0.1.2114) counts `import static ...Assertions.assertAll` lines, so an OpenRewrite wildcard-import rewrite read as a lost assertion; five accepted rows in one plan (two reviews times
+  two heads, then a fifth), re-counted here as 49 to 60 call sites and 9 to 2 gate-pattern lines. It recurs in any plan that touches test imports until the counter changes; PLAN-03 and PLAN-10 edit client tests.
+  — trigger: PLAN-03's and PLAN-10's landings; if the row recurs there, the checker fix is the operator's to route to the marketplace source (as for lesson 2026-11-13-06-005).

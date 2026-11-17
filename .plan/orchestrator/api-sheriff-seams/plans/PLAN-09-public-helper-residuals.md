@@ -219,9 +219,10 @@ head is `0` or every remaining issue is dismissed with a recorded reason (`unkno
   release that carries them with these edges closed.
 - Depends on: PLAN-07, shipped (#908, `80bc2b73`); the plan edits code and docs that landing created.
 - `parallelization_scope` is 2. Overlaps are decided by the `next` admission gate from the declared surface, not here. Known shared
-  surface with staged plans, to be confirmed at emit: PLAN-03 (`IssuerConfigResolver`, `HttpJwksLoaderConfig`, `doc/LogMessages.adoc`,
-  `quarkus-config-doc.adoc`) and PLAN-08 (`doc/LogMessages.adoc`). Requirement, ADR and log ids are next free at write time (ADR numbering
-  continues from `0031`).
+  surface with staged plans, to be confirmed at emit: PLAN-03 (seven files by the 2026-11-17 cross-check: `doc/LogMessages.adoc`, `doc/commons/requirements.adoc`,
+  `IssuerConfigResolver`, `openid-discovery.adoc`, `BoundedBodyHandler`, `HttpJwksLoaderConfig`, `BoundedBodyHandlerTest`) and PLAN-10 (`doc/LogMessages.adoc`).
+  PLAN-08 has shipped (#912, `dcbdcfb6`; it edited the INFO `4` row of `doc/LogMessages.adoc` and added no record). The operator chose to emit PLAN-03 first (2026-11-17), so
+  this plan waits for it and re-reads the files above at HEAD. Requirement, ADR and log ids are next free at write time (ADR numbering continues from `0031`).
 - Adjacent to: API Sheriff's deletions of its own copies (a separate API Sheriff plan; not part of this spec), the client parser
   (`BearerChallengeParams`, read-only except for the new test), and the PLAN-07 lessons `2026-11-16-06-001` and `2026-11-16-06-002`.
 
