@@ -770,12 +770,13 @@ The `token-sheriff-client` jar MUST carry its own GraalVM native-image metadata 
 class holding a static `SecureRandom` — or any other `Random` — (today `FlowContext` and
 `PkceChallenge`) at run time, so a seeded generator is never frozen into the image heap and no
 consumer needs a native-image workaround of its own. The metadata travels in the jar rather than in
-a Quarkus `@BuildStep` because a jar resource set reaches every consumer — Quarkus applications, the
-API Sheriff dependency shape that uses the engine without the client Quarkus extension, and bare
-GraalVM builds alike — while a `@BuildStep` reaches only consumers of `token-sheriff-client-quarkus`.
+a Quarkus `@BuildStep` because a jar resource set reaches every consumer — Quarkus applications with
+or without the client Quarkus extension, and bare GraalVM builds alike — while a `@BuildStep` reaches
+only consumers of `token-sheriff-client-quarkus`.
 This follows the precedent of the core library, which ships its reflection metadata in the
 `token-sheriff-validation` jar the same way. The metadata names classes as strings, so tests
-enumerate the converters and `SecureRandom` holders from the compiled classes and pin the exact set
+enumerate the converters and every class holding a static `Random` (a `SecureRandom` included) from
+the compiled classes and pin the exact set
 (xref:specification/test-strategy.adoc#_native_image_contract[test strategy]). The metadata changes
 no JVM-mode behaviour.
 

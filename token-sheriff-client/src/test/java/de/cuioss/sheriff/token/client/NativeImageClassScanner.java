@@ -62,7 +62,8 @@ final class NativeImageClassScanner {
      * loadable type. Nested classes are included under their binary ({@code Outer$Inner}) name.
      *
      * @return the binary names of all main classes, sorted
-     * @throws IllegalStateException if the main output cannot be located or read
+     * @throws IllegalStateException if the main output cannot be located
+     * @throws UncheckedIOException if the main output directory or jar cannot be read
      */
     static SortedSet<String> mainClassNames() {
         Path location = mainOutputLocation();
@@ -81,6 +82,7 @@ final class NativeImageClassScanner {
      * @param resource the classpath-relative resource path
      * @return the resource content
      * @throws IllegalStateException if the resource is not on the classpath, naming the resource
+     * @throws UncheckedIOException if the resource cannot be read
      */
     static String readResource(String resource) {
         try (InputStream stream = classLoader().getResourceAsStream(resource)) {
