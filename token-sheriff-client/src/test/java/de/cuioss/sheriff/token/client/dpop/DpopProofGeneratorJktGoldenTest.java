@@ -30,9 +30,7 @@ import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Golden regression test pinning the RFC 7638 {@code jkt} thumbprints {@link DpopProofGenerator}
