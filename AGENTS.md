@@ -328,9 +328,10 @@ its broad catch is deliberate, and these are all the forms the tree holds:
   release steps of `close()`, so every step runs after any failure, and rethrows the last failure
   unwrapped once they have run, with each earlier distinct failure attached as suppressed. An earlier
   failure that is the same instance as the propagated one is not attached to itself.
-- **A test that funnels an unanticipated failure into its own report**, in integration-test code
-  only: `RefreshProductionPathSpecIT` and `RefreshConcurrentRedemptionSpecIT`, whose engine failure
-  mode is not known in advance.
+- **A test that funnels an unanticipated failure into its own report**: the integration tests
+  `RefreshProductionPathSpecIT` and `RefreshConcurrentRedemptionSpecIT`, whose engine failure mode is
+  not known in advance, and one unit-test fixture, `CachingDiscoveryResolverSupport`, whose caller
+  thread hands whatever `CachingDiscoveryResolver.resolve()` throws back to the test as its outcome.
 
 A callee that declares no `throws` but documents the unchecked failure it raises is **not** such a
 boundary — narrow to the documented type. `TokenValidatorProducer.destroy()` is the worked instance:

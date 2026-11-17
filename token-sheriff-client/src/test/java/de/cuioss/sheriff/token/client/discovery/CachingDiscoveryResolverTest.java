@@ -89,26 +89,8 @@ class CachingDiscoveryResolverTest {
         now.set(now.get().plus(duration));
     }
 
+    /** One row per invalid value: a label, the setting it breaks and the four durations. */
     static Stream<Arguments> invalidDurations() {
-        Duration aboveBound = UPPER_BOUND.plusNanos(1);
-        return Stream.of(
-                Arguments.of("zero ttl", "ttl", Duration.ZERO, Duration.ZERO, Duration.ZERO, Duration.ZERO),
-                Arguments.of("negative ttl", "ttl", Duration.ofSeconds(-1), Duration.ZERO, Duration.ZERO,
-                        Duration.ZERO),
-                Arguments.of("ttl above the bound", "ttl", aboveBound, Duration.ZERO, Duration.ZERO, Duration.ZERO),
-                Arguments.of("negative grace", "gracePeriod", TTL, Duration.ofSeconds(-1), Duration.ZERO,
-                        Duration.ZERO),
-                Arguments.of("grace above the bound", "gracePeriod", TTL, aboveBound, Duration.ZERO, Duration.ZERO),
-                Arguments.of("negative min refresh interval", "minRefreshInterval", TTL, GRACE,
-                        Duration.ofSeconds(-1), Duration.ZERO),
-                Arguments.of("min refresh interval above the bound", "minRefreshInterval", TTL, GRACE, aboveBound,
-                        Duration.ZERO),
-                Arguments.of("negative jitter", "jitter", TTL, GRACE, Duration.ZERO, Duration.ofSeconds(-1)),
-                Arguments.of("jitter equal to ttl", "jitter", TTL, GRACE, Duration.ZERO, TTL),
-                Arguments.of("jitter above ttl", "jitter", TTL, GRACE, Duration.ZERO, TTL.plusSeconds(1)));
-    }
-
-    static Stream<Arguments> invalidSettings() {
         Duration aboveBound = UPPER_BOUND.plusNanos(1);
         return Stream.of(
                 Arguments.of("zero ttl", CachingDiscoveryResolver.Setting.TTL, Duration.ZERO, Duration.ZERO,
@@ -127,8 +109,10 @@ class CachingDiscoveryResolverTest {
                         CachingDiscoveryResolver.Setting.MIN_REFRESH_INTERVAL, TTL, GRACE, aboveBound, Duration.ZERO),
                 Arguments.of("negative jitter", CachingDiscoveryResolver.Setting.JITTER, TTL, GRACE, Duration.ZERO,
                         Duration.ofSeconds(-1)),
-                Arguments.of("jitter not smaller than ttl", CachingDiscoveryResolver.Setting.JITTER, TTL, GRACE,
-                        Duration.ZERO, TTL));
+                Arguments.of("jitter equal to ttl", CachingDiscoveryResolver.Setting.JITTER, TTL, GRACE,
+                        Duration.ZERO, TTL),
+                Arguments.of("jitter above ttl", CachingDiscoveryResolver.Setting.JITTER, TTL, GRACE, Duration.ZERO,
+                        TTL.plusSeconds(1)));
     }
 
     static Stream<Arguments> durationsAtUpperBound() {
@@ -141,20 +125,21 @@ class CachingDiscoveryResolverTest {
     @ParameterizedTest(name = "{0}")
     @MethodSource("invalidDurations")
     @DisplayName("Should refuse an invalid duration at construction")
-    void shouldRefuseInvalidDuration(String label, String parameter, Duration ttl, Duration grace,
-            Duration minRefreshInterval, Duration jitter) {
+    void shouldRefuseInvalidDuration(String label, CachingDiscoveryResolver.Setting setting, Duration ttl,
+            Duration grace, Duration minRefreshInterval, Duration jitter) {
         var delegate = new DiscoveryResolver(configFor("https://issuer.example"));
 
         assertThrows(IllegalArgumentException.class,
                 () -> new CachingDiscoveryResolver(delegate, ttl, grace, minRefreshInterval, jitter, clock),
-                () -> label + " must be refused for " + parameter);
+                () -> label + " must be refused for " + setting.parameterName());
     }
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("invalidDurations")
     @DisplayName("Should name the offending parameter first in every checkSettings refusal")
-    void shouldNameParameterFirstInCheckSettings(String label, String parameter, Duration ttl, Duration grace,
-            Duration minRefreshInterval, Duration jitter) {
+    void shouldNameParameterFirstInCheckSettings(String label, CachingDiscoveryResolver.Setting setting,
+            Duration ttl, Duration grace, Duration minRefreshInterval, Duration jitter) {
+        String parameter = setting.parameterName();
         var refusal = assertThrows(IllegalArgumentException.class,
                 () -> CachingDiscoveryResolver.checkSettings(ttl, grace, minRefreshInterval, jitter),
                 () -> label + " must be refused");
@@ -164,7 +149,7 @@ class CachingDiscoveryResolverTest {
     }
 
     @ParameterizedTest(name = "{0}")
-    @MethodSource("invalidSettings")
+    @MethodSource("invalidDurations")
     @DisplayName("Should name the offending setting structurally in every checkSettings refusal")
     void shouldNameSettingInCheckSettingsRefusal(String label, CachingDiscoveryResolver.Setting expected,
             Duration ttl, Duration grace, Duration minRefreshInterval, Duration jitter) {
@@ -182,12 +167,12 @@ class CachingDiscoveryResolverTest {
     @Test
     @DisplayName("Should cover every Setting with at least one invalid-value row")
     void shouldCoverEverySettingWithInvalidRow() {
-        Set<CachingDiscoveryResolver.Setting> covered = invalidSettings()
+        Set<CachingDiscoveryResolver.Setting> covered = invalidDurations()
                 .map(arguments -> (CachingDiscoveryResolver.Setting) arguments.get()[1])
                 .collect(Collectors.toCollection(() -> EnumSet.noneOf(CachingDiscoveryResolver.Setting.class)));
 
         assertEquals(EnumSet.allOf(CachingDiscoveryResolver.Setting.class), covered,
-                "every Setting constant needs an invalid-value row in invalidSettings()");
+                "every Setting constant needs an invalid-value row in invalidDurations()");
     }
 
     @ParameterizedTest(name = "{0}")
@@ -202,6 +187,49 @@ class CachingDiscoveryResolverTest {
                 () -> assertDoesNotThrow(
                         () -> new CachingDiscoveryResolver(delegate, ttl, grace, minRefreshInterval, Duration.ZERO,
                                 clock)));
+    }
+
+    /**
+     * Drives the instant arithmetic with every duration at the 365-day bound: the freshness window,
+     * the retry backoff and the grace end are each computed from a 365-day duration, so a fresh, a
+     * stale-served and a fail-closed answer each fall exactly where the settings put them.
+     */
+    @Test
+    @DisplayName("Should resolve with ttl, grace period and min refresh interval of 365 days")
+    void shouldResolveWithDurationsAtUpperBound(URIBuilder uriBuilder) {
+        var resolver = new CachingDiscoveryResolver(new DiscoveryResolver(configFor(uriBuilder.buildAsString())),
+                UPPER_BOUND, UPPER_BOUND, UPPER_BOUND, Duration.ZERO, clock);
+        var first = resolver.resolve();
+
+        advance(UPPER_BOUND.minusSeconds(1));
+        var fresh = resolver.resolve();
+        int callsWhileFresh = moduleDispatcher.getCallCounter();
+
+        advance(Duration.ofSeconds(1));
+        moduleDispatcher.returnError();
+        var staleAtTtl = resolver.resolve();
+        advance(UPPER_BOUND.minusSeconds(1));
+        var staleInBackoff = resolver.resolve();
+        int callsWhileStale = moduleDispatcher.getCallCounter();
+        var statusWhileStale = resolver.status();
+
+        advance(Duration.ofSeconds(1));
+        var expired = assertThrows(TransportException.class, resolver::resolve);
+
+        assertAll("365-day settings",
+                () -> assertEquals(first.getTokenEndpoint(), fresh.getTokenEndpoint(), "fresh until the ttl"),
+                () -> assertEquals(1, callsWhileFresh, "no refresh one second before the 365-day ttl"),
+                () -> assertEquals(first.getTokenEndpoint(), staleAtTtl.getTokenEndpoint(),
+                        "the failed refresh at the ttl serves the stale copy"),
+                () -> assertEquals(first.getTokenEndpoint(), staleInBackoff.getTokenEndpoint(),
+                        "the stale copy is served one second before the grace end"),
+                () -> assertEquals(2, callsWhileStale, "no refresh inside the 365-day backoff"),
+                () -> assertEquals(DiscoveryCacheStatus.State.FAILED, statusWhileStale.state()),
+                () -> assertEquals(START, statusWhileStale.lastSuccess(), "lastSuccess is the first resolution"),
+                () -> assertTrue(expired.getMessage().contains("expired"), expired.getMessage()),
+                () -> assertEquals(3, moduleDispatcher.getCallCounter(),
+                        "the backoff ended with the grace period, so the last call refreshed once more"),
+                () -> assertEquals(LoaderStatus.ERROR, resolver.getLoaderStatus(), "nothing servable"));
     }
 
     @Test
