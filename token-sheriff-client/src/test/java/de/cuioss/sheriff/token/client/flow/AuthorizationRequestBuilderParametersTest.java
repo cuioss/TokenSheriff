@@ -153,12 +153,12 @@ class AuthorizationRequestBuilderParametersTest {
     }
 
     @Nested
-    @DisplayName("Byte-identical default request")
+    @DisplayName("Golden request URLs")
     class Golden {
 
         @Test
-        @DisplayName("Should emit the default URL with exactly the documented parameter order and encoding")
-        void shouldKeepDefaultUrlByteIdentical() {
+        @DisplayName("Should build the default URL from the defaults with the documented parameter order and encoding")
+        void shouldBuildDefaultUrlFromDefaults() {
             var context = FlowContext.create(REDIRECT_URI);
             String expected = AUTH_ENDPOINT
                     + "?scope=openid+profile"
@@ -176,8 +176,8 @@ class AuthorizationRequestBuilderParametersTest {
         }
 
         @Test
-        @DisplayName("Should emit the step-up URL with exactly the documented parameter order and encoding")
-        void shouldKeepStepUpUrlByteIdentical() {
+        @DisplayName("Should build the step-up URL with max_age and acr_values in the documented order and encoding")
+        void shouldBuildStepUpUrlWithChallengeParameters() {
             var context = FlowContext.create(REDIRECT_URI, ACR, MAX_AGE);
             String expected = AUTH_ENDPOINT
                     + "?max_age=300"

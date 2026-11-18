@@ -28,7 +28,7 @@ import lombok.experimental.UtilityClass;
  * <p>
  * Message ID ranges:
  * <ul>
- *   <li>001-099: INFO level messages</li>
+ *   <li>1-99: INFO level messages</li>
  *   <li>100-199: WARN level messages</li>
  *   <li>200-299: ERROR level messages</li>
  * </ul>
@@ -45,7 +45,7 @@ public final class TokenSheriffQuarkusLogMessages {
     public static final String PREFIX = "TokenSheriff_Q";
 
     /**
-     * INFO level log messages (001-025; identifiers 017 and 018 are retired and must not be reused).
+     * INFO level log messages (1-25; identifiers 17 and 18 are retired and must not be reused).
      */
     @UtilityClass
     public static final class INFO {

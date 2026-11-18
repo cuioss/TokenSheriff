@@ -100,7 +100,9 @@ public class AuthorizationRequestBuilder {
      * <p>
      * Delegates to {@link #build(ClientConfiguration, ProviderMetadata, FlowContext,
      * AuthorizationRequestOptions)} with {@link AuthorizationRequestOptions#DEFAULTS}, so an override of
-     * the four-argument form also governs this one.
+     * the four-argument form also governs this one. An override of the four-argument form must therefore
+     * not call this three-argument form: the delegation would call the override again and recurse until
+     * the stack overflows. No guard prevents it.
      *
      * @param configuration the client configuration; must not be {@code null}
      * @param metadata      the resolved provider metadata carrying the authorization endpoint; must
@@ -121,6 +123,12 @@ public class AuthorizationRequestBuilder {
      * <p>
      * With {@link AuthorizationRequestOptions#DEFAULTS} the URL is identical to the one
      * {@link #build(ClientConfiguration, ProviderMetadata, FlowContext)} returns.
+     * <p>
+     * The three-argument form delegates to this one, so an override of this method must not call the
+     * three-argument form — that call would come back to the override and recurse until the stack
+     * overflows. Call {@code super.build(...)} with the four arguments, or
+     * {@link #parameters(ClientConfiguration, ProviderMetadata, FlowContext, AuthorizationRequestOptions)},
+     * instead. No guard prevents the recursion.
      *
      * @param configuration the client configuration; must not be {@code null}
      * @param metadata      the resolved provider metadata carrying the authorization endpoint; must

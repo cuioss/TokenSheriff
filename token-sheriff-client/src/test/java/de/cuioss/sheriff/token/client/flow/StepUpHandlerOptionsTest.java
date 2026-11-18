@@ -43,7 +43,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Verifies the per-call {@link AuthorizationRequestOptions} overload of {@link StepUpHandler#initiate}:
  * {@link AuthorizationRequestOptions#DEFAULTS} reproduces the three-argument step-up request, the
  * options reach the URL while the challenge's {@code acr_values} and {@code max_age} are kept, the
- * three-argument request stays byte-identical, a subclassed {@link AuthorizationRequestBuilder} is
+ * three-argument request carries a fixed parameter order and encoding, a subclassed {@link AuthorizationRequestBuilder} is
  * dispatched on the path that matches the entry point, and the overload refuses invalid input exactly
  * as the three-argument method does.
  */
@@ -113,8 +113,8 @@ class StepUpHandlerOptionsTest {
         }
 
         @Test
-        @DisplayName("Should keep the three-argument step-up URL byte-identical with its form_post default")
-        void shouldKeepThreeArgumentUrlByteIdentical() {
+        @DisplayName("Should build the three-argument step-up URL from the defaults with form_post")
+        void shouldBuildThreeArgumentStepUpUrlFromDefaults() {
             var request = handler.initiate(config("client-1"), metadata(), challenge());
 
             FlowContext context = request.context();
@@ -132,7 +132,7 @@ class StepUpHandlerOptionsTest {
                     + "&response_mode=form_post";
 
             assertEquals(expected, request.authorizationUrl(),
-                    "the three-argument step-up keeps its pre-refactor parameter order and encoding");
+                    "the three-argument step-up URL carries exactly this parameter order and encoding");
         }
     }
 

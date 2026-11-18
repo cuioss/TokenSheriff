@@ -53,6 +53,7 @@ class CachingDiscoveryResolverFailureHandlingTest {
     private static final Duration INTERVAL = Duration.ofMinutes(1);
     private static final String GOOD_TOKEN_ENDPOINT = ISSUER + "/token";
     private static final String SECRET_DETAIL = "detail-that-must-not-reach-the-status";
+    private static final int REPEATED_CALLS = 3;
 
     private final AtomicReference<Instant> now = new AtomicReference<>(START);
     private final InstantSource clock = now::get;
@@ -234,9 +235,14 @@ class CachingDiscoveryResolverFailureHandlingTest {
         advance(TTL);
         var before = resolver.status();
 
+        TransportException thrown;
+        boolean interruptKept;
         Thread.currentThread().interrupt();
-        var thrown = assertThrows(TransportException.class, resolver::resolve);
-        boolean interruptKept = Thread.interrupted();
+        try {
+            thrown = assertThrows(TransportException.class, resolver::resolve);
+        } finally {
+            interruptKept = Thread.interrupted();
+        }
         var afterInterruptedCall = resolver.status();
         var next = resolver.resolve();
 
@@ -272,6 +278,64 @@ class CachingDiscoveryResolverFailureHandlingTest {
                 () -> assertEquals(DiscoveryCacheStatus.State.FAILED, afterCall.state(), "the failure is recorded"),
                 () -> assertEquals(TransportException.class.getName(), afterCall.lastFailureCause()),
                 () -> assertEquals(2, delegate.calls(), "the backoff holds the next call back"));
+    }
+
+    @Test
+    @DisplayName("Should reach the delegate on every call of an interrupted caller on a stale cache")
+    void shouldReachDelegateOnEveryCallOfInterruptedCaller() {
+        var failure = new TransportException("refresh failed");
+        delegate.then(CachingDiscoveryResolverFailureHandlingTest::good);
+        for (int i = 0; i < REPEATED_CALLS; i++) {
+            delegate.then(() -> {
+                throw failure;
+            });
+        }
+        var resolver = resolver(INTERVAL);
+        resolver.resolve();
+        advance(TTL);
+        var before = resolver.status();
+
+        int refused = 0;
+        for (int i = 0; i < REPEATED_CALLS; i++) {
+            Thread.currentThread().interrupt();
+            try {
+                assertSame(failure, assertThrows(TransportException.class, resolver::resolve),
+                        "the delegate's refusal is rethrown on call " + i);
+                refused++;
+            } finally {
+                Thread.interrupted();
+            }
+        }
+
+        int refusedCalls = refused;
+        assertAll("no failure state, no backoff",
+                () -> assertEquals(REPEATED_CALLS, refusedCalls, "every interrupted call is refused"),
+                () -> assertEquals(1 + REPEATED_CALLS, delegate.calls(),
+                        "each interrupted call reaches the delegate: one call per call, not per refresh"),
+                () -> assertEquals(before, resolver.status(), "no failure state was written"));
+    }
+
+    @Test
+    @DisplayName("Control: should reach the delegate once per refresh for an uninterrupted caller on a stale cache")
+    void shouldReachDelegateOncePerRefreshOfUninterruptedCaller() {
+        var failure = new TransportException("refresh failed");
+        delegate.then(CachingDiscoveryResolverFailureHandlingTest::good).then(() -> {
+            throw failure;
+        });
+        var resolver = resolver(INTERVAL);
+        resolver.resolve();
+        advance(TTL);
+
+        for (int i = 0; i < REPEATED_CALLS; i++) {
+            assertEquals(GOOD_TOKEN_ENDPOINT, resolver.resolve().tokenEndpoint,
+                    "the stale copy is served on call " + i);
+        }
+
+        assertAll("one failed refresh, then the backoff",
+                () -> assertEquals(2, delegate.calls(),
+                        "the first call refreshes and fails, the backoff holds the other calls back"),
+                () -> assertEquals(DiscoveryCacheStatus.State.FAILED, resolver.status().state(),
+                        "the failure is recorded"));
     }
 
     @Test

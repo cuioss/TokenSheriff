@@ -197,8 +197,10 @@ The built-in authorization-code flow additionally offers an *opt-in pushed path*
 (`AuthorizationCodeFlow.authorizePushed`, xref:#CLIENT-27[]): it pushes the same validated
 parameters the front-channel request would carry, and returns a redirect that carries only
 `client_id` and `request_uri`. When the authorization server advertises no
-`pushed_authorization_request_endpoint` the pushed path MUST refuse with a typed error before any
-HTTP request; it MUST NOT fall back to a front-channel request. The plain `authorize` entry points
+`pushed_authorization_request_endpoint` the pushed path MUST refuse with a dedicated typed error,
+`PushedAuthorizationEndpointMissingException` (a `ClientProtocolException`, so existing catches and
+the HTTP-edge mapping are unchanged), before any HTTP request; it MUST NOT fall back to a
+front-channel request. The plain `authorize` entry points
 never push, whether or not the authorization server advertises PAR. FAPI 2.0 requires PAR and the
 BCP prefers it; a deployment that needs it calls the pushed path or composes the PAR client.
 

@@ -224,7 +224,7 @@ periodic refresh. With `unknownKidRefreshWindow(Duration)` set:
 
 * once a key set is installed and no other JWKS fetch is in flight, such a miss claims the window and
   schedules one background JWKS fetch from the current endpoint (a miss while a fetch is in flight leaves
-  the window unclaimed), and `TokenSheriff-010` (`UNKNOWN_KID_REFRESH_SCHEDULED`) is logged with the
+  the window unclaimed), and `TokenSheriff-10` (`UNKNOWN_KID_REFRESH_SCHEDULED`) is logged with the
   sanitised key ID;
 * the lookup performs no I/O and does not wait, so the token that triggered the fetch is still rejected;
   once the fetch has installed the new key set, the next token naming that key ID is accepted;

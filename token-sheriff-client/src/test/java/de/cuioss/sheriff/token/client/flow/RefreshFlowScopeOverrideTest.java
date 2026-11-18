@@ -42,6 +42,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -58,6 +59,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -82,6 +84,23 @@ class RefreshFlowScopeOverrideTest {
     private static final String PER_CALL_RENDERED = "openid email";
 
     private static final long FUTURE_TIMEOUT_SECONDS = 20;
+
+    /** The message the refresh overload refuses an empty override with; it names its own entry point. */
+    private static final String REFRESH_EMPTY_OVERRIDE =
+            "per-call scopes must not be empty; use refresh(metadata, refreshToken) to request the configured scopes";
+
+    /**
+     * The invalid overrides of the shared scope-token rule with the message the refresh overload refuses
+     * each with: the options builder's message, except for the empty override.
+     */
+    static Stream<Arguments> invalidOverridesWithRefreshMessage() {
+        return AuthorizationRequestOptionsTest.invalidScopeOverridesWithMessage().map(arguments -> {
+            Object[] values = arguments.get();
+            return AuthorizationRequestOptionsTest.EMPTY_OVERRIDE.equals(values[1])
+                    ? Arguments.of(values[0], REFRESH_EMPTY_OVERRIDE)
+                    : arguments;
+        });
+    }
 
     @Getter
     private final ArrivalGatedTokenDispatcher moduleDispatcher = new ArrivalGatedTokenDispatcher();
@@ -271,19 +290,23 @@ class RefreshFlowScopeOverrideTest {
     /**
      * Runs every invalid variant of the shared scope-token rule — a null, blank, multi-token or empty
      * override, and entries holding a character outside the RFC 6749 §3.3 scope-token set — through the
-     * per-call refresh overload. The display name carries the index only: the variants hold control
-     * characters that must not reach a test report.
+     * per-call refresh overload, and pins the exact message each variant is refused with. The display
+     * name carries the index only: the variants hold control characters that must not reach a test
+     * report.
      */
     @ParameterizedTest(name = "refuses variant #{index}")
-    @MethodSource("de.cuioss.sheriff.token.client.flow.AuthorizationRequestOptionsTest#invalidScopeOverrides")
+    @MethodSource("invalidOverridesWithRefreshMessage")
     @DisplayName("Should refuse an invalid or non-scope-token-character override before any HTTP call")
-    void shouldRefuseInvalidOverridesBeforeAnyRequest(List<String> scopes, URIBuilder uriBuilder) {
+    void shouldRefuseInvalidOverridesBeforeAnyRequest(List<String> scopes, String expectedMessage,
+            URIBuilder uriBuilder) {
         var flow = flow(config(false));
         var metadata = metadata(uriBuilder);
         String presented = presentedToken();
 
-        assertThrows(IllegalArgumentException.class, () -> flow.refresh(metadata, presented, scopes),
+        var thrown = assertThrows(IllegalArgumentException.class, () -> flow.refresh(metadata, presented, scopes),
                 "an invalid per-call override is refused by the shared scope-token rule");
+
+        assertEquals(expectedMessage, thrown.getMessage(), "the refusal carries the shared rule's message");
         moduleDispatcher.assertCallsAnswered(0);
     }
 
@@ -330,8 +353,8 @@ class RefreshFlowScopeOverrideTest {
      * is not specified.
      */
     @Test
-    @DisplayName("Should send exactly the pinned two-argument refresh form (golden form)")
-    void shouldKeepTwoArgumentFormUnchanged(URIBuilder uriBuilder, MockWebServer server) throws Exception {
+    @DisplayName("Should send the grant type, the presented token and the configured scopes in the two-argument form")
+    void shouldSendConfiguredScopesInTwoArgumentForm(URIBuilder uriBuilder, MockWebServer server) throws Exception {
         moduleDispatcher.respondWith(grantedScopeResponse(String.join(" ", CONFIGURED_SCOPES)));
         ClientConfiguration config = config(false);
         String presented = presentedToken();
