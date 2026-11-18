@@ -272,9 +272,10 @@ issuer identity of the response. The authorization and token flows MUST NOT plac
 the client secret in a URL: the engine requests only `response_type=code`, so no token is issued
 on the front channel, and the code is exchanged at the token endpoint in the request body. The
 one token that does travel in a URL is the ID token as `id_token_hint` on the RP-initiated
-logout request (xref:#CLIENT-13[]), which is why that endpoint must use `https`; the client
-secret is never placed in a URL. The authorization response MUST
-use `response_mode=form_post` by default, and the engine MUST NOT offer `response_mode=fragment`.
+logout request (xref:#CLIENT-13[]), which is why that endpoint must use `https`: a literal
+`http` endpoint is accepted only when the `allowInsecureHttp` local-testing option is set, and
+every other scheme is refused. The client secret is never placed in a URL. The authorization
+response MUST use `response_mode=form_post` by default, and the engine MUST NOT offer `response_mode=fragment`.
 `response_mode=query` is an explicit per-call caller opt-in (xref:#CLIENT-27[]) that places
 `code`, `state` and `iss` in the redirect URL and re-opens
 xref:threat-model.adoc#T-URL-LEAK[T-URL-LEAK]; its mitigation is the caller's. All
@@ -700,7 +701,8 @@ surface.
   offered; `response_mode=query`, which places the code in the redirect URL, is an explicit
   per-call caller opt-in (xref:#CLIENT-27[]) whose mitigation is the caller's. The RP-initiated
   logout request is the exception: it places `id_token_hint` in the `end_session_endpoint` URL,
-  so that endpoint must use `https` (xref:#CLIENT-13[]).
+  so that endpoint must use `https`; a literal `http` endpoint is accepted only when the
+  `allowInsecureHttp` local-testing option is set (xref:#CLIENT-13[]).
 | https://www.rfc-editor.org/rfc/rfc9700#section-4.3[RFC 9700 §4.3]
 
 | *Weak client auth where `private_key_jwt` is available; secrets over non-TLS*
