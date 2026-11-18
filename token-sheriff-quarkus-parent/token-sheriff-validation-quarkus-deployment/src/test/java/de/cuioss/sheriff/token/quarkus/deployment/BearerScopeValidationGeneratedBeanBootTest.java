@@ -76,9 +76,9 @@ class BearerScopeValidationGeneratedBeanBootTest {
     static Consumer<BuildChainBuilder> generatedBean(String className, String scope) {
         return chain -> chain.addBuildStep(context -> {
             try (ClassCreator creator = ClassCreator.builder()
-                    .classOutput(new GeneratedBeanGizmoAdaptor(context::produce))
-                    .className(className)
-                    .build()) {
+                         .classOutput(new GeneratedBeanGizmoAdaptor(context::produce))
+                         .className(className)
+                         .build()) {
                 creator.addAnnotation(Singleton.class);
                 FieldCreator field = creator.getFieldCreator(FIELD_NAME, BearerTokenResult.class);
                 field.addAnnotation(BearerToken.class).addValue("requiredScopes", new String[]{scope});

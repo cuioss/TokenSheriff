@@ -156,12 +156,12 @@ class JwtPropertyKeysDerivationGuardTest {
         @Test
         @DisplayName("positive control: the production list meets its minimum of four")
         void shouldDeriveProductionList() {
-            assertEquals(List.of(
+            assertEquals(
+                    JwtPropertyKeys.ISSUERS.DPOP_SUB_PROPERTIES, List.of(
                             JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_SIZE,
                             JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_TTL_SECONDS,
                             JwtPropertyKeys.ISSUERS.DPOP_PROOF_MAX_AGE_SECONDS,
                             JwtPropertyKeys.ISSUERS.DPOP_REQUIRED),
-                    JwtPropertyKeys.ISSUERS.DPOP_SUB_PROPERTIES,
                     "the four dpop sub-properties are derived in natural String order");
         }
     }
@@ -190,8 +190,8 @@ class JwtPropertyKeysDerivationGuardTest {
         @Test
         @DisplayName("positive control: a non-constant key declared before the derived list is derived")
         void shouldDeriveEarlyNonConstantField() {
-            assertEquals(List.of(EarlyNonConstantFixture.EARLY, EarlyNonConstantFixture.FIRST),
-                    EarlyNonConstantFixture.DERIVED,
+            assertEquals(
+                    EarlyNonConstantFixture.DERIVED, List.of(EarlyNonConstantFixture.EARLY, EarlyNonConstantFixture.FIRST),
                     "the early non-constant key is initialized and derived ('early' before 'first')");
         }
     }
