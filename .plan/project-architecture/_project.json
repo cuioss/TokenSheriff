@@ -87,7 +87,7 @@
       "description": "Root reactor and parent POM for the Token-Sheriff project. Aggregates all modules (validation core, client, Quarkus extensions, benchmarking, docs and E2E) and centralizes shared build configuration, inheriting from cui-java-parent.",
       "generation": {
         "by": "architecture",
-        "tree_sha": null
+        "tree_sha": "8e56b481c7647ace6de3996c823b01adfcf8c30d0103e77dbf532ed1cd7d16e3"
       }
     },
     "token-sheriff-quarkus-integration-tests": {

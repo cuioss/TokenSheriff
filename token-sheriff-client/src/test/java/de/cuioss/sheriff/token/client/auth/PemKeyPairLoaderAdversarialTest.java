@@ -17,6 +17,7 @@ package de.cuioss.sheriff.token.client.auth;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -32,6 +33,7 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import static de.cuioss.sheriff.token.client.auth.PemKeyPairLoaderTest.*;
@@ -156,9 +158,6 @@ class PemKeyPairLoaderAdversarialTest {
                 refusal("EC P-384 key",
                         dir -> write(dir, pemFile(ecP384, LF)),
                         PemKeyPairLoader.EC_KEY_NOT_P256),
-                refusal("off-curve EC public half",
-                        dir -> write(dir, privateBlock(ecP256) + pem(PUBLIC_KEY, offCurve(ecP256), LF)),
-                        PemKeyPairLoader.EC_KEY_NOT_P256),
                 refusal("Ed448 key",
                         dir -> write(dir, pemFile(ed448, LF)),
                         PemKeyPairLoader.KEY_TYPE_NOT_ALLOWED));
@@ -185,6 +184,32 @@ class PemKeyPairLoaderAdversarialTest {
                 () -> assertFalse(message.contains(file.getFileName().toString()),
                         "the refusal must not carry the file name"),
                 () -> assertBodyFragmentsAbsent(file, message));
+    }
+
+    /**
+     * Whether the JDK {@code KeyFactory} validates an EC point at decode time differs between JDK
+     * builds: when it does, the off-curve key fails to decode and is refused as a key the policy does
+     * not admit; when it does not, the decoded key reaches the on-curve check. Both refusals are
+     * fixed texts the policy allows, so the test accepts either and pins everything else.
+     */
+    @Test
+    @DisplayName("Should refuse an off-curve EC public half with a fixed text whether or not the JDK validates the point")
+    void shouldRefuseOffCurveEcPublicHalf() throws Exception {
+        Path onCurve = write(tempDir, pemFile(ecP256, LF));
+        Path offCurve = write(tempDir, privateBlock(ecP256) + pem(PUBLIC_KEY, offCurve(ecP256), LF));
+
+        assertNotNull(PemKeyPairLoader.load(onCurve), "the on-curve P-256 key pair is the positive control");
+        var thrown = assertThrows(IllegalArgumentException.class, () -> PemKeyPairLoader.load(offCurve),
+                "the off-curve public half must be refused");
+
+        String message = thrown.getMessage();
+        assertAll("off-curve EC public half",
+                () -> assertTrue(Set.of(PemKeyPairLoader.EC_KEY_NOT_P256, PemKeyPairLoader.KEY_TYPE_NOT_ALLOWED)
+                                .contains(message),
+                        "the refusal must be one of the two fixed texts the policy allows"),
+                () -> assertNull(thrown.getCause(), "the refusal must not attach a cause"),
+                () -> assertFalse(message.contains(offCurve.toString()), "the refusal must not carry the file path"),
+                () -> assertBodyFragmentsAbsent(offCurve, message));
     }
 
     private static Arguments refusal(String scenario, Fixture fixture, String expectedMessage) {

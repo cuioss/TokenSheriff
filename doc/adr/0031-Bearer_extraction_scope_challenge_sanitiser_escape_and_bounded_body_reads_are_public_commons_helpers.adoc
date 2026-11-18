@@ -185,6 +185,18 @@ Each change below alters what an existing deployment observes:
   (`Response body exceeds maximum allowed size of N bytes (origin)`); the lower-case client form is retired.
   On the validation path, a negative ceiling or one above `MAX_CEILING` is refused when the handler is
   created; `ParserConfig` already refuses non-positive sizes, so no configuration reaches that refusal.
+* **Client body buffer** — the client's back-channel reads no longer collect the body in a
+  `ByteArrayOutputStream`; they keep it in the shared handler's one doubling array, so their memory bound is
+  the one COMMONS-17 states for every bounded read.
+* **Logout freshness window** — `LogoutTokenValidator`'s builder refuses a freshness window longer than
+  `LogoutTokenValidator.MAX_FRESHNESS_WINDOW` (100 years); ADR-0029 records that bound in its amendment
+  "`iat` / `exp` reading and the freshness window are bounded".
+* **Unchanged unknown-`kid` fetch** — an unknown-`kid` fetch that returns the installed key set unchanged is
+  logged at DEBUG instead of through the `UNKNOWN_KID_REFRESH_DISCARDED` warning; ADR-0030 records it under
+  Risks.
+* **Health-check loader failure** — when the JWKS readiness probe fails to read an issuer's loader status, its
+  `ERROR_CHECKING_JWKS_LOADER` warning carries the issuer and the exception message through
+  `ErrorTextSanitizer` (ADR-0022) and no longer attaches the exception, so no stack trace is logged.
 
 == Consequences
 
@@ -295,14 +307,26 @@ received buffer, and its own read of an unparsable `Content-Length` threw a `Num
   text before copying it, the scope text's length being computed without joining it. The refusal point and
   its messages stay at `build()`.
 * **The body handler bounds its own work.** The bytes read so far are kept in one array that grows by
-  doubling and never beyond the ceiling, so the object count grows with the logarithm of the body size, not
-  with the number of buffers. During a growth step the old and the new array are both live, so the memory
-  held while streaming peaks below twice the ceiling plus the one chunk in flight; the byte ceiling on the
-  assembled body is unchanged (see COMMONS-17). Under `FAIL`, when the handler observes a `Content-Length`
+  doubling, so the object count grows with the logarithm of the body size, not with the number of buffers.
+  The array never exceeds the ceiling and is at most twice the bytes received, or the first allocation when
+  that is larger. During a growth step the old and the new array are both live, so the memory held while
+  streaming peaks below twice the ceiling plus the buffers of the delivery in flight; this is the one memory
+  bound of the handler, stated identically in COMMONS-17 and the transport specification. A capacity test pins
+  the retained array's capacity after each delivery; the transient peak while a growth step copies is a
+  property of the allocation logic.
+  The byte ceiling on the assembled body and the `OverLimitPolicy` behaviour are unchanged. The cost of the
+  decision is that the worst-case streaming peak of a read of a remote response is about twice what one
+  array of the ceiling costs. It conflicts with the PLAN-09 specification, which kept COMMONS-17's bound of
+  the ceiling plus one in-flight chunk; this decision replaces that bound. Under `FAIL`, when the handler observes a `Content-Length`
   that is not a valid number, it cancels the subscription without requesting a byte and fails the body
   future with an `IOException` carrying a fixed message that does not echo the header value. That guarantee
   is the handler's own; whether the surrounding client reaches the handler, and whether it parses the header
-  itself first, is the client's behaviour (see COMMONS-17).
+  itself first, is the client's behaviour (see COMMONS-17). The handler has no hook before the JDK client's
+  own parse, so the fixed failure is delivered by the caller of `send`: `BackChannelHttp.send`, through
+  which the client's discovery, PAR, userinfo and revocation clients send, and the token endpoint client's
+  own send map the JDK's `IllegalArgumentException` to a `TransportException` with a fixed text, without
+  chaining it. The validation-side discovery and JWKS reads
+  hand the handler to cui-http, whose adapter performs the send, so no mapping is made for them here.
 
 === Consequences
 
@@ -310,8 +334,12 @@ received buffer, and its own read of an unparsable `Content-Length` threw a `Num
   in every case the check covers. This matches the fail-at-startup stance of ADR-0019 and ADR-0026. The two
   accepted limits of the check fail differently. A merged set over the bounds on an interface default method
   passes the deployment, reaches a request, is answered with a 500 and is logged as `TokenSheriff_Q-201`
-  instead of escaping as an unhandled exception; the request-time answer applies to sets that pass the
-  deployment only. A concrete-typed override of a generic base method can instead make the check refuse a
+  instead of escaping as an unhandled exception. The request-time answer applies to a set the challenge
+  builder rejects when a missing-scope violation reaches `BearerTokenResult.createErrorResponse()` without
+  the deployment check having refused it: a set that passes
+  the deployment, and a set supplied programmatically through the public
+  `BearerTokenProducer.getBearerTokenResult`, which no deployment check sees. A request that carries no token
+  is answered 401 without a scope challenge, so such a set does not produce the 500 there. A concrete-typed override of a generic base method can instead make the check refuse a
   deployment that is valid at run time: that refusal happens when the application is built, never reaches a
   request, and so has no 500 response.
 * The challenge builder retains at most `MAX_SCOPE_TOKENS + 1` distinct scope names and scans at most
@@ -322,14 +350,17 @@ received buffer, and its own read of an unparsable `Content-Length` threw a `Num
   retained names are the caller's own strings, of any length, held until `build()` refuses them for their
   joined length. The body handler's byte bound of COMMONS-17 is unchanged, its object count no longer grows
   with the buffer count, and the price of the one growable array is a streaming peak below twice the ceiling
-  while a growth step copies it.
+  plus the buffers of the delivery in flight while a growth step copies it.
 * A control character in a `realm` or `error_description` past `MAX_LENGTH` characters is not reported by
   the setter; the value is refused by `build()` for its length instead.
 * The client's own parse of a malformed `Content-Length` can still surface its own exception: the JDK
   HTTP/1.1 client (observed on JDK 25) parses the header itself after the handler returned, so the caller of
   `HttpClient.send` receives the JDK's `IllegalArgumentException` (cause `NumberFormatException`) carrying
-  the raw header value, not the handler's fixed message; a caller treats the message of any exception out
-  of an HTTP exchange as remote content and sanitises it before logging.
+  the raw header value, not the handler's fixed message. The client's back-channel turns that exception
+  into a `TransportException` with a fixed text, so a caller of the client's endpoint clients never sees the
+  raw value; on the validation-side reads the send is cui-http's, and what reaches their caller is cui-http's
+  handling of that exception. A caller treats the message of any exception out of an HTTP exchange as remote
+  content and sanitises it before logging.
 
 == References
 

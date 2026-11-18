@@ -30,6 +30,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.io.Serial;
 import java.time.Duration;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
@@ -43,7 +44,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>
  * A miss inside a claimed window returns before it touches the guard. Otherwise the guard is claimed before
  * the window, a lost window releases it, and every hand-off outcome other than an accepted task releases it
- * in the same method; a failed hand-off keeps the window claimed, so it burns it. A caller-supplied executor must run or reject every
+ * in the same method, an {@link Error} from {@code execute} included, which still reaches the caller; a
+ * failed hand-off keeps the window claimed, so it burns it. A caller-supplied executor must run or reject every
  * task it accepts; the last case pins what happens when it does not, as the documented limit of that
  * requirement. The executor used here runs, throws from or silently drops {@code execute} calls on
  * demand; its scheduled tasks and {@code submit} calls are unaffected, so the periodic refresh and the
@@ -115,6 +117,9 @@ class HttpJwksLoaderExecutorHandOffTest {
 
         executor.behaviour = ScriptedExecutor.Behaviour.RUN;
         moduleDispatcher.serve(UnknownKidJwksDispatcher.Mode.ROTATED_KEY);
+        assertTrue(loader.getKeyInfo(ROTATED_KID).isEmpty());
+        drainExecutor();
+        int insideWindow = moduleDispatcher.getRequestCount();
         clock.addAndGet(WINDOW.toNanos());
         assertTrue(loader.getKeyInfo(ROTATED_KID).isEmpty());
         drainExecutor();
@@ -122,7 +127,43 @@ class HttpJwksLoaderExecutorHandOffTest {
         assertAll("the guard was released by the failed hand-off",
                 () -> assertEquals(1, afterFailure, "the failed hand-off fetched nothing"),
                 () -> assertEquals(2, afterPeriodic, "a later periodic cycle fetches"),
+                () -> assertEquals(2, insideWindow,
+                        "the failed hand-off kept the window claimed, so a miss inside it fetches nothing"),
                 () -> assertEquals(3, moduleDispatcher.getRequestCount(), "a later claim fetches"),
+                () -> assertTrue(loader.getKeyInfo(ROTATED_KID).isPresent(), "the later fetch installed the key"));
+        loader.close();
+    }
+
+    @Test
+    @DisplayName("An Error thrown by the executor's execute reaches the caller and releases the guard")
+    void shouldReleaseGuardAndPropagateWhenHandOffThrowsError(URIBuilder uriBuilder) throws Exception {
+        HttpJwksLoader loader = initializedLoader(uriBuilder);
+        executor.behaviour = ScriptedExecutor.Behaviour.ERROR;
+
+        ScriptedHandOffError thrown = assertThrows(ScriptedHandOffError.class,
+                () -> loader.getKeyInfo(ROTATED_KID), "the Error of the hand-off reaches the caller");
+        int afterError = moduleDispatcher.getRequestCount();
+        LogAsserts.assertNoLogMessagePresent(TestLogLevel.INFO,
+                JWTValidationLogMessages.INFO.UNKNOWN_KID_REFRESH_SCHEDULED.resolveIdentifierString());
+        loader.performBackgroundRefresh();
+        int afterPeriodic = moduleDispatcher.getRequestCount();
+
+        executor.behaviour = ScriptedExecutor.Behaviour.RUN;
+        moduleDispatcher.serve(UnknownKidJwksDispatcher.Mode.ROTATED_KEY);
+        assertTrue(loader.getKeyInfo(ROTATED_KID).isEmpty());
+        drainExecutor();
+        int insideWindow = moduleDispatcher.getRequestCount();
+        clock.addAndGet(WINDOW.toNanos());
+        assertTrue(loader.getKeyInfo(ROTATED_KID).isEmpty());
+        drainExecutor();
+
+        assertAll("the guard was released by the hand-off that threw an Error",
+                () -> assertEquals(ScriptedHandOffError.MESSAGE, thrown.getMessage(), "the executor's own Error"),
+                () -> assertEquals(1, afterError, "the hand-off that threw fetched nothing"),
+                () -> assertEquals(2, afterPeriodic, "the next periodic cycle fetches"),
+                () -> assertEquals(2, insideWindow,
+                        "the failed hand-off kept the window claimed, so a miss inside it fetches nothing"),
+                () -> assertEquals(3, moduleDispatcher.getRequestCount(), "a miss in the next window schedules a fetch"),
                 () -> assertTrue(loader.getKeyInfo(ROTATED_KID).isPresent(), "the later fetch installed the key"));
         loader.close();
     }
@@ -313,6 +354,21 @@ class HttpJwksLoaderExecutorHandOffTest {
     }
 
     /**
+     * The {@link Error} the scripted executor throws from {@code execute}; a type of its own, so the test
+     * cannot mistake another error for it.
+     */
+    private static final class ScriptedHandOffError extends Error {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
+        static final String MESSAGE = "scripted hand-off error";
+
+        ScriptedHandOffError() {
+            super(MESSAGE);
+        }
+    }
+
+    /**
      * A single-thread scheduled executor whose {@code execute} runs, throws or silently drops the task, as
      * scripted. {@link ScheduledThreadPoolExecutor} implements {@code submit} and the scheduling methods
      * without {@code execute}, so only the unknown-kid hand-off is affected.
@@ -320,7 +376,7 @@ class HttpJwksLoaderExecutorHandOffTest {
     private static final class ScriptedExecutor extends ScheduledThreadPoolExecutor {
 
         enum Behaviour {
-            RUN, THROW, REJECT, DISCARD
+            RUN, THROW, ERROR, REJECT, DISCARD
         }
 
         private volatile Behaviour behaviour = Behaviour.RUN;
@@ -333,6 +389,7 @@ class HttpJwksLoaderExecutorHandOffTest {
         public void execute(Runnable command) {
             switch (behaviour) {
                 case THROW -> throw new IllegalStateException("scripted hand-off failure");
+                case ERROR -> throw new ScriptedHandOffError();
                 case REJECT -> throw new RejectedExecutionException("scripted hand-off rejection");
                 case DISCARD -> {
                     // accepted and silently dropped: the run-or-reject requirement is violated

@@ -635,6 +635,18 @@ back-channel origin of xref:#CLIENT-24[] is validated against: it admits a bare 
 `http`/`https` origin with a host (a single trailing `/` accepted) and refuses everything else,
 including user-info, which may carry a credential, without echoing the value.
 
+*Egress allow-list entries.* Every `ClientConfiguration.allowedEgressHosts` entry MUST pass the one
+bare-host rule `EgressHostValidator.refusal(String)` (xref:../commons/requirements.adoc#COMMONS-3[COMMONS-3]);
+a refused entry fails the configuration build with a message naming its zero-based index and the
+validator's fixed text, never the entry. An admitted entry MUST be stored in the canonical form
+`EgressHostValidator.requireBareHost` returns — lower-case, a bare IPv6 literal in brackets — the form
+the three validation-side builders store, so `getAllowedEgressHosts()`, `equals` and `toString` show
+that form and two configurations whose entries differ only in letter case or in the optional brackets of a
+bare IPv6 literal are equal; other spellings of one IPv6 address (`::1`, `0:0:0:0:0:0:0:1`) stay
+distinct. Entries are not
+trimmed: under Quarkus, an element of `sheriff.client.allowed-egress-hosts` with surrounding whitespace
+(`keycloak, dex`) fails the client mapping instead of being trimmed.
+
 *Revoke if supported.* `RevocationClient.revokeIfSupported(ProviderMetadata, String, String,
 ClientAuthentication)` MUST check its arguments before it reads the metadata, so its contract does not
 depend on whether the provider advertises a revocation endpoint. When the metadata advertises one it
@@ -804,7 +816,7 @@ sourced xref:best-practices.adoc[best-practices] checklist, and realized in a sp
 | CLIENT-19 | (BFF groundwork — non-preclusion) | xref:architecture.adoc[architecture], token-handling
 | CLIENT-20 | xref:../commons/threat-model.adoc#T-LEAK[commons T-LEAK] (delegated) | token-handling
 | CLIENT-28 | T-REFRESH-IDENTITY, T-IDTOKEN-INTEGRITY, T-REFRESH-REFUSAL | token-handling
-| CLIENT-30 | T-TOKEN-REPLAY (one JWK member map for `jwk` and `jkt`), T-CLIENT-CRED (bounded, strictly parsed key material), T-SSRF-ADVERTISED (back-channel origin), T-LOGOUT (revocation) | xref:specification/test-strategy.adoc#_traceability[test-strategy]
+| CLIENT-30 | T-TOKEN-REPLAY (one JWK member map for `jwk` and `jkt`), T-CLIENT-CRED (bounded, strictly parsed key material), T-SSRF-ADVERTISED (back-channel origin, egress allow-list entries), T-LOGOUT (revocation) | xref:specification/test-strategy.adoc#_traceability[test-strategy]
 | CLIENT-21..22 | (cross-cutting: engine boundary + adversarial coverage) | xref:architecture.adoc[architecture], xref:specification/test-strategy.adoc[test-strategy], all specs
 | CLIENT-26 | (non-functional: native-image contract) | xref:specification/test-strategy.adoc#_native_image_contract[test-strategy (native-image contract)]
 |===

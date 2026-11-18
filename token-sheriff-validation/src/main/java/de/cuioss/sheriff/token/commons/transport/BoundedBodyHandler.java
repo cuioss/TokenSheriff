@@ -54,9 +54,10 @@ import java.util.concurrent.Flow;
  * The bytes read so far are kept in one array that grows by doubling and never beyond the ceiling, so
  * the number of objects a body costs grows with the logarithm of its size, not with the number of
  * buffers it arrives in: a body delivered as many one-byte buffers costs no more than the same bytes in
- * one buffer, and an empty buffer costs nothing. The assembled body never holds more than the ceiling, but
- * during a growth step the old and the new array are both live, so under either policy the memory held
- * while reading peaks below twice the ceiling plus the one in-flight chunk.
+ * one buffer, and an empty buffer costs nothing. The array never exceeds the ceiling and is at most twice
+ * the bytes received, or the first allocation when that is larger. During a growth step the old and the
+ * new array are both live, so under either policy the memory held while streaming peaks below twice the
+ * ceiling plus the buffers of the delivery in flight.
  * <p>
  * Under {@link OverLimitPolicy#FAIL} a {@code Content-Length} header that is not a valid number is a
  * normal failure as well, when the handler observes it: the subscription is cancelled without requesting
@@ -66,9 +67,15 @@ import java.util.concurrent.Flow;
  * parses the header itself first, is the client's behaviour: the JDK HTTP/1.1 client (observed on JDK 25)
  * parses {@code Content-Length} itself after the handler returned, so there the caller of
  * {@code HttpClient.send} receives the JDK's own {@link IllegalArgumentException} (cause
- * {@link NumberFormatException}) carrying the raw header value, and the fixed message is not delivered. A
- * caller therefore treats the message of any exception out of an HTTP exchange as remote content and
- * sanitises it before logging.
+ * {@link NumberFormatException}) carrying the raw header value, and the fixed message is not delivered.
+ * The handler has no hook before that parse, so the mapping belongs to the caller of {@code send}: the
+ * client module's endpoint clients ({@code BackChannelHttp.send}, and the token endpoint client's own
+ * send) catch that {@link IllegalArgumentException} and report a {@code TransportException} with a fixed
+ * text, neither
+ * chaining the JDK's exception nor echoing its message. The validation-side discovery and JWKS reads
+ * hand the handler to cui-http, whose adapter performs the send, so this repository has no send call
+ * there to map. A caller therefore treats the message of any exception out of an HTTP exchange as remote
+ * content and sanitises it before logging.
  * <p>
  * The ceiling is accepted from {@code 0} to {@link #MAX_CEILING} inclusive, the largest array the result
  * can hold; a negative or larger ceiling is refused with an {@link IllegalArgumentException} when the
@@ -93,6 +100,8 @@ public final class BoundedBodyHandler {
 
     /**
      * The largest accepted ceiling in bytes: the largest array the result can hold.
+     *
+     * @since 1.0
      */
     public static final long MAX_CEILING = Integer.MAX_VALUE - 8L;
 
@@ -285,8 +294,9 @@ public final class BoundedBodyHandler {
     /**
      * Accumulates the streamed body up to the ceiling and applies the policy at the first crossing:
      * cancel the subscription, release or complete with the buffered bytes, ignore every later chunk.
+     * Package-visible so a test can read the capacity of its array through {@link #capacity()}.
      */
-    private static final class BoundedSubscriber implements HttpResponse.BodySubscriber<BoundedBody> {
+    static final class BoundedSubscriber implements HttpResponse.BodySubscriber<BoundedBody> {
 
         private static final byte[] EMPTY = new byte[0];
 
@@ -299,9 +309,11 @@ public final class BoundedBodyHandler {
         private final CompletableFuture<BoundedBody> result = new CompletableFuture<>();
 
         /**
-         * The bytes read so far, in {@code content[0..total)}. Grown by doubling, never beyond
-         * {@link #maxBytes}, so the number of arrays allocated grows with the logarithm of the body size
-         * and not with the number of buffers it arrives in.
+         * The bytes read so far, in {@code content[0..total)}. Grown by doubling, so the number of arrays
+         * allocated grows with the logarithm of the body size and not with the number of buffers it
+         * arrives in. The array never exceeds {@link #maxBytes} and is at most twice the bytes received,
+         * or the first allocation when that is larger; while streaming, the memory held peaks below twice
+         * the ceiling plus the buffers of the delivery in flight.
          */
         private byte[] content = EMPTY;
         private long total;
@@ -348,11 +360,13 @@ public final class BoundedBodyHandler {
             subscription.cancel();
             if (policy == OverLimitPolicy.TRUNCATE) {
                 append(buffer, (int) (maxBytes - total));
-                result.complete(new BoundedBody(assemble(), true));
+                BoundedBody truncated = new BoundedBody(assemble(), true);
+                content = EMPTY;
+                result.complete(truncated);
             } else {
+                content = EMPTY;
                 result.completeExceptionally(new IOException(overLimitMessage(maxBytes, boundOrigin)));
             }
-            content = EMPTY;
         }
 
         /**
@@ -373,6 +387,14 @@ public final class BoundedBodyHandler {
             total = required;
         }
 
+        /**
+         * @return the capacity of the array that holds the bytes read so far; {@code 0} before the first
+         * byte and after the body completed or failed
+         */
+        int capacity() {
+            return content.length;
+        }
+
         private byte[] assemble() {
             return content.length == total ? content : Arrays.copyOf(content, (int) total);
         }
@@ -388,8 +410,9 @@ public final class BoundedBodyHandler {
             if (result.isDone()) {
                 return;
             }
-            result.complete(new BoundedBody(assemble(), false));
+            BoundedBody body = new BoundedBody(assemble(), false);
             content = EMPTY;
+            result.complete(body);
         }
     }
 }

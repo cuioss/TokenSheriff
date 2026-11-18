@@ -904,14 +904,21 @@ class ClientConfigurationTest {
         }
 
         @Test
-        @DisplayName("Should accept bare host names, IPv4 and IPv6 literals and store them as configured")
-        void shouldAcceptBareAllowedHostsAsConfigured() {
+        @DisplayName("Should accept bare host names, IPv4 and IPv6 literals and store them in the canonical form")
+        void shouldAcceptBareAllowedHostsInCanonicalForm() {
             var configured = List.of("Keycloak", "idp.internal", "10.0.0.5", "::1", "[2001:db8::1]");
+            var builder = minimalBuilder();
 
-            var config = minimalBuilder().allowedEgressHosts(configured).build();
+            var config = builder.allowedEgressHosts(configured).build();
+            var upperCase = builder.clearAllowedEgressHosts().allowedEgressHost("KEYCLOAK").build();
+            var lowerCase = builder.clearAllowedEgressHosts().allowedEgressHost("keycloak").build();
 
-            assertEquals(configured, config.getAllowedEgressHosts(),
-                    "the stored list keeps the configured spelling; only the egress policy canonicalises it");
+            assertAll("the stored list holds the form EgressHostValidator.requireBareHost returns",
+                    () -> assertEquals(List.of("keycloak", "idp.internal", "10.0.0.5", "[::1]", "[2001:db8::1]"),
+                            config.getAllowedEgressHosts(),
+                            "each entry is stored lower-case, a bare IPv6 literal in brackets"),
+                    () -> assertEquals(lowerCase, upperCase,
+                            "two configurations differing only in an entry's letter case are equal"));
         }
 
         @Test

@@ -611,12 +611,25 @@ an isolated-component or server-capability test alone does not qualify the row a
   `KeyPairPolicy` construction refusals; `PemKeyPairLoaderAdversarialTest`: the size bound plus one
   byte and a multi-megabyte file, directory, missing and empty files, text outside a block, unknown,
   repeated and mismatched labels, the encrypted PKCS#8, PKCS#1 and SEC1 encodings, PEM injection,
-  invalid base64, a non-ASCII byte, mismatched halves, RSA 1024, P-384, an off-curve public half and
-  Ed448 — each refused with its fixed text, containing neither the path nor any body fragment;
+  invalid base64, a non-ASCII byte, mismatched halves, RSA 1024, P-384 and Ed448 — each refused with
+  its fixed text, containing neither the path nor any body fragment — and an off-curve EC public half,
+  refused with either fixed text the policy allows (`EC_KEY_NOT_P256`, or `KEY_TYPE_NOT_ALLOWED` when
+  the JDK validates the point at decode time), against an on-curve P-256 positive control;
   `BackChannelOriginValidatorTest`: the accepted origins and the refused inputs (user-info credential,
   query, fragment, path, non-http(s), relative, blank, `null`, control and Unicode characters), no
-  refusal echoing the input; `ClientConfigurationTest`: a port-carrying, control-character or Unicode
-  `allowedEgressHosts` entry refused without echoing it; `RevocationClientTest`: `revokeIfSupported`
+  refusal echoing the input; the egress allow-list rule: `EgressHostValidatorTest` (every admitted form
+  and its canonical form, every refusal class with its fixed text, and the zoned IPv6 literal `URI`
+  reports as the host refused by the `%` rule), `EgressPolicyTest`, `WellKnownConfigTest` and
+  `HttpJwksLoaderConfigEgressHostTest` (each builder refuses every refusal class with the fixed text,
+  never echoing the entry, and admits a bare host), `IssuerConfigResolverEgressHostTest` (a
+  port-carrying `allowed-egress-hosts` element fails startup naming the property, blank elements are
+  dropped), `BackChannelEgressPolicyTest` (the client back channel applies the policy to the URL
+  actually contacted), `ClientConfigurationTest` (a port-carrying, control-character or Unicode
+  `allowedEgressHosts` entry refused without echoing it, and admitted entries stored in the canonical
+  form: lower case, a bare IPv6 literal in brackets, so two configurations whose entries differ only in
+  letter case are equal) and
+  `TokenSheriffClientProducerEgressTest` (the mapper passes `sheriff.client.allowed-egress-hosts`
+  elements on untrimmed); `RevocationClientTest`: `revokeIfSupported`
   sends one request and returns `true` for an advertised endpoint, sends nothing and returns `false`
   without one, propagates `TransportException`, delegates to an overridden `revoke` (ADR-0006), and
   refuses invalid arguments before any request

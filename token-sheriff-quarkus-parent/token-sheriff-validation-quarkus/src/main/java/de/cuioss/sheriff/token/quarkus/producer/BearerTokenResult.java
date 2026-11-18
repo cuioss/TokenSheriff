@@ -255,7 +255,10 @@ public class BearerTokenResult implements Serializable {
      * <p>
      * A missing-scope violation is answered with the {@code insufficient_scope} challenge. When the required
      * scopes cannot be carried by that challenge - a scope name outside the RFC 6749 §3.3 {@code scope-token}
-     * grammar, more than 64 distinct scopes, or a challenge longer than 8192 characters, a set the deployment
+     * grammar, more than
+     * {@value de.cuioss.sheriff.token.commons.http.BearerChallenge#MAX_SCOPE_TOKENS} distinct scopes, or a
+     * challenge longer than {@value de.cuioss.sheriff.token.commons.http.BearerChallenge#MAX_LENGTH}
+     * characters, a set the deployment
      * check of {@link BearerToken} and {@code @BearerAuth} does not cover in every case - the method does not
      * throw: it returns 500 (Internal Server Error) with a generic body and no {@code WWW-Authenticate} header,
      * and logs the misconfiguration once at ERROR ({@code TokenSheriff_Q-201}).

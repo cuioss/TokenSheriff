@@ -186,7 +186,7 @@ public class UserInfoClient {
 
         HttpClient client = backChannel.sharedClient(handler);
         try {
-            HttpResponse<String> response = client.send(request, backChannel.bodyHandler());
+            HttpResponse<String> response = backChannel.send(client, request, FAILURE_CONTEXT);
             if (!HttpStatusFamily.isSuccess(response.statusCode())) {
                 throw new TransportException(
                         "userinfo endpoint returned unexpected HTTP status " + response.statusCode());

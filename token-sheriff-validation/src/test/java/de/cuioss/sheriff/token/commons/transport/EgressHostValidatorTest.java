@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.commons.transport;
 
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -83,6 +84,48 @@ class EgressHostValidatorTest {
                 Arguments.of("idp.1example.", EgressHostValidator.INVALID_HOST),
                 Arguments.of("a".repeat(64) + ".example", EgressHostValidator.INVALID_HOST),
                 Arguments.of("a.".repeat(127) + "ab", EgressHostValidator.INVALID_HOST));
+    }
+
+    /**
+     * One entry per refusal class of the validator, with the fixed text each must produce. Shared by
+     * the builder tests ({@code EgressPolicyTest}, {@code WellKnownConfigTest},
+     * {@code HttpJwksLoaderConfigEgressHostTest}) so every allow-list builder is checked against the
+     * same classes.
+     */
+    static Stream<Arguments> builderRefusalClasses() {
+        return Stream.of(
+                Arguments.of(null, EgressHostValidator.NULL_ENTRY),
+                Arguments.of("", EgressHostValidator.BLANK_ENTRY),
+                Arguments.of("   ", EgressHostValidator.BLANK_ENTRY),
+                Arguments.of("keycloak:8443", EgressHostValidator.PORT),
+                Arguments.of("[::1]:8443", EgressHostValidator.PORT),
+                Arguments.of("key cloak", EgressHostValidator.WHITESPACE),
+                Arguments.of("key\tcloak", EgressHostValidator.CONTROL_CHARACTER),
+                Arguments.of("kéycloak", EgressHostValidator.NON_ASCII),
+                Arguments.of("idp_internal", EgressHostValidator.INVALID_HOST),
+                Arguments.of("idp.123", EgressHostValidator.INVALID_HOST),
+                Arguments.of("https://keycloak", EgressHostValidator.URL_SYNTAX),
+                Arguments.of("[fe80::1%eth0]", EgressHostValidator.URL_SYNTAX),
+                Arguments.of("[::1", EgressHostValidator.INVALID_IPV6));
+    }
+
+    /**
+     * Asserts that a builder refused an entry with the expected fixed text and that no exception in
+     * the cause chain echoes the entry. A {@code null} or empty entry cannot be echoed meaningfully, so
+     * only the fixed text is checked for it; a nonempty blank entry is checked like any other.
+     */
+    static void assertFixedRefusal(IllegalArgumentException exception, @Nullable String entry,
+            String expectedRefusal) {
+        assertEquals(expectedRefusal, exception.getMessage(), "the refusal must be the validator's fixed text");
+        if (entry == null || entry.isEmpty()) {
+            return;
+        }
+        assertFalse(expectedRefusal.contains(entry), "the fixed refusal text must not contain the entry");
+        for (Throwable current = exception; current != null; current = current.getCause()) {
+            String message = current.getMessage();
+            assertFalse(message != null && message.contains(entry),
+                    "no exception in the cause chain may echo the entry, but found: " + message);
+        }
     }
 
     @Nested
@@ -162,6 +205,19 @@ class EgressHostValidatorTest {
             assertNull(URI.create("https://" + entry + "/token").getHost(),
                     "URI must report no host, so every URL to it is refused before the allow-list lookup");
             assertEquals(Optional.of(EgressHostValidator.INVALID_HOST), EgressHostValidator.refusal(entry));
+        }
+
+        @Test
+        @DisplayName("Should refuse a zoned IPv6 literal by the % rule although URI reports it as the host")
+        void shouldRefuseZonedIpv6LiteralThatUriReportsAsHost() throws Exception {
+            String host = new URI("http://[fe80::1%eth0]/").getHost();
+
+            assertEquals("[fe80::1%eth0]", host,
+                    "URI accepts the zone id and reports it as part of the bracketed host");
+            assertEquals(Optional.of(EgressHostValidator.URL_SYNTAX), EgressHostValidator.refusal(host),
+                    "the entry URI reports as the host is refused by the % rule");
+            assertEquals(Optional.of(EgressHostValidator.URL_SYNTAX), EgressHostValidator.refusal("fe80::1%eth0"),
+                    "the bare zoned literal is refused by the same rule");
         }
 
         @ParameterizedTest(name = "does not echo [{0}]")

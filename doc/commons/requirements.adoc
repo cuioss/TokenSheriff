@@ -117,21 +117,38 @@ limit).
 side, MUST be a bare host as `URI.getHost()` reports it: an ASCII host name of letter-digit-hyphen
 labels whose final label, when there is more than one, starts with a letter, optionally ending in
 one terminal root dot, a dotted
-IPv4 literal, or an IPv6 literal, bare or bracketed. A `null` or blank entry, an
-entry carrying a port (`keycloak:8080`, `[::1]:443`), whitespace, a control or non-ASCII character,
-or a URL syntax character (`/`, `@`, `?`, `#`, `%`) MUST be refused when the configuration is built —
-never stored, never silently ignored — with a fixed text that does not contain the entry. The one rule
+IPv4 literal, or an IPv6 literal, bare or bracketed. Every other entry MUST be refused when the
+configuration is built — never stored, never silently ignored — with a fixed text that does not
+contain the entry. The refused classes are:
+
+* `null`, and a blank entry;
+* a port in any form (`keycloak:8080`, `[::1]:443`, any other single-colon form);
+* a scheme or other URL syntax: `/`, `@`, `?` or `#` (`https://keycloak`, `user@keycloak`);
+* a name with `%`, which includes a zoned IPv6 literal (`[fe80::1%eth0]`, `fe80::1%eth0`): for
+  `http://[fe80::1%eth0]/` `URI.getHost()` reports `[fe80::1%eth0]`, but the zone id names an
+  interface of the local machine and an allow-list entry bypasses the link-local refusal, so `%` is
+  refused in every entry;
+* whitespace, and a control character;
+* a non-ASCII character;
+* an underscore, or any other character outside letter-digit-hyphen labels (`idp_internal`);
+* a dotted name whose final label does not start with a letter (`idp.123`, `idp.1example`), for
+  which `URI.getHost()` reports no host;
+* a malformed IPv6 literal (`::g`, `[::1`, `[10.0.0.1]`).
+
+The one rule
 is `commons.transport.EgressHostValidator`; `EgressPolicy.EgressPolicyBuilder.allowedHost`,
 `WellKnownConfig.WellKnownConfigBuilder.allowedEgressHost`,
 `HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder.allowedEgressHost` and the client's
-`ClientConfiguration` all apply it. An admitted entry is stored lower-cased, a bare IPv6 literal in
-bracketed form, so a bare IPv6 entry matches the bracketed host of an IPv6 URL; matching stays
-case-insensitive. Under
+`ClientConfiguration` all apply it. All four builders store an admitted entry in the canonical form
+`EgressHostValidator.requireBareHost` returns — lower-cased, a bare IPv6 literal in bracketed form — so
+a bare IPv6 entry matches the bracketed host of an IPv6 URL, and `ClientConfiguration` reports,
+compares and prints its list in that form; matching stays case-insensitive. Under
 Quarkus a port-carrying element of `sheriff.token.issuers.<name>.jwks.http.allowed-egress-hosts`
-fails startup naming the property, and blank CSV elements are dropped before the rule runs; a
-port-carrying element, or one with surrounding whitespace (the client mapping does not trim entries), of
-`sheriff.client.allowed-egress-hosts` fails the client mapping, while the configuration reader drops empty
-CSV elements there before the rule runs.
+fails startup naming the property; on this issuer path blank CSV elements are dropped and the
+whitespace around an element is trimmed before the rule runs, so `keycloak, dex` admits both hosts. The
+client path does not trim: a port-carrying element, or one with surrounding whitespace, of
+`sheriff.client.allowed-egress-hosts` fails the client mapping, so `keycloak, dex` fails it there, while
+the configuration reader drops empty CSV elements before the rule runs.
 
 * Source: https://owasp.org/www-community/attacks/Server_Side_Request_Forgery[OWASP SSRF], https://github.com/advisories/GHSA-7vw6-5q2f-7w5r[CVE-2026-1180], https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4.10].
 
@@ -159,10 +176,11 @@ ceiling into the assembled body, and offers two policies:
   bytes with an explicit truncation signal.
 
 The handler bounds its own work as well as the bytes: the body read so far is kept in one array that
-grows by doubling and never beyond the ceiling, so the objects a body costs grow with the logarithm of its
-size, not with the number of buffers it arrives in, and an empty buffer costs nothing. During a growth
-step the old and the new array are both live, so the memory held while the body streams peaks below twice
-the ceiling plus the one chunk in flight; assembling and, for the string variant, decoding the result at
+grows by doubling, so the objects a body costs grow with the logarithm of its size, not with the number of
+buffers it arrives in, and an empty buffer costs nothing. The array never exceeds the ceiling and is at most
+twice the bytes received, or the first allocation when that is larger. During a growth step the old and the
+new array are both live, so the memory held while the body streams peaks below twice the ceiling plus the
+buffers of the delivery in flight; assembling and, for the string variant, decoding the result at
 completion peaks at a small constant multiple of the ceiling. Under the fail policy, when the handler
 observes a `Content-Length` header that is not a valid number, it cancels the subscription without
 requesting a byte, and the body future fails with an `IOException` carrying a fixed message that does not
@@ -172,7 +190,14 @@ That guarantee is the handler's own. Whether the surrounding client reaches the 
 parses the header itself first, is the client's behaviour: the JDK HTTP/1.1 client (observed on JDK 25)
 parses `Content-Length` itself after the handler returned, so there the caller of `HttpClient.send`
 receives the JDK's own `IllegalArgumentException` (cause `NumberFormatException`) carrying the raw header
-value, and the handler's fixed message is not delivered. A caller therefore treats the message of any
+value, and the handler's fixed message is not delivered. The handler has no hook before that parse, so the
+mapping belongs to the caller of `send`. The client's discovery, PAR, userinfo and revocation clients send
+through `BackChannelHttp.send`, and the token endpoint client through its own send; each catches that
+`IllegalArgumentException` and fails the call with a `TransportException` whose message is the endpoint's
+failure context and the fixed text `BackChannelHttp.MALFORMED_RESPONSE` (after a success status the token
+endpoint reports it as its post-redemption failure), neither chaining the JDK's exception nor echoing its
+message. The validation-side discovery and JWKS reads hand the handler to cui-http, whose adapter performs
+the send, so this repository has no send call there to map. A caller therefore treats the message of any
 exception that comes out of an HTTP exchange as remote content and sanitises it before logging.
 
 The ceiling is accepted from 0 to `Integer.MAX_VALUE - 8` bytes; any other value is refused when the

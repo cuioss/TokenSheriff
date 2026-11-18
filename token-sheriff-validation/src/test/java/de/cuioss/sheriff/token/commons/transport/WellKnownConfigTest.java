@@ -20,9 +20,11 @@ import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import javax.net.ssl.SSLContext;
@@ -134,6 +136,17 @@ class WellKnownConfigTest {
         if (!entry.isBlank()) {
             assertCauseChainDoesNotContain(exception, entry);
         }
+    }
+
+    @ParameterizedTest(name = "refuses [{0}] with its fixed text")
+    @MethodSource("de.cuioss.sheriff.token.commons.transport.EgressHostValidatorTest#builderRefusalClasses")
+    @DisplayName("Should refuse every refusal class of the validator at the setter, never echoing the entry")
+    void shouldRefuseEveryRefusalClass(@Nullable String entry, String expectedRefusal) {
+        var builder = WellKnownConfig.builder().wellKnownUrl(TEST_WELL_KNOWN_URL);
+
+        var exception = assertThrows(IllegalArgumentException.class, () -> builder.allowedEgressHost(entry),
+                "the allow-list setter must refuse the entry before build()");
+        EgressHostValidatorTest.assertFixedRefusal(exception, entry, expectedRefusal);
     }
 
     @Test

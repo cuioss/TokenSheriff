@@ -598,6 +598,17 @@ public class TokenEndpointClient {
                         + observedStatus.get() + ": " + e.getMessage(), e);
             }
             throw new TransportException("Token endpoint request failed: " + e.getMessage(), e);
+        } catch (IllegalArgumentException ignored) {
+            // The JDK client parses Content-Length itself after the body handler returned and refuses a
+            // value that is not a number with this exception, whose message carries the raw header value:
+            // it is neither chained nor reused (CWE-117, CWE-532). The status line was already read, so a
+            // success status still means the grant is redeemed.
+            LOGGER.debug("Token endpoint response refused by the HTTP client as malformed");
+            if (HttpStatusFamily.isSuccess(observedStatus.get())) {
+                throw new RedeemedResponseException("Token endpoint response body could not be read after HTTP "
+                        + observedStatus.get() + ": " + BackChannelHttp.MALFORMED_RESPONSE);
+            }
+            throw new TransportException("Token endpoint request failed: " + BackChannelHttp.MALFORMED_RESPONSE);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new TransportException("Token endpoint request interrupted", e);

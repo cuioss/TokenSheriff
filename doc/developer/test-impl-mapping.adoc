@@ -4,7 +4,7 @@
 :toc-title: Table of Contents
 :sectnums:
 
-This document maps each production package of the four production modules to the test
+This document maps each production package of the production modules to the test
 classes that exercise it. It also lists the cross-cutting guards that check the code base
 as a whole, and the integration-test specifications per feature area.
 
@@ -41,9 +41,10 @@ parser is `InsufficientScopeChallengeRoundTripTest` in token-sheriff-client (`cl
 |No test class of its own.
 
 |`commons.transport`
-|`BoundedBodyHandlerTest`, `BoundedBodyHandlerTruncateTest`, `CleartextEndpointsTest`,
-`DirectDeserializationTest`, `EgressPolicyTest`,
-`HttpHandlerVerifyHostnameContractTest`, `HttpJwksLoaderConfigTest`,
+|`BoundedBodyHandlerCapacityTest`, `BoundedBodyHandlerMultiBufferTest`, `BoundedBodyHandlerTest`,
+`BoundedBodyHandlerTruncateTest`, `CleartextEndpointsTest`, `DirectDeserializationTest`,
+`EgressHostValidatorTest`, `EgressPolicyTest`, `HttpHandlerVerifyHostnameContractTest`,
+`HttpJwksLoaderConfigEgressHostTest`, `HttpJwksLoaderConfigTest`,
 `HttpJwksLoaderConfigTransportTest`, `HttpJwksLoaderConfigUnknownKidTest`,
 `HttpJwksLoaderConfigWellKnownTest`, `HttpWellKnownResolverIssuerTest`,
 `HttpWellKnownResolverTest`, `JwksHostnameVerificationTest`, `JwksHttpContentConverterTest`,
@@ -182,7 +183,8 @@ Package prefix: `de.cuioss.sheriff.token.client`.
 
 |`auth`
 |`ClientAuthenticationSelectorTest`, `ClientSecretAuthTest`, `MtlsClientAuthTest`,
-`PrivateKeyJwtAuthTest`, `WeakAuthRefusedTest`
+`PemKeyPairLoaderAdversarialTest`, `PemKeyPairLoaderTest`, `PrivateKeyJwtAuthTest`,
+`WeakAuthRefusedTest`
 
 |`config`
 |`ClientConfigurationTest`
@@ -191,7 +193,8 @@ Package prefix: `de.cuioss.sheriff.token.client`.
 |`DiscoveryAdversarialTest`, `DiscoveryResolverTest`, `ProviderMetadataTest`
 
 |`dpop`
-|`DpopProofGeneratorTest`, `SenderConstraintTest`
+|`DpopProofGeneratorJktGoldenTest`, `DpopProofGeneratorTest`, `JwkPublicMembersTest`,
+`SenderConstraintTest`
 
 |`flow`
 |`AuthorizationCodeFlowOptionsTest`, `AuthorizationCodeFlowPushedTest`,
@@ -209,7 +212,8 @@ Package prefix: `de.cuioss.sheriff.token.client`.
 
 |`internal`
 |`BackChannelEgressPolicyTest`, `BackChannelHostnameVerificationTest`,
-`BackChannelHttpBoundedBodyTest`, `BackChannelHttpTlsTrustTest`, `BackChannelOriginMappingTest`, `BackChannelOriginRoutingTest`,
+`BackChannelHttpBoundedBodyTest`, `BackChannelHttpMalformedResponseTest`, `BackChannelHttpTlsTrustTest`,
+`BackChannelOriginMappingTest`, `BackChannelOriginRoutingTest`,
 `EndpointQueryTest`, `EndpointSchemePolicyTest`, `FormEncoderTest`, `JsonEscaperTest`,
 `JsonResponseMediaTypeTest`, `LogSanitizerTest`
 
@@ -258,7 +262,8 @@ Package prefix: `de.cuioss.sheriff.token.quarkus`.
 |`config`
 |`AccessLogFilterConfigResolverTest`, `AccessLogFilterConfigTest`,
 `AccessTokenCacheConfigResolverTest`, `ConfigValueParserTest`,
-`IssuerConfigResolverDpopTransportAndLoggingTest`, `IssuerConfigResolverJwksLoaderOptInTest`,
+`IssuerConfigResolverDpopTransportAndLoggingTest`, `IssuerConfigResolverEgressHostTest`,
+`IssuerConfigResolverJwksLoaderOptInTest`,
 `IssuerConfigResolverJwksLoaderOrphanedTest`, `IssuerConfigResolverMaxStalenessTest`, `IssuerConfigResolverTest`, `JwtPropertyKeysTest`, `ParserConfigResolverTest`,
 `RetryStrategyConfigResolverTest`
 
@@ -293,7 +298,7 @@ Package prefix: `de.cuioss.sheriff.token.quarkus`.
 
 |`producer`
 |`BearerTokenProducerSchemeRuleTest`, `BearerTokenProducerTest`, `BearerTokenResponseFactoryTest`,
-`BearerTokenResultTest`,
+`BearerTokenResponseFactoryUnrepresentableScopesTest`, `BearerTokenResultTest`,
 `EmptyJsonWebTokenTest`, `JsonWebTokenAdapterTest`, `NativeTokenValidatorProducerIT`,
 `QuarkusTokenValidatorProducerTest`, `TokenValidatorProducerUnitTest`,
 `TokenValidatorStartupInitializerTest`
@@ -313,6 +318,26 @@ Fixtures that are not test classes: `JwtTestProfile` (`config`), `MockInjectionP
 (`producer`), `HttpRequestResolverMock` (`servlet`), and `TestConfig` and
 `TestConfigurations` (`test`).
 
+[#validation-quarkus-deployment]
+== token-sheriff-validation-quarkus-deployment
+
+The build-time (deployment) module of the Quarkus extension for token validation.
+
+Package prefix: `de.cuioss.sheriff.token.quarkus`.
+
+[cols="1,3",options="header"]
+|===
+|Production package |Test classes
+
+|`deployment`
+|`BearerScopeValidationBootTest`, `BearerScopeValidationBuildStepTest`,
+`BearerScopeValidationDefaultMethodBuildStepTest`, `BearerScopeValidationRefusalBootTest`,
+`TokenSheriffDevUIIntegrationTest`, `TokenSheriffIntegrationTest`,
+`TokenSheriffProcessorBuildStepTest`, `TokenSheriffProcessorTest`,
+`TokenValidatorEagerStartupTest`; the extension as a whole is booted by
+`TokenSheriffExtensionTest` (test package `quarkus.test`)
+|===
+
 [#client-quarkus]
 == token-sheriff-client-quarkus
 
@@ -325,10 +350,29 @@ Package prefix: `de.cuioss.sheriff.token.client.quarkus`.
 |Production package |Test classes
 
 |`quarkus`
-|`ClientExceptionMapperTest`, `TokenSheriffClientProducerTest`
+|`ClientExceptionMapperTest`, `TokenSheriffClientProducerEgressTest`, `TokenSheriffClientProducerTest`
 
 |`config`
-|No test class of its own.
+|No test class of its own; `ClientConfigMapper` is exercised directly by `ClientConfigMapperContract`
+in `TokenSheriffClientProducerEgressTest`, which sits in the test package
+`de.cuioss.sheriff.token.client.quarkus`.
+|===
+
+[#client-quarkus-deployment]
+== token-sheriff-client-quarkus-deployment
+
+The build-time (deployment) module of the Quarkus extension for the client engine.
+
+Package prefix: `de.cuioss.sheriff.token.client.quarkus`.
+
+[cols="1,3",options="header"]
+|===
+|Production package |Test classes
+
+|`deployment`
+|`DefaultBeanReplacementTest`, `DiscoveryCacheDisabledNoInjectionDeploymentTest`,
+`DiscoveryCacheEnabledInjectionDeploymentTest`, `DiscoveryCacheInjectionDeploymentTest`,
+`TokenSheriffClientProcessorTest`
 |===
 
 [#cross-cutting-guards]

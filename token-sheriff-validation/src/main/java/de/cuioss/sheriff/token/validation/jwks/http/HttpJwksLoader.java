@@ -95,7 +95,9 @@ import static de.cuioss.sheriff.token.validation.JWTValidationLogMessages.WARN;
  * it is still claimed, taking nothing; otherwise it takes the in-flight guard, then claims the window with
  * one compare-and-set on a monotonic clock and hands one fetch to the refresh executor; the lookup
  * performs no I/O, does not wait and still misses. A hand-off the executor rejects releases the guard but
- * keeps the window claimed, so it burns the window. At most one such fetch runs per window and per
+ * keeps the window claimed, so it burns the window; an {@link Error} thrown by the executor's
+ * {@code execute} releases the guard too, burns the window and propagates to the caller of the lookup.
+ * At most one such fetch runs per window and per
  * loader. The fetched
  * key set is installed through the same commit step as a periodic refresh, and only when it holds the
  * requested key id and the generation is still live; installing it publishes {@code OK} like any other
@@ -857,9 +859,11 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * taken, so a lost claim never leaks a guard. The fetch carries the {@link #epoch} read here, so it
      * commits nothing once a {@link #close()} moved it on.
      * <p>
-     * The guard is released in this method for every hand-off outcome other than an accepted task: an
-     * executor that rejects the fetch, or fails with any other {@link RuntimeException}, releases the
-     * guard, and the failure is logged at DEBUG and never thrown on the caller. The window is not
+     * The guard is released in this method, in a {@code finally} block, for every hand-off outcome other
+     * than an accepted task: an executor that rejects the fetch, or fails with any other
+     * {@link RuntimeException}, releases the guard, and the failure is logged at DEBUG and never thrown
+     * on the caller; an {@link Error} thrown by the executor's {@code execute} releases the guard as well
+     * and propagates to the caller. The window is not
      * refunded: a failed hand-off burns the window it claimed, so the next on-demand fetch can be claimed
      * only in the next window. An accepted task releases the guard when it ends, so a caller-supplied
      * executor must run or reject every task it accepts.
@@ -892,20 +896,30 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
             return;
         }
         long claimEpoch = epoch.get();
+        boolean accepted = false;
         try {
-            config.getScheduledExecutorService().execute(() -> fetchForUnknownKid(kid, claimEpoch));
+            try {
+                config.getScheduledExecutorService().execute(() -> fetchForUnknownKid(kid, claimEpoch));
+                accepted = true;
+            } finally {
+                // Every outcome other than an accepted task releases the guard, an Error included, before any
+                // logging; an accepted task releases it when it ends.
+                if (!accepted) {
+                    fetchInFlight.set(false);
+                }
+            }
         }
         // Boundary catch around a caller-supplied executor: a rejection or any other failure of the
-        // hand-off releases the guard and is never thrown on the caller of getKeyInfo, which only missed.
-        // The window is deliberately not refunded: a failed hand-off burns it, so a rejecting executor is
-        // retried at most once per window.
+        // hand-off is never thrown on the caller of getKeyInfo, which only missed. An Error is not caught
+        // and propagates. The window is deliberately not refunded: a failed hand-off burns it, so a
+        // rejecting executor is retried at most once per window.
         // cui-rewrite:disable InvalidExceptionUsageRecipe
         catch (RuntimeException e) {
-            fetchInFlight.set(false);
             LOGGER.debug("Refresh executor did not accept the unknown-kid fetch (%s)", e.getClass().getName());
-            return;
         }
-        LOGGER.info(INFO.UNKNOWN_KID_REFRESH_SCHEDULED, ErrorTextSanitizer.sanitize(kid), loggableIssuerIdentifier());
+        if (accepted) {
+            LOGGER.info(INFO.UNKNOWN_KID_REFRESH_SCHEDULED, ErrorTextSanitizer.sanitize(kid), loggableIssuerIdentifier());
+        }
     }
 
     /**

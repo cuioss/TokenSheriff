@@ -222,6 +222,16 @@ public final class BearerChallenge {
             return value.toString();
         }
 
+        /**
+         * Package-private so a test can observe the retention bound of {@link #scope(String)}.
+         *
+         * @return the number of distinct scopes this builder retains, at most
+         *         {@value BearerChallenge#MAX_SCOPE_TOKENS}{@code + 1}
+         */
+        int retainedScopeCount() {
+            return scopes.size();
+        }
+
         private static int length(@Nullable String value) {
             return value == null ? 0 : value.length();
         }

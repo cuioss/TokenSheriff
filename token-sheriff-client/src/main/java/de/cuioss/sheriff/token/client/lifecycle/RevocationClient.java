@@ -109,7 +109,7 @@ public class RevocationClient {
 
         HttpClient client = backChannel.sharedClient(handler);
         try {
-            HttpResponse<String> response = client.send(requestBuilder.build(), backChannel.bodyHandler());
+            HttpResponse<String> response = backChannel.send(client, requestBuilder.build(), FAILURE_CONTEXT);
             if (!HttpStatusFamily.isSuccess(response.statusCode())) {
                 throw new TransportException(
                         "Revocation endpoint returned unexpected HTTP status " + response.statusCode());

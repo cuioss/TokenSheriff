@@ -134,9 +134,10 @@ public @interface BearerToken {
      * <p>
      * Every name must be an RFC 6749 §3.3 {@code scope-token}: at least one character, each in
      * {@code %x21 / %x23-5B / %x5D-7E} (printable ASCII except space, {@code "} and {@code \}). The set may
-     * hold at most 64 distinct scopes, and the {@code insufficient_scope} challenge sent for it, realm and
-     * {@code error_description} included, may be at most 8192 characters long; these are the bounds of the
-     * challenge. A violation of any of the three rules fails the deployment.
+     * hold at most {@value de.cuioss.sheriff.token.commons.http.BearerChallenge#MAX_SCOPE_TOKENS} distinct
+     * scopes, and the {@code insufficient_scope} challenge sent for it, realm and {@code error_description}
+     * included, may be at most {@value de.cuioss.sheriff.token.commons.http.BearerChallenge#MAX_LENGTH}
+     * characters long; these are the bounds of the challenge. A violation of any of the three rules fails the deployment.
      * <p>
      * Each {@code @BearerToken} is checked on its own. The deployment check has two known limits, accepted as
      * such, both on the merging of {@link BearerAuth}: an interface default method is checked without the
