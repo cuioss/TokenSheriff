@@ -2,10 +2,10 @@
   "id": "PLAN-11",
   "slug": "final-residuals-sweep",
   "workstream": "WS-02",
-  "status": "staged",
+  "status": "shipped",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
-  "pr": "",
-  "landing": "",
+  "plan_marshall_plan_id": "plan-11-final-residuals-sweep",
+  "pr": "#921",
+  "landing": "landings/PLAN-11.md",
   "seq": 11
 }
