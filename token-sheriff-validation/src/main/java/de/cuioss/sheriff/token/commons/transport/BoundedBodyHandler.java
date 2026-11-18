@@ -57,7 +57,7 @@ import java.util.concurrent.Flow;
  * one buffer, and an empty buffer costs nothing. The array never exceeds the ceiling and is at most twice
  * the bytes received, or the first allocation when that is larger. During a growth step the old and the
  * new array are both live, so under either policy the memory held while streaming peaks below twice the
- * ceiling plus the one chunk in flight.
+ * ceiling plus the buffers of the delivery in flight.
  * <p>
  * Under {@link OverLimitPolicy#FAIL} a {@code Content-Length} header that is not a valid number is a
  * normal failure as well, when the handler observes it: the subscription is cancelled without requesting
@@ -313,7 +313,7 @@ public final class BoundedBodyHandler {
          * allocated grows with the logarithm of the body size and not with the number of buffers it
          * arrives in. The array never exceeds {@link #maxBytes} and is at most twice the bytes received,
          * or the first allocation when that is larger; while streaming, the memory held peaks below twice
-         * the ceiling plus the one chunk in flight.
+         * the ceiling plus the buffers of the delivery in flight.
          */
         private byte[] content = EMPTY;
         private long total;
@@ -360,11 +360,13 @@ public final class BoundedBodyHandler {
             subscription.cancel();
             if (policy == OverLimitPolicy.TRUNCATE) {
                 append(buffer, (int) (maxBytes - total));
-                result.complete(new BoundedBody(assemble(), true));
+                BoundedBody truncated = new BoundedBody(assemble(), true);
+                content = EMPTY;
+                result.complete(truncated);
             } else {
+                content = EMPTY;
                 result.completeExceptionally(new IOException(overLimitMessage(maxBytes, boundOrigin)));
             }
-            content = EMPTY;
         }
 
         /**
@@ -408,8 +410,9 @@ public final class BoundedBodyHandler {
             if (result.isDone()) {
                 return;
             }
-            result.complete(new BoundedBody(assemble(), false));
+            BoundedBody body = new BoundedBody(assemble(), false);
             content = EMPTY;
+            result.complete(body);
         }
     }
 }

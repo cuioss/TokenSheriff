@@ -367,8 +367,9 @@ public final class BackChannelHttp {
             throws IOException, InterruptedException {
         Objects.requireNonNull(client, "client must not be null");
         Objects.requireNonNull(request, "request must not be null");
+        HttpResponse.BodyHandler<String> boundedBody = bodyHandler();
         try {
-            return client.send(request, bodyHandler());
+            return client.send(request, boundedBody);
         } catch (IllegalArgumentException ignored) {
             // Deliberately neither chained nor reused: the JDK's message carries the raw header value.
             LOGGER.debug("The HTTP client refused the response as malformed");

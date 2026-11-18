@@ -206,7 +206,7 @@ class PemKeyPairLoaderAdversarialTest {
         assertAll("off-curve EC public half",
                 () -> assertTrue(Set.of(PemKeyPairLoader.EC_KEY_NOT_P256, PemKeyPairLoader.KEY_TYPE_NOT_ALLOWED)
                                 .contains(message),
-                        "the refusal must be one of the two fixed texts the policy allows, but was: " + message),
+                        "the refusal must be one of the two fixed texts the policy allows"),
                 () -> assertNull(thrown.getCause(), "the refusal must not attach a cause"),
                 () -> assertFalse(message.contains(offCurve.toString()), "the refusal must not carry the file path"),
                 () -> assertBodyFragmentsAbsent(offCurve, message));

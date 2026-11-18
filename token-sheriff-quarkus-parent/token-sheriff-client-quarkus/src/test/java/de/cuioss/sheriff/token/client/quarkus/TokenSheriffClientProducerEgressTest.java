@@ -122,8 +122,10 @@ class TokenSheriffClientProducerEgressTest {
                     assertThrows(IllegalArgumentException.class, () -> ClientConfigMapper.map(config),
                             "an allow-list element carrying a port matches no contacted host and must fail the mapping");
             assertAll("the failure names the allow-list and the entry index, never the entry",
-                    () -> assertTrue(failure.getMessage().contains("allowedEgressHosts entry 1"),
-                            "the failure names the field and the refused index, but was: " + failure.getMessage()),
+                    () -> assertEquals(
+                            "allowedEgressHosts entry 1 is refused: egress allow-list host must be a bare host without a port",
+                            failure.getMessage(),
+                            "the failure is the field, the zero-based refused index and the validator's fixed text"),
                     () -> assertFalse(failure.getMessage().contains("keycloak"),
                             "the refused element must not be echoed, but was: " + failure.getMessage()));
         }
@@ -141,8 +143,10 @@ class TokenSheriffClientProducerEgressTest {
                     assertThrows(IllegalArgumentException.class, () -> ClientConfigMapper.map(paddedConfig),
                             "the client mapping does not trim, so a whitespace-padded element must fail it");
             assertAll("the padded element is refused at its index; the unpadded list is the positive control",
-                    () -> assertTrue(failure.getMessage().contains("allowedEgressHosts entry 1"),
-                            "the failure names the padded element's index, but was: " + failure.getMessage()),
+                    () -> assertEquals(
+                            "allowedEgressHosts entry 1 is refused: egress allow-list host must not contain whitespace",
+                            failure.getMessage(),
+                            "the failure is the field, the padded element's zero-based index and the validator's fixed text"),
                     () -> assertFalse(failure.getMessage().contains("dex"),
                             "the refused element must not be echoed, but was: " + failure.getMessage()),
                     () -> assertEquals(List.of("keycloak", "dex"),

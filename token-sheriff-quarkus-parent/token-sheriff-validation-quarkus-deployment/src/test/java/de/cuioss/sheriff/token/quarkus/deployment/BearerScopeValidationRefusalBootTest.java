@@ -51,6 +51,8 @@ class BearerScopeValidationRefusalBootTest {
 
     private static final String NOT_A_SCOPE_TOKEN = "is not an RFC 6749 section 3.3 scope-token";
 
+    private static final String SCOPE_REFUSAL = "declares requiredScopes that an insufficient_scope challenge cannot carry";
+
     private static final String REFUSED_MEMBER = " on method " + InvalidMethodLevelScope.class.getName() + "#endpoint ";
 
     private static final String REFUSED_NON_ASCII_MEMBER = " on method " + NonAsciiScope.class.getName()
@@ -67,22 +69,22 @@ class BearerScopeValidationRefusalBootTest {
 
     private static void assertScopeRefusal(Throwable thrown) {
         assertNotNull(thrown, "augmentation must fail for a scope name outside the scope-token grammar");
-        Throwable refusal = findScopeRefusal(thrown, REFUSED_MEMBER);
+        Throwable refusal = findScopeRefusal(thrown, REFUSED_MEMBER, NOT_A_SCOPE_TOKEN);
         assertNotNull(refusal, "augmentation must fail with a DeploymentException naming " + REFUSED_MEMBER.strip()
                 + " and the scope-token reason, but the failure was: " + thrown);
         assertInstanceOf(DeploymentException.class, refusal,
                 "the scope refusal must be a DeploymentException, was: " + refusal);
-        assertNotNull(findScopeRefusal(thrown, REFUSED_NON_ASCII_MEMBER),
+        assertNotNull(findScopeRefusal(thrown, REFUSED_NON_ASCII_MEMBER, NOT_A_SCOPE_TOKEN),
                 "a scope name holding a non-ASCII letter must be refused as well, but the failure was: " + thrown);
-        assertNull(findScopeRefusal(thrown, VALID_MEMBER),
-                "control: the fixture with valid scope names in the same archive must not be refused");
+        assertNull(findScopeRefusal(thrown, VALID_MEMBER, SCOPE_REFUSAL),
+                "control: the fixture with valid scope names in the same archive must not be refused for any scope reason");
     }
 
     /**
      * Walks the cause chain, and the suppressed exceptions Quarkus attaches when it collects validation
-     * errors, for the DeploymentException whose message names {@code member} and the reason.
+     * errors, for the DeploymentException whose message names {@code member} and contains {@code reason}.
      */
-    private static Throwable findScopeRefusal(Throwable thrown, String member) {
+    private static Throwable findScopeRefusal(Throwable thrown, String member, String reason) {
         Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<>());
         Deque<Throwable> pending = new ArrayDeque<>();
         pending.push(thrown);
@@ -93,7 +95,7 @@ class BearerScopeValidationRefusalBootTest {
             }
             String message = current.getMessage();
             if (current instanceof DeploymentException && message != null && message.contains(member)
-                    && message.contains(NOT_A_SCOPE_TOKEN)) {
+                    && message.contains(reason)) {
                 return current;
             }
             if (current.getCause() != null) {

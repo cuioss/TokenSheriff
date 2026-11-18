@@ -117,6 +117,9 @@ class HttpJwksLoaderExecutorHandOffTest {
 
         executor.behaviour = ScriptedExecutor.Behaviour.RUN;
         moduleDispatcher.serve(UnknownKidJwksDispatcher.Mode.ROTATED_KEY);
+        assertTrue(loader.getKeyInfo(ROTATED_KID).isEmpty());
+        drainExecutor();
+        int insideWindow = moduleDispatcher.getRequestCount();
         clock.addAndGet(WINDOW.toNanos());
         assertTrue(loader.getKeyInfo(ROTATED_KID).isEmpty());
         drainExecutor();
@@ -124,6 +127,8 @@ class HttpJwksLoaderExecutorHandOffTest {
         assertAll("the guard was released by the failed hand-off",
                 () -> assertEquals(1, afterFailure, "the failed hand-off fetched nothing"),
                 () -> assertEquals(2, afterPeriodic, "a later periodic cycle fetches"),
+                () -> assertEquals(2, insideWindow,
+                        "the failed hand-off kept the window claimed, so a miss inside it fetches nothing"),
                 () -> assertEquals(3, moduleDispatcher.getRequestCount(), "a later claim fetches"),
                 () -> assertTrue(loader.getKeyInfo(ROTATED_KID).isPresent(), "the later fetch installed the key"));
         loader.close();
@@ -145,6 +150,9 @@ class HttpJwksLoaderExecutorHandOffTest {
 
         executor.behaviour = ScriptedExecutor.Behaviour.RUN;
         moduleDispatcher.serve(UnknownKidJwksDispatcher.Mode.ROTATED_KEY);
+        assertTrue(loader.getKeyInfo(ROTATED_KID).isEmpty());
+        drainExecutor();
+        int insideWindow = moduleDispatcher.getRequestCount();
         clock.addAndGet(WINDOW.toNanos());
         assertTrue(loader.getKeyInfo(ROTATED_KID).isEmpty());
         drainExecutor();
@@ -153,6 +161,8 @@ class HttpJwksLoaderExecutorHandOffTest {
                 () -> assertEquals(ScriptedHandOffError.MESSAGE, thrown.getMessage(), "the executor's own Error"),
                 () -> assertEquals(1, afterError, "the hand-off that threw fetched nothing"),
                 () -> assertEquals(2, afterPeriodic, "the next periodic cycle fetches"),
+                () -> assertEquals(2, insideWindow,
+                        "the failed hand-off kept the window claimed, so a miss inside it fetches nothing"),
                 () -> assertEquals(3, moduleDispatcher.getRequestCount(), "a miss in the next window schedules a fetch"),
                 () -> assertTrue(loader.getKeyInfo(ROTATED_KID).isPresent(), "the later fetch installed the key"));
         loader.close();

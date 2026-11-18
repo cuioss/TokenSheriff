@@ -122,9 +122,9 @@ class BoundedBodyHandlerMultiBufferTest {
             ManualDrive<BoundedBody> drive = subscribed(CEILING, OverLimitPolicy.FAIL);
 
             List<ByteBuffer> buffers = drive.feedInOneCall(CHUNKS);
-            drive.complete();
 
             ManualDrive<BoundedBody> control = fedOneBufferPerCall(CEILING, OverLimitPolicy.FAIL);
+            assertTrue(drive.body().isDone(), "The crossing settles the body before onComplete");
             IOException failure = assertInstanceOf(IOException.class, drive.failure(), "FAIL fails the read");
             assertAll("FAIL crossing in the list",
                     () -> assertEquals("Response body exceeds maximum allowed size of 6 bytes (" + ORIGIN + ")",
@@ -143,8 +143,8 @@ class BoundedBodyHandlerMultiBufferTest {
             ManualDrive<BoundedBody> drive = subscribed(CEILING, OverLimitPolicy.TRUNCATE);
 
             List<ByteBuffer> buffers = drive.feedInOneCall(CHUNKS);
-            drive.complete();
 
+            assertTrue(drive.body().isDone(), "The crossing settles the body before onComplete");
             BoundedBody body = drive.body().join();
             BoundedBody control = fedOneBufferPerCall(CEILING, OverLimitPolicy.TRUNCATE).body().join();
             assertAll("TRUNCATE crossing in the list",

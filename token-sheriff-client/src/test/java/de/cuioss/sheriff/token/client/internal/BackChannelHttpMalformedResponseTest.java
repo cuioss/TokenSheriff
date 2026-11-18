@@ -98,7 +98,7 @@ class BackChannelHttpMalformedResponseTest {
      * Starts a loopback server that answers every request with {@code rawResponse} and returns its URL.
      */
     private String serve(String rawResponse) throws IOException {
-        serverSocket = new ServerSocket(0, 50, InetAddress.getLoopbackAddress());
+        serverSocket = new ServerSocket(0, 50, InetAddress.getByAddress(new byte[]{127, 0, 0, 1}));
         byte[] answer = rawResponse.getBytes(StandardCharsets.US_ASCII);
         serverThread.execute(() -> {
             while (!serverSocket.isClosed()) {

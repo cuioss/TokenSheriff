@@ -111,13 +111,13 @@ class EgressHostValidatorTest {
 
     /**
      * Asserts that a builder refused an entry with the expected fixed text and that no exception in
-     * the cause chain echoes the entry. A {@code null} or blank entry cannot be echoed meaningfully, so
-     * only the fixed text is checked for it.
+     * the cause chain echoes the entry. A {@code null} or empty entry cannot be echoed meaningfully, so
+     * only the fixed text is checked for it; a nonempty blank entry is checked like any other.
      */
     static void assertFixedRefusal(IllegalArgumentException exception, @Nullable String entry,
             String expectedRefusal) {
         assertEquals(expectedRefusal, exception.getMessage(), "the refusal must be the validator's fixed text");
-        if (entry == null || entry.isBlank()) {
+        if (entry == null || entry.isEmpty()) {
             return;
         }
         assertFalse(expectedRefusal.contains(entry), "the fixed refusal text must not contain the entry");

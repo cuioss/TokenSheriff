@@ -449,7 +449,8 @@ public class ClientConfiguration {
      * {@link EgressHostValidator#requireBareHost(String)} returns — lower-case, a bare IPv6 literal in
      * brackets — the form {@link EgressPolicy}, {@code WellKnownConfig} and {@code HttpJwksLoaderConfig}
      * store, so {@link #getAllowedEgressHosts()}, {@code equals} and {@code toString} show that form and two
-     * configurations differing only in an entry's spelling are equal.
+     * configurations whose entries differ only in letter case or in the optional brackets of a bare IPv6
+     * literal are equal; other spellings of one IPv6 address stay distinct.
      *
      * @param allowedEgressHosts the configured allow-list; must not be {@code null}
      * @return an immutable list of the canonical forms, in the configured order

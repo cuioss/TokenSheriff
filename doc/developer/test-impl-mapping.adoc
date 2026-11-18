@@ -4,7 +4,7 @@
 :toc-title: Table of Contents
 :sectnums:
 
-This document maps each production package of the five production modules to the test
+This document maps each production package of the production modules to the test
 classes that exercise it. It also lists the cross-cutting guards that check the code base
 as a whole, and the integration-test specifications per feature area.
 
@@ -262,7 +262,8 @@ Package prefix: `de.cuioss.sheriff.token.quarkus`.
 |`config`
 |`AccessLogFilterConfigResolverTest`, `AccessLogFilterConfigTest`,
 `AccessTokenCacheConfigResolverTest`, `ConfigValueParserTest`,
-`IssuerConfigResolverDpopTransportAndLoggingTest`, `IssuerConfigResolverJwksLoaderOptInTest`,
+`IssuerConfigResolverDpopTransportAndLoggingTest`, `IssuerConfigResolverEgressHostTest`,
+`IssuerConfigResolverJwksLoaderOptInTest`,
 `IssuerConfigResolverJwksLoaderOrphanedTest`, `IssuerConfigResolverMaxStalenessTest`, `IssuerConfigResolverTest`, `JwtPropertyKeysTest`, `ParserConfigResolverTest`,
 `RetryStrategyConfigResolverTest`
 
@@ -352,7 +353,26 @@ Package prefix: `de.cuioss.sheriff.token.client.quarkus`.
 |`ClientExceptionMapperTest`, `TokenSheriffClientProducerEgressTest`, `TokenSheriffClientProducerTest`
 
 |`config`
-|No test class of its own.
+|No test class of its own; `ClientConfigMapper` is exercised directly by `ClientConfigMapperContract`
+in `TokenSheriffClientProducerEgressTest`, which sits in the test package
+`de.cuioss.sheriff.token.client.quarkus`.
+|===
+
+[#client-quarkus-deployment]
+== token-sheriff-client-quarkus-deployment
+
+The build-time (deployment) module of the Quarkus extension for the client engine.
+
+Package prefix: `de.cuioss.sheriff.token.client.quarkus`.
+
+[cols="1,3",options="header"]
+|===
+|Production package |Test classes
+
+|`deployment`
+|`DefaultBeanReplacementTest`, `DiscoveryCacheDisabledNoInjectionDeploymentTest`,
+`DiscoveryCacheEnabledInjectionDeploymentTest`, `DiscoveryCacheInjectionDeploymentTest`,
+`TokenSheriffClientProcessorTest`
 |===
 
 [#cross-cutting-guards]

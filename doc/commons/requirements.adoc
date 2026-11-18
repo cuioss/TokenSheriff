@@ -180,7 +180,7 @@ grows by doubling, so the objects a body costs grow with the logarithm of its si
 buffers it arrives in, and an empty buffer costs nothing. The array never exceeds the ceiling and is at most
 twice the bytes received, or the first allocation when that is larger. During a growth step the old and the
 new array are both live, so the memory held while the body streams peaks below twice the ceiling plus the
-one chunk in flight; assembling and, for the string variant, decoding the result at
+buffers of the delivery in flight; assembling and, for the string variant, decoding the result at
 completion peaks at a small constant multiple of the ceiling. Under the fail policy, when the handler
 observes a `Content-Length` header that is not a valid number, it cancels the subscription without
 requesting a byte, and the body future fails with an `IOException` carrying a fixed message that does not

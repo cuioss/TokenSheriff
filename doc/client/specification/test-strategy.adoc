@@ -626,7 +626,8 @@ an isolated-component or server-capability test alone does not qualify the row a
   dropped), `BackChannelEgressPolicyTest` (the client back channel applies the policy to the URL
   actually contacted), `ClientConfigurationTest` (a port-carrying, control-character or Unicode
   `allowedEgressHosts` entry refused without echoing it, and admitted entries stored in the canonical
-  form, so two configurations differing only in an entry's spelling are equal) and
+  form, so two configurations whose entries differ only in letter case are equal, while equivalent IPv6
+  spellings such as `::1` and `0:0:0:0:0:0:0:1` stay distinct) and
   `TokenSheriffClientProducerEgressTest` (the mapper passes `sheriff.client.allowed-egress-hosts`
   elements on untrimmed); `RevocationClientTest`: `revokeIfSupported`
   sends one request and returns `true` for an advertised endpoint, sends nothing and returns `false`

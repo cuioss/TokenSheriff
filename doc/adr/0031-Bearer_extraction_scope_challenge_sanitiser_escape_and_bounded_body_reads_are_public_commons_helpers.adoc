@@ -310,8 +310,10 @@ received buffer, and its own read of an unparsable `Content-Length` threw a `Num
   doubling, so the object count grows with the logarithm of the body size, not with the number of buffers.
   The array never exceeds the ceiling and is at most twice the bytes received, or the first allocation when
   that is larger. During a growth step the old and the new array are both live, so the memory held while
-  streaming peaks below twice the ceiling plus the one chunk in flight; this is the one memory bound of the
-  handler, stated identically in COMMONS-17 and the transport specification and pinned by a capacity test.
+  streaming peaks below twice the ceiling plus the buffers of the delivery in flight; this is the one memory
+  bound of the handler, stated identically in COMMONS-17 and the transport specification. A capacity test pins
+  the retained array's capacity after each delivery; the transient peak while a growth step copies is a
+  property of the allocation logic.
   The byte ceiling on the assembled body and the `OverLimitPolicy` behaviour are unchanged. The cost of the
   decision is that the worst-case streaming peak of a read of a remote response is about twice what one
   array of the ceiling costs. It conflicts with the PLAN-09 specification, which kept COMMONS-17's bound of
@@ -332,10 +334,12 @@ received buffer, and its own read of an unparsable `Content-Length` threw a `Num
   in every case the check covers. This matches the fail-at-startup stance of ADR-0019 and ADR-0026. The two
   accepted limits of the check fail differently. A merged set over the bounds on an interface default method
   passes the deployment, reaches a request, is answered with a 500 and is logged as `TokenSheriff_Q-201`
-  instead of escaping as an unhandled exception. The request-time answer applies to every set that reaches
-  `BearerTokenResult.createErrorResponse()` without the deployment check having refused it: a set that passes
+  instead of escaping as an unhandled exception. The request-time answer applies to a set the challenge
+  builder rejects when a missing-scope violation reaches `BearerTokenResult.createErrorResponse()` without
+  the deployment check having refused it: a set that passes
   the deployment, and a set supplied programmatically through the public
-  `BearerTokenProducer.getBearerTokenResult`, which no deployment check sees. A concrete-typed override of a generic base method can instead make the check refuse a
+  `BearerTokenProducer.getBearerTokenResult`, which no deployment check sees. A request that carries no token
+  is answered 401 without a scope challenge, so such a set does not produce the 500 there. A concrete-typed override of a generic base method can instead make the check refuse a
   deployment that is valid at run time: that refusal happens when the application is built, never reaches a
   request, and so has no 500 response.
 * The challenge builder retains at most `MAX_SCOPE_TOKENS + 1` distinct scope names and scans at most
@@ -346,7 +350,7 @@ received buffer, and its own read of an unparsable `Content-Length` threw a `Num
   retained names are the caller's own strings, of any length, held until `build()` refuses them for their
   joined length. The body handler's byte bound of COMMONS-17 is unchanged, its object count no longer grows
   with the buffer count, and the price of the one growable array is a streaming peak below twice the ceiling
-  plus the one chunk in flight while a growth step copies it.
+  plus the buffers of the delivery in flight while a growth step copies it.
 * A control character in a `realm` or `error_description` past `MAX_LENGTH` characters is not reported by
   the setter; the value is refused by `build()` for its length instead.
 * The client's own parse of a malformed `Content-Length` can still surface its own exception: the JDK

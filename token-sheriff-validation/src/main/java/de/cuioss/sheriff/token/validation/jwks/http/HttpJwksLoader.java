@@ -898,8 +898,16 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         long claimEpoch = epoch.get();
         boolean accepted = false;
         try {
-            config.getScheduledExecutorService().execute(() -> fetchForUnknownKid(kid, claimEpoch));
-            accepted = true;
+            try {
+                config.getScheduledExecutorService().execute(() -> fetchForUnknownKid(kid, claimEpoch));
+                accepted = true;
+            } finally {
+                // Every outcome other than an accepted task releases the guard, an Error included, before any
+                // logging; an accepted task releases it when it ends.
+                if (!accepted) {
+                    fetchInFlight.set(false);
+                }
+            }
         }
         // Boundary catch around a caller-supplied executor: a rejection or any other failure of the
         // hand-off is never thrown on the caller of getKeyInfo, which only missed. An Error is not caught
@@ -908,12 +916,6 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         // cui-rewrite:disable InvalidExceptionUsageRecipe
         catch (RuntimeException e) {
             LOGGER.debug("Refresh executor did not accept the unknown-kid fetch (%s)", e.getClass().getName());
-        } finally {
-            // Every outcome other than an accepted task releases the guard, an Error included; an accepted
-            // task releases it when it ends.
-            if (!accepted) {
-                fetchInFlight.set(false);
-            }
         }
         if (accepted) {
             LOGGER.info(INFO.UNKNOWN_KID_REFRESH_SCHEDULED, ErrorTextSanitizer.sanitize(kid), loggableIssuerIdentifier());
