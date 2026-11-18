@@ -434,9 +434,18 @@ public class IssuerConfigResolver {
      * Fails fast when any {@code dpop.*} sub-property is configured while DPoP is
      * not enabled for the issuer. Without this check, such a configuration would
      * silently disable DPoP validation.
+     * <p>
+     * The sub-properties are checked in the order of
+     * {@link JwtPropertyKeys.ISSUERS#DPOP_SUB_PROPERTIES}, the natural {@link String} sort of their
+     * templates. When several of them are configured, the startup failure names only the first in that
+     * order; for example, with both {@code dpop.required} and {@code dpop.proof-max-age-seconds} set,
+     * it names {@code dpop.proof-max-age-seconds}.
+     * </p>
      *
      * @param issuerName the issuer name
-     * @throws IllegalStateException naming the offending property when a dpop sub-property is present
+     * @throws IllegalStateException naming the offending property when a dpop sub-property is present,
+     *                               the first in natural sort order of
+     *                               {@link JwtPropertyKeys.ISSUERS#DPOP_SUB_PROPERTIES} when several are
      */
     private void validateNoOrphanedDpopProperties(String issuerName) {
         for (String template : JwtPropertyKeys.ISSUERS.DPOP_SUB_PROPERTIES) {
