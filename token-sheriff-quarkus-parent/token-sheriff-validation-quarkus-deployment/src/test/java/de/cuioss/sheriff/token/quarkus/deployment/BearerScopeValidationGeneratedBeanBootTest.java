@@ -46,8 +46,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * scope name outside the RFC 6749 §3.3 {@code scope-token} grammar, fails augmentation with a
  * {@link DeploymentException} naming that member.
  * <p>
- * A generated bean is in the bean-archive index the scope check reads, but not in the combined index, so this
- * test fails when the check scans the combined index. The negative control
+ * A generated bean is in the bean-archive index, but not in the combined index. The scope check scans both
+ * indexes together, so this test fails when the check stops scanning the bean-archive index. The negative control
  * {@link BearerScopeValidationGeneratedBeanControlBootTest} boots the same generated bean with a valid scope.
  */
 @Tag("quarkus-boot")
