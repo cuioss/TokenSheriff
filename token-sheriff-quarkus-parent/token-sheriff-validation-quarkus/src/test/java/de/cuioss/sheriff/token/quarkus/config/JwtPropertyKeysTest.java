@@ -343,6 +343,19 @@ class JwtPropertyKeysTest {
             expected.remove(JwtPropertyKeys.ISSUERS.DPOP_ENABLED);
 
             assertAll("DPoP sub-property list",
+                    () -> {
+                        assertEquals(Set.of(
+                                        JwtPropertyKeys.ISSUERS.DPOP_REQUIRED,
+                                        JwtPropertyKeys.ISSUERS.DPOP_PROOF_MAX_AGE_SECONDS,
+                                        JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_SIZE,
+                                        JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_TTL_SECONDS),
+                                Set.copyOf(subProperties),
+                                "this literal set keeps the derived-set comparison below from passing "
+                                        + "vacuously (an empty list and an empty derivation agree); a new dpop.* "
+                                        + "key must be added here on purpose: " + subProperties);
+                        assertEquals(4, subProperties.size(),
+                                "the list must hold exactly the four named dpop sub-properties: " + subProperties);
+                    },
                     () -> assertEquals(expected, Set.copyOf(subProperties),
                             "the list must hold exactly the dpop.* keys declared on ISSUERS, "
                                     + "without the dpop base and the enabled switch"),
@@ -390,13 +403,14 @@ class JwtPropertyKeysTest {
         }
 
         @Test
-        @DisplayName("should register ISSUERS for reflection with its fields, so the derivation works natively")
-        void shouldRegisterIssuersFieldsForReflection() {
+        @DisplayName("should carry @RegisterForReflection(fields = true) on ISSUERS - pins the annotation only; "
+                + "the explicit TokenSheriffProcessor registration is what reaches a native build")
+        void shouldCarryTheRegisterForReflectionAnnotationOnIssuers() {
             RegisterForReflection registration =
                     JwtPropertyKeys.ISSUERS.class.getAnnotation(RegisterForReflection.class);
 
             assertNotNull(registration, "ISSUERS must carry @RegisterForReflection");
-            assertTrue(registration.fields(), "the registration must include the fields the derivation reads");
+            assertTrue(registration.fields(), "the annotation must include the fields the derivation reads");
         }
     }
 
