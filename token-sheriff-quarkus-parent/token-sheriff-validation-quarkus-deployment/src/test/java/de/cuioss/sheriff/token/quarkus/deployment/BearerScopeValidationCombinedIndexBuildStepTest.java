@@ -20,6 +20,7 @@ import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
 import io.quarkus.arc.deployment.ValidationPhaseBuildItem.ValidationErrorBuildItem;
 import io.quarkus.arc.processor.BeanArchives;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
+import jakarta.enterprise.inject.Vetoed;
 import jakarta.enterprise.inject.spi.DeploymentException;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
@@ -46,6 +47,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * over an index that holds the application bean class only, as for a base class in a dependency that is no
  * bean archive. That index resolves the base class when asked for it by name, but does not enumerate its
  * annotations; the combined index holds both classes, as it holds every indexed application archive.
+ * <p>
+ * Because the combined index holds classes that are no beans, the class also pins that a {@code @Vetoed} class,
+ * declaring or inheriting the method, is no bean class whose class-level scopes are merged.
  */
 @DisplayName("Deployment-time scope check of a @BearerAuth method inherited from outside the bean-archive index")
 class BearerScopeValidationCombinedIndexBuildStepTest {
@@ -107,6 +111,48 @@ class BearerScopeValidationCombinedIndexBuildStepTest {
                         && message.contains(NOT_A_SCOPE_TOKEN)).count(), messages::toString));
     }
 
+    @Test
+    @DisplayName("Should not merge an inherited method with a @Vetoed subclass, refusing the same shape without it")
+    void shouldSkipVetoedSubclass() throws Exception {
+        List<String> vetoed = TokenSheriffProcessor
+                .findScopeViolations(Index.of(DependencyEndpointBase.class, VetoedSubclassOverBound.class));
+        List<String> control = TokenSheriffProcessor
+                .findScopeViolations(Index.of(DependencyEndpointBase.class, ApplicationSubclassOverBound.class));
+
+        assertEquals(List.of(), vetoed, "a @Vetoed class is no bean class, so it never runs the method");
+        assertEquals(1, control.size(), "control: exactly the merge in the bean class: " + control);
+        assertTrue(control.getFirst().startsWith("@BearerAuth on method " + DependencyEndpointBase.class.getName()
+                + "#endpoint together with the class-level @BearerAuth of bean class "
+                + ApplicationSubclassOverBound.class.getName() + " "), control.getFirst());
+        assertTrue(control.getFirst().contains(OVER_BOUND), control.getFirst());
+    }
+
+    @Test
+    @DisplayName("Should not merge a method with its @Vetoed declaring class, refusing the same shape without it")
+    void shouldSkipVetoedDeclaringClass() throws Exception {
+        List<String> vetoed = TokenSheriffProcessor.findScopeViolations(Index.of(VetoedDeclaringOverBound.class));
+        List<String> control = TokenSheriffProcessor.findScopeViolations(Index.of(DeclaringOverBound.class));
+
+        assertEquals(List.of(), vetoed, "a @Vetoed declaring class is no bean class, so its scopes are not merged");
+        assertEquals(1, control.size(), "control: exactly the merged method: " + control);
+        assertTrue(control.getFirst().startsWith("@BearerAuth on method " + DeclaringOverBound.class.getName()
+                + "#endpoint together with the class-level @BearerAuth of bean class "
+                + DeclaringOverBound.class.getName() + " "), control.getFirst());
+        assertTrue(control.getFirst().contains(OVER_BOUND), control.getFirst());
+    }
+
+    @Test
+    @DisplayName("Should still refuse the own scopes of a method whose only class is @Vetoed")
+    void shouldCheckMethodOfVetoedClassAlone() throws Exception {
+        List<String> violations = TokenSheriffProcessor
+                .findScopeViolations(Index.of(VetoedDeclaringInvalidMethodScope.class));
+
+        assertEquals(1, violations.size(), "exactly the method's own scopes must be refused: " + violations);
+        assertTrue(violations.getFirst().startsWith("@BearerAuth on method "
+                + VetoedDeclaringInvalidMethodScope.class.getName() + "#endpoint declares "), violations.getFirst());
+        assertTrue(violations.getFirst().contains(NOT_A_SCOPE_TOKEN), violations.getFirst());
+    }
+
     private static IndexView computingIndex(Index beanArchive) {
         return BeanArchives.buildComputingBeanArchiveIndex(
                 BearerScopeValidationCombinedIndexBuildStepTest.class.getClassLoader(), new ConcurrentHashMap<>(),
@@ -163,5 +209,53 @@ class BearerScopeValidationCombinedIndexBuildStepTest {
     /** A class-level {@code @BearerAuth} whose scope name holds a double quote. */
     @BearerAuth(requiredScopes = {"quote\"d"})
     static class InvalidClassLevelScope {
+    }
+
+    /** {@link ApplicationSubclassOverBound} declared {@code @Vetoed}: 33 class-level scopes plus the inherited 32. */
+    @Vetoed
+    @BearerAuth(requiredScopes = {"c01", "c02", "c03", "c04", "c05", "c06", "c07", "c08", "c09", "c10", "c11",
+            "c12", "c13", "c14", "c15", "c16", "c17", "c18", "c19", "c20", "c21", "c22", "c23", "c24", "c25", "c26",
+            "c27", "c28", "c29", "c30", "c31", "c32", "c33"})
+    static class VetoedSubclassOverBound extends DependencyEndpointBase {
+    }
+
+    /** A concrete class whose 33 class-level scopes plus its method's 32 are 65. */
+    @BearerAuth(requiredScopes = {"c01", "c02", "c03", "c04", "c05", "c06", "c07", "c08", "c09", "c10", "c11",
+            "c12", "c13", "c14", "c15", "c16", "c17", "c18", "c19", "c20", "c21", "c22", "c23", "c24", "c25", "c26",
+            "c27", "c28", "c29", "c30", "c31", "c32", "c33"})
+    static class DeclaringOverBound {
+
+        @BearerAuth(requiredScopes = {"m01", "m02", "m03", "m04", "m05", "m06", "m07", "m08", "m09", "m10", "m11",
+                "m12", "m13", "m14", "m15", "m16", "m17", "m18", "m19", "m20", "m21", "m22", "m23", "m24", "m25",
+                "m26", "m27", "m28", "m29", "m30", "m31", "m32"})
+        public String endpoint() {
+            return "merged";
+        }
+    }
+
+    /** {@link DeclaringOverBound} declared {@code @Vetoed}. */
+    @Vetoed
+    @BearerAuth(requiredScopes = {"c01", "c02", "c03", "c04", "c05", "c06", "c07", "c08", "c09", "c10", "c11",
+            "c12", "c13", "c14", "c15", "c16", "c17", "c18", "c19", "c20", "c21", "c22", "c23", "c24", "c25", "c26",
+            "c27", "c28", "c29", "c30", "c31", "c32", "c33"})
+    static class VetoedDeclaringOverBound {
+
+        @BearerAuth(requiredScopes = {"m01", "m02", "m03", "m04", "m05", "m06", "m07", "m08", "m09", "m10", "m11",
+                "m12", "m13", "m14", "m15", "m16", "m17", "m18", "m19", "m20", "m21", "m22", "m23", "m24", "m25",
+                "m26", "m27", "m28", "m29", "m30", "m31", "m32"})
+        public String endpoint() {
+            return "vetoed";
+        }
+    }
+
+    /** A {@code @Vetoed} class whose method-level scope name holds a space. */
+    @Vetoed
+    @BearerAuth(requiredScopes = "c01")
+    static class VetoedDeclaringInvalidMethodScope {
+
+        @BearerAuth(requiredScopes = {"read", "has space"})
+        public String endpoint() {
+            return "refused";
+        }
     }
 }

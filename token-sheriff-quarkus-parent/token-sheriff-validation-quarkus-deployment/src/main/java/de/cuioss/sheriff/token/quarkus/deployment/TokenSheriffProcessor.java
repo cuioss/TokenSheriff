@@ -62,6 +62,7 @@ import io.quarkus.devui.spi.JsonRPCProvidersBuildItem;
 import io.quarkus.devui.spi.page.CardPageBuildItem;
 import io.quarkus.devui.spi.page.Page;
 import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
+import jakarta.enterprise.inject.Vetoed;
 import jakarta.enterprise.inject.spi.DeploymentException;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.jboss.jandex.AnnotationInstance;
@@ -122,6 +123,8 @@ public class TokenSheriffProcessor {
     private static final DotName BEARER_AUTH = DotName.createSimple(BearerAuth.class.getName());
 
     private static final DotName BEARER_TOKEN = DotName.createSimple(BearerToken.class.getName());
+
+    private static final DotName VETOED = DotName.createSimple(Vetoed.class.getName());
 
     private static final String REQUIRED_SCOPES = "requiredScopes";
 
@@ -346,7 +349,8 @@ public class TokenSheriffProcessor {
      * class, as the union {@code BearerTokenInterceptor} enforces (ADR-0024): the interceptor reads the
      * class-level annotation from the bean class, not from the class declaring the method, and
      * {@code @BearerAuth} is not {@code @Inherited}, so an inherited method is merged with the subclass's own
-     * annotation only. A {@code @BearerToken} on a field, a method, a method parameter or a producer parameter
+     * annotation only. An interface, an abstract class and a class declaring {@code @Vetoed} are no bean classes,
+     * so their class-level scopes are never merged. A {@code @BearerToken} on a field, a method, a method parameter or a producer parameter
      * is checked on its own. Each scope set is checked by building the challenge through
      * {@link BearerTokenResponseFactory#insufficientScopeChallenge}, so the rule and the length bound are
      * exactly the ones applied to the challenge that is sent.
@@ -382,10 +386,11 @@ public class TokenSheriffProcessor {
      * class's own class-level {@code @BearerAuth} as {@code BearerTokenInterceptor} merges them.
      * <p>
      * A bean class runs the method when it is the declaring class or a subclass of it that neither it nor a
-     * class between it and the declaring class overrides; abstract classes and interfaces are no bean classes.
-     * When no such bean class is in the index, the method's own scopes are checked alone. A bean class whose
-     * class-level annotation is refused on its own is already reported at that class, so for it only the
-     * method's own scopes are checked: a bad class-level scope is never reported as the method's.
+     * class between it and the declaring class overrides; interfaces, abstract classes and classes declaring
+     * {@code @Vetoed} are no bean classes. When no such bean class is in the index, the method's own scopes are
+     * checked alone. A bean class whose class-level annotation is refused on its own is already reported at
+     * that class, so for it only the method's own scopes are checked: a bad class-level scope is never reported
+     * as the method's.
      */
     private static void checkMethodLevel(IndexView index, MethodInfo method, Set<String> methodScopes,
             Set<String> violations) {
@@ -410,6 +415,14 @@ public class TokenSheriffProcessor {
         }
     }
 
+    /**
+     * Lists the bean classes in the index that run the method: the declaring class and every subclass that
+     * inherits the method unchanged, each only when it is a bean class candidate. An interface, an abstract
+     * class and a class declaring {@code @Vetoed} are no bean classes, whether it declares the method or
+     * inherits it.
+     *
+     * @return the bean classes running the method, empty when there is none in the index
+     */
     private static List<ClassInfo> beanClassesRunning(IndexView index, MethodInfo method) {
         ClassInfo declaringClass = method.declaringClass();
         List<ClassInfo> beanClasses = new ArrayList<>();
@@ -427,8 +440,13 @@ public class TokenSheriffProcessor {
         return beanClasses;
     }
 
+    /**
+     * A bean class candidate is a concrete class that does not declare {@code @Vetoed}: interfaces, abstract
+     * classes and {@code @Vetoed} classes are no bean classes.
+     */
     private static boolean isBeanClassCandidate(ClassInfo classInfo) {
-        return !classInfo.isInterface() && !Modifier.isAbstract(classInfo.flags());
+        return !classInfo.isInterface() && !Modifier.isAbstract(classInfo.flags())
+                && classInfo.declaredAnnotation(VETOED) == null;
     }
 
     private static boolean inheritsUnchanged(IndexView index, ClassInfo subclass, MethodInfo method) {
