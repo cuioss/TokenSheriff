@@ -589,6 +589,12 @@ public class TokenEndpointClient {
                 return boundedBody.apply(responseInfo);
             });
         } catch (IOException e) {
+            if (BackChannelHttp.isMalformedFraming(e)) {
+                // Since JDK 27 the refusal of a Content-Length that is not a number is an IOException
+                // (a ProtocolException caused by a NumberFormatException) and must not reach the
+                // generic branch below, which would echo its message, the raw header value.
+                throw malformedResponse(observedStatus.get());
+            }
             LOGGER.debug(e, "Token endpoint request failed: %s", e.getMessage());
             if (HttpStatusFamily.isSuccess(observedStatus.get())) {
                 // The status line was a success before the body read failed (for example a body past
@@ -603,16 +609,24 @@ public class TokenEndpointClient {
             // value that is not a number with this exception, whose message carries the raw header value:
             // it is neither chained nor reused (CWE-117, CWE-532). The status line was already read, so a
             // success status still means the grant is redeemed.
-            LOGGER.debug("Token endpoint response refused by the HTTP client as malformed");
-            if (HttpStatusFamily.isSuccess(observedStatus.get())) {
-                throw new RedeemedResponseException("Token endpoint response body could not be read after HTTP "
-                        + observedStatus.get() + ": " + BackChannelHttp.MALFORMED_RESPONSE);
-            }
-            throw new TransportException("Token endpoint request failed: " + BackChannelHttp.MALFORMED_RESPONSE);
+            throw malformedResponse(observedStatus.get());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new TransportException("Token endpoint request interrupted", e);
         }
+    }
+
+    /**
+     * The failure for a response the HTTP client refused as malformed: fixed text only, the JDK's
+     * exception is neither chained nor reused. After a success status the grant is already redeemed.
+     */
+    private static TransportException malformedResponse(int observedStatus) {
+        LOGGER.debug("Token endpoint response refused by the HTTP client as malformed");
+        if (HttpStatusFamily.isSuccess(observedStatus)) {
+            return new RedeemedResponseException("Token endpoint response body could not be read after HTTP "
+                    + observedStatus + ": " + BackChannelHttp.MALFORMED_RESPONSE);
+        }
+        return new TransportException("Token endpoint request failed: " + BackChannelHttp.MALFORMED_RESPONSE);
     }
 
     // Every branch below runs only after HttpStatusFamily.isSuccess(...) held for the response, so the
