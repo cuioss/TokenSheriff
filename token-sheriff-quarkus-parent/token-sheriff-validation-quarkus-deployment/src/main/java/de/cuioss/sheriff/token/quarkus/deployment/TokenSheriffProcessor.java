@@ -20,6 +20,7 @@ import de.cuioss.sheriff.token.commons.http.BearerChallenge;
 import de.cuioss.sheriff.token.quarkus.annotation.BearerAuth;
 import de.cuioss.sheriff.token.quarkus.annotation.BearerToken;
 import de.cuioss.sheriff.token.quarkus.config.AccessLogFilterConfigResolver;
+import de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys;
 import de.cuioss.sheriff.token.quarkus.error.ProblemDetailExceptionMapper;
 import de.cuioss.sheriff.token.quarkus.health.JwksEndpointHealthCheck;
 import de.cuioss.sheriff.token.quarkus.health.TokenValidatorHealthCheck;
@@ -141,6 +142,13 @@ public class TokenSheriffProcessor {
      * reflection contract ships with {@code token-sheriff-validation} under
      * {@code META-INF/native-image/de.cuioss.sheriff.token/token-sheriff-validation/} and is
      * auto-detected by GraalVM, so it must not be duplicated in this processor.
+     * <p>
+     * {@link JwtPropertyKeys.ISSUERS} is registered with its fields because its key definitions are read
+     * reflectively: {@link JwtPropertyKeys.ISSUERS#DPOP_SUB_PROPERTIES} is derived from them, and the
+     * orphaned-DPoP guard checks exactly that list. This registration is what makes the list derivable in
+     * a native build. The runtime jar is not indexed, so the {@code @RegisterForReflection} on
+     * {@code ISSUERS} alone is not enough, and without its fields the list would be empty and the guard
+     * would check nothing.
      *
      * @param reflectiveClasses producer for reflective class build items
      */
@@ -167,6 +175,15 @@ public class TokenSheriffProcessor {
                 .methods(false)
                 .fields(false)
                 .constructors(true)
+                .build());
+
+        // Issuer key definitions whose static String constants are read reflectively to derive the
+        // DPoP orphan guard's key list. The runtime jar is not indexed, so @RegisterForReflection on
+        // ISSUERS alone does not reach a native build; without this the list would be empty.
+        reflectiveClasses.produce(ReflectiveClassBuildItem.builder(JwtPropertyKeys.ISSUERS.class)
+                .methods(false)
+                .fields(true)
+                .constructors(false)
                 .build());
     }
 

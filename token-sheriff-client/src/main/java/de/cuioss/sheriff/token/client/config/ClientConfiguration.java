@@ -580,6 +580,7 @@ public class ClientConfiguration {
      * @throws NullPointerException     if {@code scopes} is {@code null}
      * @throws IllegalArgumentException if an entry is {@code null} or blank, or holds a character outside
      *                                  the scope-token character set
+     * @since 1.0
      * @see <a href="https://www.rfc-editor.org/rfc/rfc6749#section-3.3">RFC 6749 §3.3</a>
      */
     public static List<String> validateScopes(List<String> scopes) {

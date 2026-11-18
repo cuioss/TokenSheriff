@@ -16,11 +16,14 @@
 package de.cuioss.sheriff.token.integration.client;
 
 import de.cuioss.sheriff.token.integration.BaseIntegrationTest;
+import io.restassured.http.ContentType;
+import io.restassured.response.Response;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static io.restassured.RestAssured.given;
-import static org.hamcrest.Matchers.equalTo;
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Native-image contract of the client engine ({@code CLIENT-26}), asserted from the refusing side.
@@ -37,47 +40,86 @@ import static org.hamcrest.Matchers.equalTo;
  *   <li>the matching-key control is accepted, so the mismatch refusal comes from the binding check
  *       and not from a response that could not be parsed.</li>
  * </ul>
+ * The two input guards of the probe endpoint are pinned as well: an unknown DPoP-binding mode and a
+ * stub-token request whose thumbprint is not base64url are each answered with {@code 400}, so a guard
+ * that stopped refusing would turn a probe into an unvalidated request instead of failing here.
  */
 @DisplayName("Client engine refusals inside the native executable")
 class ClientNativeImageSpecIT extends BaseIntegrationTest {
 
     private static final String CREDENTIAL_REJECTION_PATH = "/client-native/credential-rejection";
     private static final String DPOP_BINDING_PATH = "/client-native/dpop-binding";
+    private static final String STUB_TOKEN_PATH = "/client-native/stub-token";
     private static final String MODE = "mode";
     private static final String OUTCOME = "outcome";
+    private static final String ERROR = "error";
+    private static final String PROBE_JKT_PARAMETER = "probe_jkt";
 
     @Test
     @DisplayName("Keycloak invalid_grant answer is classified as a rejected credential")
     void shouldClassifyInvalidGrantAsCredentialRejection() {
-        given()
+        Response response = given()
                 .when()
-                .get(CREDENTIAL_REJECTION_PATH)
-                .then()
-                .statusCode(200)
-                .body(OUTCOME, equalTo("credential_rejected"));
+                .get(CREDENTIAL_REJECTION_PATH);
+
+        assertOutcome(response, "credential_rejected");
     }
 
     @Test
     @DisplayName("Token bound to another key is refused as a cnf.jkt mismatch")
     void shouldRefuseTokenBoundToAnotherKey() {
-        given()
+        Response response = given()
                 .queryParam(MODE, "other")
                 .when()
-                .get(DPOP_BINDING_PATH)
-                .then()
-                .statusCode(200)
-                .body(OUTCOME, equalTo("jkt_mismatch"));
+                .get(DPOP_BINDING_PATH);
+
+        assertOutcome(response, "jkt_mismatch");
     }
 
     @Test
     @DisplayName("Token bound to the proof key is accepted")
     void shouldAcceptTokenBoundToProofKey() {
-        given()
+        Response response = given()
                 .queryParam(MODE, "match")
                 .when()
-                .get(DPOP_BINDING_PATH)
-                .then()
-                .statusCode(200)
-                .body(OUTCOME, equalTo("accepted"));
+                .get(DPOP_BINDING_PATH);
+
+        assertOutcome(response, "accepted");
+    }
+
+    @Test
+    @DisplayName("An unknown DPoP-binding mode is refused with 400")
+    void shouldRefuseUnknownDpopBindingMode() {
+        Response response = given()
+                .queryParam(MODE, "unknown")
+                .when()
+                .get(DPOP_BINDING_PATH);
+
+        assertAll("Unknown mode refusal",
+                () -> assertEquals(400, response.statusCode(), "An unknown mode must be refused"),
+                () -> assertEquals("mode must be 'match' or 'other'", response.jsonPath().getString(ERROR),
+                        "The refusal must name the accepted modes"));
+    }
+
+    @Test
+    @DisplayName("A stub-token request whose thumbprint is not base64url is refused with 400")
+    void shouldRefuseStubTokenWithNonBase64UrlThumbprint() {
+        Response response = given()
+                .contentType(ContentType.URLENC)
+                .formParam(PROBE_JKT_PARAMETER, "not\"base64url")
+                .when()
+                .post(STUB_TOKEN_PATH);
+
+        assertAll("Non-base64url thumbprint refusal",
+                () -> assertEquals(400, response.statusCode(), "A thumbprint outside base64url must be refused"),
+                () -> assertEquals("invalid_request", response.jsonPath().getString(ERROR),
+                        "The refusal must carry the invalid_request error"));
+    }
+
+    private static void assertOutcome(Response response, String expectedOutcome) {
+        assertAll("Probe outcome",
+                () -> assertEquals(200, response.statusCode(), "The probe must answer 200"),
+                () -> assertEquals(expectedOutcome, response.jsonPath().getString(OUTCOME),
+                        "The probe must report the expected outcome"));
     }
 }

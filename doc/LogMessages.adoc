@@ -35,19 +35,19 @@ The log messages can be used for troubleshooting issues with the JWT Token Valid
 
 For more details about security events related to these log messages, see the SecurityEventCounter implementation in xref:validation/architecture.adoc#securityeventcounter[Architecture].
 
-== INFO Level (001-010)
+== INFO Level (1-10)
 
 [cols="1,1,2,2", options="header"]
 |===
 |ID |Component |Message |Description
-|TokenSheriff-001 |TOKEN |TokenValidator initialized with %s |Logged when TokenValidator is initialized with issuer configurations
-|TokenSheriff-002 |JWKS |JWKS keys updated for issuer %s, key ids: %s |Logged when a JWKS load or refresh installs a changed key set, naming the issuer the keys belong to and the key ids of the newly installed key set in sorted order
-|TokenSheriff-003 |JWKS |Background JWKS refresh started with interval: %s seconds |Logged when background JWKS refresh is started with specified interval
-|TokenSheriff-004 |TOKEN |Skipping disabled issuer configuration %s |Logged when an issuer configuration is skipped because it's disabled
-|TokenSheriff-007 |JWKS |JWKS loaded successfully for issuer: %s |Logged when JWKS is successfully loaded for a specific issuer
-|TokenSheriff-008 |ISSUER |Issuer configuration loaded successfully: %s |Logged when an issuer configuration is successfully loaded
-|TokenSheriff-009 |JWE |JWE decryption enabled with %s decryption key(s) |Logged when JWE decryption is configured on TokenValidator with the number of available decryption keys
-|TokenSheriff-010 |JWKS |Key id '%s' is unknown for issuer %s, scheduled one background JWKS refresh |Logged when the opt-in `unknownKidRefreshWindow` is configured and a key lookup for a key id that is in neither the installed nor a retired key set claims the window: one background JWKS fetch is scheduled and the lookup itself still misses. At most one such fetch runs per window and per loader; lookups that find the window or the fetch already claimed log at DEBUG only. The key id comes from the token header and is sanitised before it is logged
+|TokenSheriff-1 |TOKEN |TokenValidator initialized with %s |Logged when TokenValidator is initialized with issuer configurations
+|TokenSheriff-2 |JWKS |JWKS keys updated for issuer %s, key ids: %s |Logged when a JWKS load or refresh installs a changed key set, naming the issuer the keys belong to and the key ids of the newly installed key set in sorted order
+|TokenSheriff-3 |JWKS |Background JWKS refresh started with interval: %s seconds |Logged when background JWKS refresh is started with specified interval
+|TokenSheriff-4 |TOKEN |Skipping disabled issuer configuration %s |Logged when an issuer configuration is skipped because it's disabled
+|TokenSheriff-7 |JWKS |JWKS loaded successfully for issuer: %s |Logged when JWKS is successfully loaded for a specific issuer
+|TokenSheriff-8 |ISSUER |Issuer configuration loaded successfully: %s |Logged when an issuer configuration is successfully loaded
+|TokenSheriff-9 |JWE |JWE decryption enabled with %s decryption key(s) |Logged when JWE decryption is configured on TokenValidator with the number of available decryption keys
+|TokenSheriff-10 |JWKS |Key id '%s' is unknown for issuer %s, scheduled one background JWKS refresh |Logged when the opt-in `unknownKidRefreshWindow` is configured and a key lookup for a key id that is in neither the installed nor a retired key set claims the window: one background JWKS fetch is scheduled and the lookup itself still misses. At most one such fetch runs per window and per loader; lookups that find the window or the fetch already claimed log at DEBUG only. The key id comes from the token header and is sanitised before it is logged
 |===
 
 == WARN Level (100-173; identifier 156 is retired)
@@ -126,7 +126,7 @@ For more details about security events related to these log messages, see the Se
 |TokenSheriff-170 |JWKS |JWKS for issuer '%s' has not been refreshed successfully since %s, exceeding the configured maximum staleness of %s; the loader reports a non-OK status until a refresh succeeds |Logged once per degradation when a `maxStaleness` is configured and a failed background refresh finds the last successful JWKS load older than that bound. The loader leaves `OK` (tokens for the issuer are rejected until a refresh succeeds); no installed key is dropped
 |TokenSheriff-171 |JWKS |Duplicate kid '%s' in JWKS: a later key overwrote an earlier one — the JWKS should carry a unique kid per key |Logged when a JWKS document contains two keys with the same key ID; the later key replaces the earlier one
 |TokenSheriff-172 |JWKS |Advertised jwks_uri for issuer %s cannot be used, the loader stops retrying: %s |Logged once when the `jwks_uri` advertised by the well-known discovery document cannot be used (a malformed URI, or a cleartext `http` URI while insecure HTTP is not allowed) and no endpoint is published yet. The loader ends in the terminal `ERROR` status and makes no further retries: no refresh task is scheduled, or the running one is cancelled. The second parameter is a fixed reason text naming both causes; the advertised `jwks_uri` and the refusal message of the HTTP handler configuration, which echoes it, are not logged, so no document content is logged
-|TokenSheriff-173 |JWKS |Unknown-kid JWKS refresh for issuer %s discarded, the installed keys stay in place: %s |Logged when the background fetch scheduled for an unknown key id (`TokenSheriff-010`) is discarded: the fetch failed, it yields no usable key, it does not hold the requested key id, or the loader was closed meanwhile. A fetch whose content is unchanged is discarded the same way but logged at DEBUG, not with this message. Nothing is installed, keys, retired key sets, status and endpoint stay unchanged, and the outcome is not counted as a failed refresh cycle. The second parameter is a fixed reason text; no remote content is logged
+|TokenSheriff-173 |JWKS |Unknown-kid JWKS refresh for issuer %s discarded, the installed keys stay in place: %s |Logged when the background fetch scheduled for an unknown key id (`TokenSheriff-10`) is discarded: the fetch failed, it yields no usable key, it does not hold the requested key id, or the loader was closed meanwhile. A fetch whose content is unchanged is discarded the same way but logged at DEBUG, not with this message. Nothing is installed, keys, retired key sets, status and endpoint stay unchanged, and the outcome is not counted as a failed refresh cycle. The second parameter is a fixed reason text; no remote content is logged
 |===
 
 == ERROR Level (200-206)
@@ -147,34 +147,34 @@ For more details about security events related to these log messages, see the Se
 
 This section documents log messages specific to the Quarkus integration module (token-sheriff-validation-quarkus).
 
-=== Quarkus INFO Level (001-025; identifiers 017 and 018 are retired)
+=== Quarkus INFO Level (1-25; identifiers 17 and 18 are retired)
 
 [cols="1,1,2,2", options="header"]
 |===
 |ID |Component |Message |Description
-|TokenSheriff_Q-001 |CONFIG |Resolving issuer configurations from properties |Indicates the start of issuer configuration resolution from application properties
-|TokenSheriff_Q-002 |CONFIG |Resolved issuer configuration: %s |Shows a single resolved issuer configuration with its details
-|TokenSheriff_Q-003 |CONFIG |Resolved %s enabled issuer configurations |Summary count of all enabled issuer configurations found
-|TokenSheriff_Q-004 |CONFIG |Resolved ParserConfig: maxTokenSize=%s bytes, maxPayloadSize=%s bytes, maxStringLength=%s |Shows the resolved JWT parser configuration limits
-|TokenSheriff_Q-005 |VALIDATION |Initializing JWT validation components from configuration |Indicates the start of JWT validation component initialization
-|TokenSheriff_Q-006 |VALIDATION |JWT validation components initialized successfully with %s issuers |Confirms successful initialization with issuer count
-|TokenSheriff_Q-007 |VALIDATION |Resolving access log filter configuration from properties |Indicates the start of access log filter configuration resolution
-|TokenSheriff_Q-008 |VALIDATION |Claim mapper registry initialized with %s custom mapper(s): %s |Shows the number of custom claim mappers discovered and their names
-|TokenSheriff_Q-009 |VALIDATION |No custom claim mappers discovered |Indicates that no custom claim mappers were found during CDI discovery
-|TokenSheriff_Q-010 |VALIDATION |Token validation rule registry initialized with %s custom rule(s) |Shows the number of custom token validation rules discovered during CDI discovery
-|TokenSheriff_Q-011 |VALIDATION |No custom token validation rules discovered |Indicates that no custom token validation rules were found during CDI discovery
-|TokenSheriff_Q-012 |METRICS |Initializing JwtMetricsCollector |Indicates the start of JWT metrics collector initialization
-|TokenSheriff_Q-013 |METRICS |JwtMetricsCollector initialized with %s event types |Confirms successful initialization with event type count
-|TokenSheriff_Q-014 |CACHE |Resolving access token cache configuration from properties |Indicates the start of access token cache configuration resolution
-|TokenSheriff_Q-015 |CACHE |Access token cache disabled (maxSize=0) |Indicates that the access token cache is disabled
-|TokenSheriff_Q-016 |CACHE |Access token cache configured: maxSize=%s, evictionIntervalSeconds=%s |Shows the configured access token cache settings
-|TokenSheriff_Q-019 |JWE |Resolving JWE decryption configuration from properties |Indicates the start of JWE decryption configuration resolution
-|TokenSheriff_Q-020 |JWE |JWE decryption configuration resolved with %s key(s) |Shows the number of JWE decryption keys resolved
-|TokenSheriff_Q-021 |JWE |JWE config check: singleKeyPath=%s, keystorePath=%s, multiKeys=%s |Logs the JWE configuration sources being checked
-|TokenSheriff_Q-022 |JWE |No JWE decryption configuration found - JWE support disabled |Indicates that no JWE decryption configuration was found
-|TokenSheriff_Q-023 |ACCESS_LOG |CustomAccessLogFilter initialized: %s |Shows the initialized access log filter configuration
-|TokenSheriff_Q-024 |ACCESS_LOG |%s |Individual access log entry in the configured format
-|TokenSheriff_Q-025 |OBSERVABILITY |Observed TokenValidator resolution: %s |Shows which TokenValidator the observability beans (health checks, metrics, DevUI) report against: the extension's property-configured validator, a single external validator bean, or none
+|TokenSheriff_Q-1 |CONFIG |Resolving issuer configurations from properties |Indicates the start of issuer configuration resolution from application properties
+|TokenSheriff_Q-2 |CONFIG |Resolved issuer configuration: %s |Shows a single resolved issuer configuration with its details
+|TokenSheriff_Q-3 |CONFIG |Resolved %s enabled issuer configurations |Summary count of all enabled issuer configurations found
+|TokenSheriff_Q-4 |CONFIG |Resolved ParserConfig: maxTokenSize=%s bytes, maxPayloadSize=%s bytes, maxStringLength=%s |Shows the resolved JWT parser configuration limits
+|TokenSheriff_Q-5 |VALIDATION |Initializing JWT validation components from configuration |Indicates the start of JWT validation component initialization
+|TokenSheriff_Q-6 |VALIDATION |JWT validation components initialized successfully with %s issuers |Confirms successful initialization with issuer count
+|TokenSheriff_Q-7 |VALIDATION |Resolving access log filter configuration from properties |Indicates the start of access log filter configuration resolution
+|TokenSheriff_Q-8 |VALIDATION |Claim mapper registry initialized with %s custom mapper(s): %s |Shows the number of custom claim mappers discovered and their names
+|TokenSheriff_Q-9 |VALIDATION |No custom claim mappers discovered |Indicates that no custom claim mappers were found during CDI discovery
+|TokenSheriff_Q-10 |VALIDATION |Token validation rule registry initialized with %s custom rule(s) |Shows the number of custom token validation rules discovered during CDI discovery
+|TokenSheriff_Q-11 |VALIDATION |No custom token validation rules discovered |Indicates that no custom token validation rules were found during CDI discovery
+|TokenSheriff_Q-12 |METRICS |Initializing JwtMetricsCollector |Indicates the start of JWT metrics collector initialization
+|TokenSheriff_Q-13 |METRICS |JwtMetricsCollector initialized with %s event types |Confirms successful initialization with event type count
+|TokenSheriff_Q-14 |CACHE |Resolving access token cache configuration from properties |Indicates the start of access token cache configuration resolution
+|TokenSheriff_Q-15 |CACHE |Access token cache disabled (maxSize=0) |Indicates that the access token cache is disabled
+|TokenSheriff_Q-16 |CACHE |Access token cache configured: maxSize=%s, evictionIntervalSeconds=%s |Shows the configured access token cache settings
+|TokenSheriff_Q-19 |JWE |Resolving JWE decryption configuration from properties |Indicates the start of JWE decryption configuration resolution
+|TokenSheriff_Q-20 |JWE |JWE decryption configuration resolved with %s key(s) |Shows the number of JWE decryption keys resolved
+|TokenSheriff_Q-21 |JWE |JWE config check: singleKeyPath=%s, keystorePath=%s, multiKeys=%s |Logs the JWE configuration sources being checked
+|TokenSheriff_Q-22 |JWE |No JWE decryption configuration found - JWE support disabled |Indicates that no JWE decryption configuration was found
+|TokenSheriff_Q-23 |ACCESS_LOG |CustomAccessLogFilter initialized: %s |Shows the initialized access log filter configuration
+|TokenSheriff_Q-24 |ACCESS_LOG |%s |Individual access log entry in the configured format
+|TokenSheriff_Q-25 |OBSERVABILITY |Observed TokenValidator resolution: %s |Shows which TokenValidator the observability beans (health checks, metrics, DevUI) report against: the extension's property-configured validator, a single external validator bean, or none
 |===
 
 === Quarkus WARN Level (100-104)
@@ -202,15 +202,17 @@ This section documents log messages specific to the Quarkus integration module (
 
 This section documents log messages specific to the client engine (token-sheriff-client). Messages carry the `TokenSheriffClient` prefix.
 
-=== Client INFO Level (001-004)
+=== Client INFO Level (1-4)
+
+The runtime emits the client INFO identifiers without leading zeros, in the form listed here.
 
 [cols="1,1,2,2", options="header"]
 |===
 |ID |Component |Message |Description
-|TokenSheriffClient-001 |DISCOVERY |Resolved OIDC provider metadata for issuer '%s' |Logged when provider metadata is successfully resolved for an issuer
-|TokenSheriffClient-002 |LOGOUT |Cleared held tokens for session '%s' as part of RP-initiated logout |Logged when held tokens for a session are cleared from the local store during RP-initiated logout (client-side store clear only; RFC 7009 revocation is performed separately)
-|TokenSheriffClient-003 |LIFECYCLE |Refused refresh for session '%s' left the store untouched: a newer grant was stored while the exchange was in flight, so it and its rotation family are kept |Logged after a refused refresh (one of TokenSheriffClient-108, -112, -113 or -114) when the fail-closed clear finds that the store holds a bundle with a different refresh token than the refused one: typically a re-login or step-up stored a newer grant while the exchange was in flight, but the guard compares the refresh token only and does not check recency, so the store entry and rotation family are left in place instead of being cleared. The refusal still propagates unless a revocation call threw an unchecked exception, which replaces it. Any revocation the refused path makes was attempted before the clear was skipped; it is attempted only when the provider advertises a revocation endpoint, and it may fail (an `invalid_grant` refusal attempts none)
-|TokenSheriffClient-4 |DISCOVERY |Discovery cache for issuer '%s' recovered: the provider metadata was refreshed successfully after a failed refresh |Logged by the opt-in `CachingDiscoveryResolver` on the first successful refresh after one or more failed refresh attempts, ending a failure episode; logged once per episode. The cache logs no INFO record of its own for an ordinary successful refresh, but every refresh runs through the delegate `DiscoveryResolver`, so its INFO line (listed above as TokenSheriffClient-001, emitted by the runtime as `TokenSheriffClient-1`) appears once per successful refresh, this one included. The runtime emits this record's identifier as `TokenSheriffClient-4`, without leading zeros
+|TokenSheriffClient-1 |DISCOVERY |Resolved OIDC provider metadata for issuer '%s' |Logged when provider metadata is successfully resolved for an issuer
+|TokenSheriffClient-2 |LOGOUT |Cleared held tokens for session '%s' as part of RP-initiated logout |Logged when held tokens for a session are cleared from the local store during RP-initiated logout (client-side store clear only; RFC 7009 revocation is performed separately)
+|TokenSheriffClient-3 |LIFECYCLE |Refused refresh for session '%s' left the store untouched: a newer grant was stored while the exchange was in flight, so it and its rotation family are kept |Logged after a refused refresh (one of TokenSheriffClient-108, -112, -113 or -114) when the fail-closed clear finds that the store holds a bundle with a different refresh token than the refused one: typically a re-login or step-up stored a newer grant while the exchange was in flight, but the guard compares the refresh token only and does not check recency, so the store entry and rotation family are left in place instead of being cleared. The refusal still propagates unless a revocation call threw an unchecked exception, which replaces it. Any revocation the refused path makes was attempted before the clear was skipped; it is attempted only when the provider advertises a revocation endpoint, and it may fail (an `invalid_grant` refusal attempts none)
+|TokenSheriffClient-4 |DISCOVERY |Discovery cache for issuer '%s' recovered: the provider metadata was refreshed successfully after a failed refresh |Logged by the opt-in `CachingDiscoveryResolver` on the first successful refresh after one or more failed refresh attempts, ending a failure episode; logged once per episode. The cache logs no INFO record of its own for an ordinary successful refresh, but every refresh runs through the delegate `DiscoveryResolver`, so its INFO line TokenSheriffClient-1 appears once per successful refresh, this one included
 |===
 
 === Client WARN Level (100-116)
@@ -233,7 +235,7 @@ This section documents log messages specific to the client engine (token-sheriff
 |TokenSheriffClient-112 |LIFECYCLE |Refresh refused after the authorization server rotated the token for session '%s'; revoking the rotated token at the authorization server (RFC 7009) and clearing the store and rotation family |Logged when a refresh the authorization server already rotated is refused. The causes are exactly these: the refreshed ID token fails pipeline validation or is inconsistent with the refreshed access token (the latter also logs TokenSheriffClient-109); the identity or sender-constraint binding check rejects the refresh; or, when the refusal is raised inside the token exchange after the authorization server issued a rotated successor, the freshly issued access token fails client-side validation or `strictScopeReconciliation` rejects a broader granted scope. A refusal inside the exchange whose success response could not be parsed is TokenSheriffClient-113 instead, and one that names no rotated successor does not log this message. The presented token is burned at the AS, so revocation of the rotated token is attempted (best-effort: only when the provider advertises a revocation endpoint, and a request that is made may fail) and a fail-closed clear of the session is attempted; unless the clear spares a stored bundle with a different refresh token or fails, the session must re-authenticate
 |TokenSheriffClient-113 |LIFECYCLE |Refresh response for session '%s' was unusable after the authorization server accepted the request; rotation is unrecoverable, so the presented token is presumed burned and the store and rotation family are cleared without revocation |Logged when the token endpoint answers a refresh with a success status whose body cannot be parsed: no TokenResponse exists, so whether the presented refresh token was rotated is not computable, and a fail-closed clear of the session is attempted on that presumption without revoking a token that is not known
 |TokenSheriffClient-114 |LIFECYCLE |Authorization server rejected the refresh token for session '%s' as invalid; nothing was redeemed, so the store and rotation family are cleared without revocation |Logged when the token endpoint refuses a refresh with a client-error status whose RFC 6749 §5.2 body names `invalid_grant`: the authorization server judged the presented refresh token and declared it dead without consuming the grant, so no successor exists to revoke, but a fail-closed clear of the session is attempted because no retry revives the credential
-|TokenSheriffClient-115 |DISCOVERY |Discovery refresh for issuer '%s' failed (%s); serving the last resolved provider metadata until %s |Logged by the opt-in `CachingDiscoveryResolver` when a refresh of a stale document fails while the last resolved document can still be served: once on entering a failure episode, i.e. on the first failed refresh after a success; the cache itself logs further failures within the episode at DEBUG only, but the delegate `DiscoveryResolver` logs its own line for most failed attempts but not for every one (a wrong content type, an empty body or an interrupt, for example, are thrown without a delegate line), so a failing provider is usually, though not always, visible per attempt. The cause is the exception class name, and the instant is the end of the grace period (`lastSuccess + ttl + gracePeriod`)
+|TokenSheriffClient-115 |DISCOVERY |Discovery refresh for issuer '%s' failed (%s); serving the last resolved provider metadata until %s |Logged by the opt-in `CachingDiscoveryResolver` when a refresh of a stale document fails while the last resolved document can still be served: once on entering a failure episode, i.e. on the first failed refresh after a success; the cache itself logs further failures within the episode at DEBUG only. Of the thirteen refusals the delegate `DiscoveryResolver` throws itself, five log a delegate line (TokenSheriffClient-100, -101 and -103, and TokenSheriffClient-200 for an I/O failure and for an unparseable document) and eight do not (a malformed issuer URL, a content type other than `application/json`, an interrupt, an empty body, a body the size check after the read refuses, a document that parses to nothing, a non-`https` endpoint in an `https` issuer's document and a missing `token_endpoint`); the refusals of the shared back-channel transport log at DEBUG at most. A failing provider is therefore visible per attempt exactly when its refusal is one of the five that log. The cause is the exception class name, and the instant is the end of the grace period (`lastSuccess + ttl + gracePeriod`)
 |TokenSheriffClient-116 |DISCOVERY |Cached discovery metadata for issuer '%s' expired while refreshes kept failing (%s); failing closed |Logged by the opt-in `CachingDiscoveryResolver` once per failure episode, on the first resolution refused after the grace period ended; from then on every resolution fails closed with a `TransportException` until a refresh succeeds. The cause is the exception class name
 |===
 

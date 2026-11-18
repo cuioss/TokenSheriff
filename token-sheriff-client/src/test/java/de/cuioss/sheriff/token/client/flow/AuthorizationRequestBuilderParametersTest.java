@@ -43,7 +43,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Verifies {@link AuthorizationRequestBuilder#parameters} against the URL that
  * {@link AuthorizationRequestBuilder#build} emits: same names, same values, same order, same
- * refusals, and a default URL that stays byte-identical to the request the builder has always sent.
+ * refusals, and a default URL whose bytes are pinned to the documented parameter order and encoding.
  */
 @EnableTestLogger
 @EnableGeneratorController
@@ -157,7 +157,7 @@ class AuthorizationRequestBuilderParametersTest {
     class Golden {
 
         @Test
-        @DisplayName("Should keep the default URL byte-identical to the request emitted before the refactor")
+        @DisplayName("Should emit the default URL with exactly the documented parameter order and encoding")
         void shouldKeepDefaultUrlByteIdentical() {
             var context = FlowContext.create(REDIRECT_URI);
             String expected = AUTH_ENDPOINT
@@ -172,11 +172,11 @@ class AuthorizationRequestBuilderParametersTest {
                     + "&response_mode=form_post";
 
             assertEquals(expected, builder.build(config("client-1"), metadata(), context),
-                    "the default request keeps its pre-refactor parameter order and encoding");
+                    "the default request carries the documented parameter order and encoding");
         }
 
         @Test
-        @DisplayName("Should keep the step-up URL byte-identical to the request emitted before the refactor")
+        @DisplayName("Should emit the step-up URL with exactly the documented parameter order and encoding")
         void shouldKeepStepUpUrlByteIdentical() {
             var context = FlowContext.create(REDIRECT_URI, ACR, MAX_AGE);
             String expected = AUTH_ENDPOINT
@@ -193,7 +193,7 @@ class AuthorizationRequestBuilderParametersTest {
                     + "&response_mode=form_post";
 
             assertEquals(expected, builder.build(config("client-1"), metadata(), context),
-                    "max_age leads and acr_values follows scope, as in the pre-refactor request");
+                    "max_age leads and acr_values follows scope, in the documented order");
         }
     }
 

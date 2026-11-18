@@ -15,15 +15,14 @@
  */
 package de.cuioss.sheriff.token.client.discovery;
 
-import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
-import de.cuioss.sheriff.token.client.config.ClientConfiguration;
+import de.cuioss.sheriff.token.client.discovery.CachingDiscoveryResolverSupport.Hold;
+import de.cuioss.sheriff.token.client.discovery.CachingDiscoveryResolverSupport.ScriptedDelegate;
 import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
 import de.cuioss.test.juli.LogAsserts;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
-import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -32,16 +31,9 @@ import java.io.Serial;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.InstantSource;
-import java.util.Queue;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.FutureTask;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 
+import static de.cuioss.sheriff.token.client.discovery.CachingDiscoveryResolverSupport.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -58,12 +50,10 @@ class CachingDiscoveryResolverRefreshRegressionTest {
     private static final Instant START = Instant.parse("2026-01-01T00:00:00Z");
     private static final Duration TTL = Duration.ofMinutes(5);
     private static final Duration GRACE = Duration.ofMinutes(10);
-    private static final String ISSUER = "https://issuer.example";
     private static final String OLD_TOKEN_ENDPOINT = ISSUER + "/token";
     private static final String OLD_USERINFO_ENDPOINT = ISSUER + "/userinfo";
     private static final String NEW_TOKEN_ENDPOINT = ISSUER + "/v2/token";
     private static final String NEW_USERINFO_ENDPOINT = ISSUER + "/v2/userinfo";
-    private static final long AWAIT_SECONDS = 10;
 
     private final AtomicReference<Instant> now = new AtomicReference<>(START);
     private final InstantSource clock = now::get;
@@ -76,7 +66,7 @@ class CachingDiscoveryResolverRefreshRegressionTest {
         @Test
         @DisplayName("Should serve the old endpoints before the TTL, without a refresh")
         void shouldServeOldEndpointsBeforeTtl() {
-            delegate.then(ScriptedDelegate::oldDocument).then(ScriptedDelegate::newDocument);
+            delegate.then(Documents::oldDocument).then(Documents::newDocument);
             var resolver = resolver();
             resolver.resolve();
 
@@ -92,7 +82,7 @@ class CachingDiscoveryResolverRefreshRegressionTest {
         @Test
         @DisplayName("Should hand the refreshed endpoints to the caller after the refresh and to every later caller")
         void shouldServeRefreshedEndpointsAfterRefresh() {
-            delegate.then(ScriptedDelegate::oldDocument).then(ScriptedDelegate::newDocument);
+            delegate.then(Documents::oldDocument).then(Documents::newDocument);
             var resolver = resolver();
             var initial = resolver.resolve();
 
@@ -129,9 +119,9 @@ class CachingDiscoveryResolverRefreshRegressionTest {
             });
             var resolver = resolver();
 
-            var winner = start(resolver::resolve);
+            var winner = startCatchingErrors(resolver::resolve);
             held.awaitEntered();
-            var joiner = start(resolver::resolve);
+            var joiner = startCatchingErrors(resolver::resolve);
             awaitParked(joiner.thread());
             held.release();
 
@@ -149,7 +139,7 @@ class CachingDiscoveryResolverRefreshRegressionTest {
         @DisplayName("Should hand a joiner the stale copy within grace when the refresh fails")
         void shouldHandJoinerStaleCopyWithinGrace() throws Exception {
             var held = new Hold();
-            delegate.then(ScriptedDelegate::oldDocument).then(() -> {
+            delegate.then(Documents::oldDocument).then(() -> {
                 held.enterAndWait();
                 throw new TransportException("refresh failed");
             });
@@ -157,9 +147,9 @@ class CachingDiscoveryResolverRefreshRegressionTest {
             resolver.resolve();
             advance(TTL);
 
-            var winner = start(resolver::resolve);
+            var winner = startCatchingErrors(resolver::resolve);
             held.awaitEntered();
-            var joiner = start(resolver::resolve);
+            var joiner = startCatchingErrors(resolver::resolve);
             awaitParked(joiner.thread());
             held.release();
 
@@ -188,7 +178,7 @@ class CachingDiscoveryResolverRefreshRegressionTest {
             var error = new ScriptedError();
             delegate.then(() -> {
                 throw error;
-            }).then(ScriptedDelegate::oldDocument);
+            }).then(Documents::oldDocument);
             var resolver = resolver();
 
             var thrown = assertThrows(ScriptedError.class, resolver::resolve);
@@ -210,12 +200,12 @@ class CachingDiscoveryResolverRefreshRegressionTest {
             delegate.then(() -> {
                 held.enterAndWait();
                 throw error;
-            }).then(ScriptedDelegate::newDocument);
+            }).then(Documents::newDocument);
             var resolver = resolver();
 
-            var winner = start(resolver::resolve);
+            var winner = startCatchingErrors(resolver::resolve);
             held.awaitEntered();
-            var joiner = start(resolver::resolve);
+            var joiner = startCatchingErrors(resolver::resolve);
             awaitParked(joiner.thread());
             held.release();
 
@@ -239,11 +229,11 @@ class CachingDiscoveryResolverRefreshRegressionTest {
         @Test
         @DisplayName("Should emit the recovery record under the identifier TokenSheriffClient-4")
         void shouldEmitPinnedRecoveryIdentifier() {
-            delegate.then(ScriptedDelegate::oldDocument)
+            delegate.then(Documents::oldDocument)
                     .then(() -> {
                         throw new TransportException("refresh failed");
                     })
-                    .then(ScriptedDelegate::newDocument);
+                    .then(Documents::newDocument);
             var resolver = resolver();
             resolver.resolve();
             advance(TTL);
@@ -267,73 +257,6 @@ class CachingDiscoveryResolverRefreshRegressionTest {
         now.set(now.get().plus(duration));
     }
 
-    /** Waits until the thread parks, which a joined caller does inside its wait for the refresh. */
-    private static void awaitParked(Thread thread) {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(AWAIT_SECONDS);
-        while (thread.getState() != Thread.State.WAITING) {
-            if (System.nanoTime() > deadline) {
-                fail("the joining caller never waited for the in-flight refresh, state " + thread.getState());
-            }
-            Thread.onSpinWait();
-        }
-    }
-
-    private static Caller start(Callable<ProviderMetadata> call) {
-        var task = new FutureTask<>(() -> {
-            try {
-                return new Outcome(call.call(), null);
-            }
-            // cui-rewrite:disable InvalidExceptionUsageRecipe
-            catch (RuntimeException | Error e) {
-                // The outcome under test is whatever the resolver throws, Error included.
-                return new Outcome(null, e);
-            }
-        });
-        var thread = new Thread(task, "discovery-caller");
-        thread.setDaemon(true);
-        thread.start();
-        return new Caller(thread, task);
-    }
-
-    /** A caller running {@link CachingDiscoveryResolver#resolve()} on its own thread. */
-    private record Caller(Thread thread, FutureTask<Outcome> task) {
-
-        Outcome outcome() throws Exception {
-            return task.get(AWAIT_SECONDS, TimeUnit.SECONDS);
-        }
-    }
-
-    /** What one caller got back. */
-    private record Outcome(@Nullable ProviderMetadata result, @Nullable Throwable failure) {
-    }
-
-    /** Holds the delegate inside its call until the test releases it. */
-    private static final class Hold {
-
-        private final CountDownLatch entered = new CountDownLatch(1);
-        private final CountDownLatch release = new CountDownLatch(1);
-
-        void enterAndWait() {
-            entered.countDown();
-            try {
-                if (!release.await(AWAIT_SECONDS, TimeUnit.SECONDS)) {
-                    throw new AssertionError("the test never released the delegate");
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new AssertionError("interrupted while holding the delegate", e);
-            }
-        }
-
-        void awaitEntered() throws InterruptedException {
-            assertTrue(entered.await(AWAIT_SECONDS, TimeUnit.SECONDS), "the winner must reach the delegate");
-        }
-
-        void release() {
-            release.countDown();
-        }
-    }
-
     /** An {@link Error} thrown by the delegate, distinct from anything the cache throws itself. */
     private static final class ScriptedError extends Error {
 
@@ -345,38 +268,10 @@ class CachingDiscoveryResolverRefreshRegressionTest {
         }
     }
 
-    /** A delegate that answers each call with the next scripted step and counts the calls. */
-    private static final class ScriptedDelegate extends DiscoveryResolver {
+    /** The two documents the scripted delegate serves: the one before and the one after a refresh. */
+    private static final class Documents {
 
-        private final Queue<Supplier<ProviderMetadata>> script = new ConcurrentLinkedQueue<>();
-        private final AtomicInteger calls = new AtomicInteger();
-
-        ScriptedDelegate() {
-            super(ClientConfiguration.builder()
-                    .issuer(ISSUER)
-                    .clientId("client")
-                    .clientSecret("secret")
-                    .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
-                    .build());
-        }
-
-        ScriptedDelegate then(Supplier<ProviderMetadata> step) {
-            script.add(step);
-            return this;
-        }
-
-        int calls() {
-            return calls.get();
-        }
-
-        @Override
-        public ProviderMetadata resolve() {
-            calls.incrementAndGet();
-            Supplier<ProviderMetadata> step = script.poll();
-            if (step == null) {
-                throw new AssertionError("unscripted delegate call");
-            }
-            return step.get();
+        private Documents() {
         }
 
         static ProviderMetadata oldDocument() {
@@ -385,14 +280,6 @@ class CachingDiscoveryResolverRefreshRegressionTest {
 
         static ProviderMetadata newDocument() {
             return document(NEW_TOKEN_ENDPOINT, NEW_USERINFO_ENDPOINT);
-        }
-
-        private static ProviderMetadata document(String tokenEndpoint, String userinfoEndpoint) {
-            var metadata = new ProviderMetadata();
-            metadata.issuer = ISSUER;
-            metadata.tokenEndpoint = tokenEndpoint;
-            metadata.userinfoEndpoint = userinfoEndpoint;
-            return metadata;
         }
     }
 }

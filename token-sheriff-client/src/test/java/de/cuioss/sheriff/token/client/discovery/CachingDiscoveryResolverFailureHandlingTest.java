@@ -15,12 +15,11 @@
  */
 package de.cuioss.sheriff.token.client.discovery;
 
-import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
-import de.cuioss.sheriff.token.client.config.ClientConfiguration;
+import de.cuioss.sheriff.token.client.discovery.CachingDiscoveryResolverSupport.Hold;
+import de.cuioss.sheriff.token.client.discovery.CachingDiscoveryResolverSupport.ScriptedDelegate;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.commons.transport.LoaderStatus;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
-import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -31,25 +30,18 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.InstantSource;
-import java.util.Queue;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.FutureTask;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 import java.util.stream.Stream;
 
+import static de.cuioss.sheriff.token.client.discovery.CachingDiscoveryResolverSupport.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * How {@link CachingDiscoveryResolver} treats a delegate failure that is not a plain transport
  * failure: any other runtime exception is recorded as a failed refresh, and a refresh that fails
- * while the calling thread is interrupted is aborted without writing any state. The delegate is a
- * scripted {@link DiscoveryResolver} subclass and time is driven by an injected
- * {@link InstantSource}; no case sleeps.
+ * while the calling thread is interrupted is aborted without writing any state — also when the flag
+ * was already set before the call. The delegate is a scripted {@link DiscoveryResolver} subclass and
+ * time is driven by an injected {@link InstantSource}; no case sleeps.
  */
 @EnableTestLogger
 @DisplayName("CachingDiscoveryResolver records every delegate failure and aborts an interrupted refresh")
@@ -59,10 +51,8 @@ class CachingDiscoveryResolverFailureHandlingTest {
     private static final Duration TTL = Duration.ofMinutes(5);
     private static final Duration GRACE = Duration.ofMinutes(10);
     private static final Duration INTERVAL = Duration.ofMinutes(1);
-    private static final String ISSUER = "https://issuer.example";
     private static final String GOOD_TOKEN_ENDPOINT = ISSUER + "/token";
     private static final String SECRET_DETAIL = "detail-that-must-not-reach-the-status";
-    private static final long AWAIT_SECONDS = 10;
 
     private final AtomicReference<Instant> now = new AtomicReference<>(START);
     private final InstantSource clock = now::get;
@@ -107,7 +97,7 @@ class CachingDiscoveryResolverFailureHandlingTest {
         var failure = new IllegalStateException(SECRET_DETAIL);
         delegate.then(() -> {
             throw failure;
-        }).then(ScriptedDelegate::good);
+        }).then(CachingDiscoveryResolverFailureHandlingTest::good);
         var resolver = resolver(INTERVAL);
 
         assertThrows(IllegalStateException.class, resolver::resolve);
@@ -129,7 +119,7 @@ class CachingDiscoveryResolverFailureHandlingTest {
     @DisplayName("Should serve the stale copy within grace and fail closed after it on an unexpected exception")
     void shouldApplyStalePolicyToUnexpectedException() {
         var failure = new IllegalStateException(SECRET_DETAIL);
-        delegate.then(ScriptedDelegate::good).then(() -> {
+        delegate.then(CachingDiscoveryResolverFailureHandlingTest::good).then(() -> {
             throw failure;
         });
         // An interval longer than the grace period, so the call past grace answers from the record.
@@ -158,20 +148,18 @@ class CachingDiscoveryResolverFailureHandlingTest {
     @DisplayName("Should hand the winner and a joined caller the same recorded exception")
     void shouldHandJoinerTheRecordedException() throws Exception {
         var failure = new IllegalStateException(SECRET_DETAIL);
-        var entered = new CountDownLatch(1);
-        var release = new CountDownLatch(1);
+        var held = new Hold();
         delegate.then(() -> {
-            entered.countDown();
-            await(release);
+            held.enterAndWait();
             throw failure;
         });
         var resolver = resolver(Duration.ZERO);
 
         var winner = start(resolver::resolve);
-        assertTrue(entered.await(AWAIT_SECONDS, TimeUnit.SECONDS), "the winner must reach the delegate");
+        held.awaitEntered();
         var joiner = start(resolver::resolve);
         awaitParked(joiner.thread());
-        release.countDown();
+        held.release();
 
         var winnerOutcome = winner.outcome();
         var joinerOutcome = joiner.outcome();
@@ -185,7 +173,8 @@ class CachingDiscoveryResolverFailureHandlingTest {
     @Test
     @DisplayName("Should abort an interrupted first refresh without writing state or a backoff")
     void shouldAbortInterruptedFirstRefresh() {
-        delegate.then(ScriptedDelegate::interrupted).then(ScriptedDelegate::good);
+        delegate.then(CachingDiscoveryResolverFailureHandlingTest::interrupted)
+                .then(CachingDiscoveryResolverFailureHandlingTest::good);
         var resolver = resolver(INTERVAL);
 
         var thrown = assertThrows(TransportException.class, resolver::resolve);
@@ -207,7 +196,9 @@ class CachingDiscoveryResolverFailureHandlingTest {
     @Test
     @DisplayName("Should leave a stale cache untouched when its refresh is interrupted")
     void shouldAbortInterruptedRefreshOfStaleCache() {
-        delegate.then(ScriptedDelegate::good).then(ScriptedDelegate::interrupted).then(ScriptedDelegate::good);
+        delegate.then(CachingDiscoveryResolverFailureHandlingTest::good)
+                .then(CachingDiscoveryResolverFailureHandlingTest::interrupted)
+                .then(CachingDiscoveryResolverFailureHandlingTest::good);
         var resolver = resolver(INTERVAL);
         resolver.resolve();
         advance(TTL);
@@ -228,22 +219,76 @@ class CachingDiscoveryResolverFailureHandlingTest {
     }
 
     @Test
+    @DisplayName("Should rethrow a failing refresh unrecorded to a caller whose interrupt flag was set before the call")
+    void shouldNotRecordFailureForAlreadyInterruptedCaller() {
+        var failure = new TransportException("refresh failed");
+        delegate.then(CachingDiscoveryResolverFailureHandlingTest::good)
+                .then(() -> {
+                    throw failure;
+                })
+                .then(() -> {
+                    throw failure;
+                });
+        var resolver = resolver(INTERVAL);
+        resolver.resolve();
+        advance(TTL);
+        var before = resolver.status();
+
+        Thread.currentThread().interrupt();
+        var thrown = assertThrows(TransportException.class, resolver::resolve);
+        boolean interruptKept = Thread.interrupted();
+        var afterInterruptedCall = resolver.status();
+        var next = resolver.resolve();
+
+        assertAll("already-interrupted caller",
+                () -> assertSame(failure, thrown, "the delegate's refusal is rethrown to the caller"),
+                () -> assertTrue(interruptKept, "the caller's interrupt flag is kept"),
+                () -> assertEquals(before, afterInterruptedCall, "no failure state was written"),
+                () -> assertEquals(GOOD_TOKEN_ENDPOINT, next.tokenEndpoint,
+                        "the next caller is served the stale copy within grace"),
+                () -> assertEquals(3, delegate.calls(), "no backoff held the next caller back"),
+                () -> assertEquals(DiscoveryCacheStatus.State.FAILED, resolver.status().state(),
+                        "the next caller without a set flag records the failure"));
+    }
+
+    @Test
+    @DisplayName("Control: should record the same failing refresh as FAILED with a backoff when the flag is not set")
+    void shouldRecordFailureForCallerWithoutInterruptFlag() {
+        var failure = new TransportException("refresh failed");
+        delegate.then(CachingDiscoveryResolverFailureHandlingTest::good).then(() -> {
+            throw failure;
+        });
+        var resolver = resolver(INTERVAL);
+        resolver.resolve();
+        advance(TTL);
+
+        var served = resolver.resolve();
+        var afterCall = resolver.status();
+        advance(INTERVAL.minusSeconds(1));
+        resolver.resolve();
+
+        assertAll("negative control",
+                () -> assertEquals(GOOD_TOKEN_ENDPOINT, served.tokenEndpoint, "the stale copy is served"),
+                () -> assertEquals(DiscoveryCacheStatus.State.FAILED, afterCall.state(), "the failure is recorded"),
+                () -> assertEquals(TransportException.class.getName(), afterCall.lastFailureCause()),
+                () -> assertEquals(2, delegate.calls(), "the backoff holds the next call back"));
+    }
+
+    @Test
     @DisplayName("Should let a joined caller run its own refresh after the winner's refresh was interrupted")
     void shouldLetJoinerRefreshAfterInterruptedWinner() throws Exception {
-        var entered = new CountDownLatch(1);
-        var release = new CountDownLatch(1);
+        var held = new Hold();
         delegate.then(() -> {
-            entered.countDown();
-            await(release);
-            return ScriptedDelegate.interrupted();
-        }).then(ScriptedDelegate::good);
+            held.enterAndWait();
+            return interrupted();
+        }).then(CachingDiscoveryResolverFailureHandlingTest::good);
         var resolver = resolver(INTERVAL);
 
         var winner = start(resolver::resolve);
-        assertTrue(entered.await(AWAIT_SECONDS, TimeUnit.SECONDS), "the winner must reach the delegate");
+        held.awaitEntered();
         var joiner = start(resolver::resolve);
         awaitParked(joiner.thread());
-        release.countDown();
+        held.release();
 
         var winnerOutcome = winner.outcome();
         var joinerOutcome = joiner.outcome();
@@ -290,102 +335,13 @@ class CachingDiscoveryResolverFailureHandlingTest {
         now.set(now.get().plus(duration));
     }
 
-    private static void await(CountDownLatch latch) {
-        try {
-            if (!latch.await(AWAIT_SECONDS, TimeUnit.SECONDS)) {
-                throw new AssertionError("the test never released the delegate");
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new AssertionError("interrupted while holding the delegate", e);
-        }
+    private static ProviderMetadata good() {
+        return document(GOOD_TOKEN_ENDPOINT, null);
     }
 
-    /** Waits until the thread parks, which a joined caller does inside its wait for the refresh. */
-    private static void awaitParked(Thread thread) {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(AWAIT_SECONDS);
-        while (thread.getState() != Thread.State.WAITING) {
-            if (System.nanoTime() > deadline) {
-                fail("the joining caller never waited for the in-flight refresh, state " + thread.getState());
-            }
-            Thread.onSpinWait();
-        }
-    }
-
-    private static Caller start(Callable<ProviderMetadata> call) {
-        var task = new FutureTask<>(() -> {
-            try {
-                return new Outcome(call.call(), null, Thread.currentThread().isInterrupted());
-            }
-            // cui-rewrite:disable InvalidExceptionUsageRecipe
-            catch (RuntimeException e) {
-                return new Outcome(null, e, Thread.currentThread().isInterrupted());
-            }
-        });
-        var thread = new Thread(task, "discovery-caller");
-        thread.setDaemon(true);
-        thread.start();
-        return new Caller(thread, task);
-    }
-
-    /** A caller running {@link CachingDiscoveryResolver#resolve()} on its own thread. */
-    private record Caller(Thread thread, FutureTask<Outcome> task) {
-
-        Outcome outcome() throws Exception {
-            return task.get(AWAIT_SECONDS, TimeUnit.SECONDS);
-        }
-    }
-
-    /** What one caller got back, and whether its interrupt flag was set when it got it. */
-    private record Outcome(@Nullable ProviderMetadata result, @Nullable RuntimeException failure,
-    boolean interrupted) {
-    }
-
-    /** A delegate that answers each call with the next scripted step and counts the calls. */
-    private static final class ScriptedDelegate extends DiscoveryResolver {
-
-        private final Queue<Supplier<ProviderMetadata>> script = new ConcurrentLinkedQueue<>();
-        private final AtomicInteger calls = new AtomicInteger();
-
-        ScriptedDelegate() {
-            super(ClientConfiguration.builder()
-                    .issuer(ISSUER)
-                    .clientId("client")
-                    .clientSecret("secret")
-                    .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
-                    .build());
-        }
-
-        ScriptedDelegate then(Supplier<ProviderMetadata> step) {
-            script.add(step);
-            return this;
-        }
-
-        int calls() {
-            return calls.get();
-        }
-
-        @Override
-        public ProviderMetadata resolve() {
-            calls.incrementAndGet();
-            Supplier<ProviderMetadata> step = script.poll();
-            if (step == null) {
-                throw new AssertionError("unscripted delegate call");
-            }
-            return step.get();
-        }
-
-        static ProviderMetadata good() {
-            var metadata = new ProviderMetadata();
-            metadata.issuer = ISSUER;
-            metadata.tokenEndpoint = GOOD_TOKEN_ENDPOINT;
-            return metadata;
-        }
-
-        /** Mirrors {@code DiscoveryResolver.fetch}: restore the flag, then report a transport failure. */
-        static ProviderMetadata interrupted() {
-            Thread.currentThread().interrupt();
-            throw new TransportException("request interrupted", new InterruptedException());
-        }
+    /** Mirrors {@code DiscoveryResolver.fetch}: restore the flag, then report a transport failure. */
+    private static ProviderMetadata interrupted() {
+        Thread.currentThread().interrupt();
+        throw new TransportException("request interrupted", new InterruptedException());
     }
 }

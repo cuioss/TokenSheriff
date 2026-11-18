@@ -15,8 +15,8 @@
  */
 package de.cuioss.sheriff.token.client.discovery;
 
-import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
-import de.cuioss.sheriff.token.client.config.ClientConfiguration;
+import de.cuioss.sheriff.token.client.discovery.CachingDiscoveryResolverSupport.Hold;
+import de.cuioss.sheriff.token.client.discovery.CachingDiscoveryResolverSupport.Outcome;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
@@ -26,13 +26,10 @@ import java.lang.reflect.Field;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.InstantSource;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.FutureTask;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static de.cuioss.sheriff.token.client.discovery.CachingDiscoveryResolverSupport.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -51,10 +48,8 @@ class CachingDiscoveryResolverHookFailureTest {
     private static final Instant START = Instant.parse("2026-01-01T00:00:00Z");
     private static final Duration TTL = Duration.ofMinutes(5);
     private static final Duration GRACE = Duration.ofMinutes(10);
-    private static final String ISSUER = "https://issuer.example";
     private static final String TOKEN_ENDPOINT = ISSUER + "/token";
     private static final String COMPETING_TOKEN_ENDPOINT = ISSUER + "/competing-token";
-    private static final long AWAIT_SECONDS = 10;
 
     private final AtomicReference<Instant> now = new AtomicReference<>(START);
     private final InstantSource clock = now::get;
@@ -121,19 +116,17 @@ class CachingDiscoveryResolverHookFailureTest {
     @DisplayName("Should let a caller that joined the claim re-evaluate when the hook throws")
     void shouldLetJoinerRefreshAfterHookThrows() throws Exception {
         var failure = new IllegalStateException("hook failed");
-        var entered = new CountDownLatch(1);
-        var release = new CountDownLatch(1);
+        var held = new Hold();
         onNextClaim.set(() -> {
-            entered.countDown();
-            await(release);
+            held.enterAndWait();
             throw failure;
         });
 
         var winner = start(resolver::resolve);
-        assertTrue(entered.await(AWAIT_SECONDS, TimeUnit.SECONDS), "the winner must claim the slot");
+        held.awaitEntered();
         var joiner = start(resolver::resolve);
         awaitJoined(joiner.thread());
-        release.countDown();
+        held.release();
 
         var winnerOutcome = winner.outcome();
         var joinerOutcome = joiner.outcome();
@@ -149,18 +142,14 @@ class CachingDiscoveryResolverHookFailureTest {
     @Test
     @DisplayName("Control: should hand a joined caller the winner's refresh when the hook returns normally")
     void shouldShareRefreshWhenHookReturnsNormally() throws Exception {
-        var entered = new CountDownLatch(1);
-        var release = new CountDownLatch(1);
-        onNextClaim.set(() -> {
-            entered.countDown();
-            await(release);
-        });
+        var held = new Hold();
+        onNextClaim.set(held::enterAndWait);
 
         var winner = start(resolver::resolve);
-        assertTrue(entered.await(AWAIT_SECONDS, TimeUnit.SECONDS), "the winner must claim the slot");
+        held.awaitEntered();
         var joiner = start(resolver::resolve);
         awaitJoined(joiner.thread());
-        release.countDown();
+        held.release();
 
         var winnerOutcome = winner.outcome();
         var joinerOutcome = joiner.outcome();
@@ -238,19 +227,17 @@ class CachingDiscoveryResolverHookFailureTest {
      * @return the winner's outcome at index 0 and the joiner's at index 1
      */
     private Outcome[] runSupersededClaim(CachingDiscoveryResolver competitor) throws Exception {
-        var entered = new CountDownLatch(1);
-        var release = new CountDownLatch(1);
+        var held = new Hold();
         onNextClaim.set(() -> {
-            entered.countDown();
-            await(release);
+            held.enterAndWait();
             stateOf(resolver).set(stateOf(competitor).get());
         });
 
         var winner = start(resolver::resolve);
-        assertTrue(entered.await(AWAIT_SECONDS, TimeUnit.SECONDS), "the winner must claim the slot");
+        held.awaitEntered();
         var joiner = start(resolver::resolve);
         awaitJoined(joiner.thread());
-        release.countDown();
+        held.release();
 
         return new Outcome[]{winner.outcome(), joiner.outcome()};
     }
@@ -273,72 +260,6 @@ class CachingDiscoveryResolverHookFailureTest {
         now.set(now.get().plus(duration));
     }
 
-    private static void await(CountDownLatch latch) {
-        try {
-            if (!latch.await(AWAIT_SECONDS, TimeUnit.SECONDS)) {
-                throw new AssertionError("the test never released the hook");
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new AssertionError("interrupted while holding the hook", e);
-        }
-    }
-
-    /**
-     * Waits until the thread parks inside {@code CachingDiscoveryResolver.join}, the wait on the
-     * in-flight refresh.
-     */
-    private static void awaitJoined(Thread thread) {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(AWAIT_SECONDS);
-        while (!isJoined(thread)) {
-            if (System.nanoTime() > deadline) {
-                fail("the joining caller never waited for the in-flight refresh, state " + thread.getState());
-            }
-            Thread.onSpinWait();
-        }
-    }
-
-    private static boolean isJoined(Thread thread) {
-        if (thread.getState() != Thread.State.WAITING) {
-            return false;
-        }
-        for (StackTraceElement frame : thread.getStackTrace()) {
-            if (CachingDiscoveryResolver.class.getName().equals(frame.getClassName())
-                    && "join".equals(frame.getMethodName())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static Caller start(Callable<ProviderMetadata> call) {
-        var task = new FutureTask<>(() -> {
-            try {
-                return new Outcome(call.call(), null);
-            }
-            // cui-rewrite:disable InvalidExceptionUsageRecipe
-            catch (RuntimeException e) {
-                return new Outcome(null, e);
-            }
-        });
-        var thread = new Thread(task, "discovery-caller");
-        thread.setDaemon(true);
-        thread.start();
-        return new Caller(thread, task);
-    }
-
-    /** A caller running {@link CachingDiscoveryResolver#resolve()} on its own thread. */
-    private record Caller(Thread thread, FutureTask<Outcome> task) {
-
-        Outcome outcome() throws Exception {
-            return task.get(AWAIT_SECONDS, TimeUnit.SECONDS);
-        }
-    }
-
-    /** What one caller got back. */
-    private record Outcome(@Nullable ProviderMetadata result, @Nullable RuntimeException failure) {
-    }
-
     /** A delegate that always resolves the same good document and counts its calls. */
     private static final class CountingDelegate extends DiscoveryResolver {
 
@@ -351,12 +272,7 @@ class CachingDiscoveryResolverHookFailureTest {
 
         /** A delegate whose document names {@code tokenEndpoint}, so its entries are recognisable. */
         CountingDelegate(String tokenEndpoint) {
-            super(ClientConfiguration.builder()
-                    .issuer(ISSUER)
-                    .clientId("client")
-                    .clientSecret("secret")
-                    .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
-                    .build());
+            super(configuration());
             this.tokenEndpoint = tokenEndpoint;
         }
 
@@ -367,10 +283,7 @@ class CachingDiscoveryResolverHookFailureTest {
         @Override
         public ProviderMetadata resolve() {
             calls.incrementAndGet();
-            var metadata = new ProviderMetadata();
-            metadata.issuer = ISSUER;
-            metadata.tokenEndpoint = tokenEndpoint;
-            return metadata;
+            return document(tokenEndpoint, null);
         }
     }
 }

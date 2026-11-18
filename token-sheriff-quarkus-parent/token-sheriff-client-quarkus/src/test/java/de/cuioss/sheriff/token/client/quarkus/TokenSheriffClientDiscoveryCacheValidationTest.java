@@ -20,6 +20,7 @@ import de.cuioss.sheriff.token.client.quarkus.config.ClientConfigMapper;
 import de.cuioss.sheriff.token.client.quarkus.config.ClientRuntimeConfig;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import io.quarkus.runtime.StartupEvent;
+import io.quarkus.runtime.configuration.DurationConverter;
 import io.smallrye.config.SmallRyeConfigBuilder;
 import org.eclipse.microprofile.config.Config;
 import org.junit.jupiter.api.DisplayName;
@@ -272,8 +273,9 @@ class TokenSheriffClientDiscoveryCacheValidationTest {
          * Derives the expected properties from the declarations of {@link ClientRuntimeConfig}, not
          * from {@link CachingDiscoveryResolver.Setting} or {@link #expectedProperty}, so a discovery
          * cache property declared there but missing from {@code Setting} cannot pass unnoticed. A new
-         * {@code DISCOVERY_CACHE_*} constant must be added to {@link CachingDiscoveryResolver.Setting}
-         * and to the {@link ClientConfigMapper} registries, or this test fails naming it.
+         * {@code DISCOVERY_CACHE_*} constant must be added to {@link CachingDiscoveryResolver.Setting},
+         * whose exhaustive mapping to its property in {@link ClientConfigMapper} then does not compile
+         * until it names the constant, or this test fails naming it.
          */
         @Test
         @DisplayName("Should refuse every discovery cache property ClientRuntimeConfig declares as an orphan")
@@ -286,7 +288,7 @@ class TokenSheriffClientDiscoveryCacheValidationTest {
                 IllegalStateException failure = assertThrows(IllegalStateException.class,
                         () -> ClientConfigMapper.validateDiscoveryCache(config),
                         property + " is declared by ClientRuntimeConfig but not refused on a disabled cache; "
-                                + "add it to CachingDiscoveryResolver.Setting and the ClientConfigMapper registries");
+                                + "add it to CachingDiscoveryResolver.Setting and map it in ClientConfigMapper");
                 if (failure.getMessage().contains("'" + property + "' is set but")) {
                     refused.add(property);
                 }
@@ -301,8 +303,8 @@ class TokenSheriffClientDiscoveryCacheValidationTest {
                             "the reflection finds the four known duration properties: " + declared),
                     () -> assertEquals(declared, refused,
                             "every declared discovery cache property must be refused as an orphan naming it; "
-                                    + "a missing one must be added to CachingDiscoveryResolver.Setting and the "
-                                    + "ClientConfigMapper registries"));
+                                    + "a missing one must be added to CachingDiscoveryResolver.Setting and mapped "
+                                    + "in ClientConfigMapper"));
         }
     }
 
@@ -371,6 +373,63 @@ class TokenSheriffClientDiscoveryCacheValidationTest {
             assertDoesNotThrow(() -> startUp(config), "a valid configuration must start");
             assertDoesNotThrow(() -> ClientConfigMapper.mapDiscoveryCache(config).orElseThrow(),
                     "a valid enabled configuration maps its settings");
+        }
+    }
+
+    /** One row per duration form the failure message names: the value and the duration it maps to. */
+    static Stream<Arguments> acceptedForms() {
+        return Stream.of(
+                Arguments.of("PT5M", Duration.ofMinutes(5)),
+                Arguments.of("300", Duration.ofSeconds(300)),
+                Arguments.of("500ms", Duration.ofMillis(500)),
+                Arguments.of("30s", Duration.ofSeconds(30)),
+                Arguments.of("5m", Duration.ofMinutes(5)),
+                Arguments.of("2h", Duration.ofHours(2)),
+                Arguments.of("1d", Duration.ofDays(1)));
+    }
+
+    /**
+     * Runs the values through {@link DurationConverter}, the converter a Quarkus application reads a
+     * {@link Duration} property with, instead of the ISO-8601-only implicit converter of a bare
+     * SmallRye config.
+     */
+    @Nested
+    @DisplayName("Quarkus duration converter")
+    class QuarkusDurationConverter {
+
+        private Config quarkusConfigOf(Map<String, String> properties) {
+            return new SmallRyeConfigBuilder().withDefaultValues(properties)
+                    .withConverter(Duration.class, 200, new DurationConverter()).build();
+        }
+
+        @ParameterizedTest(name = "ttl={0}")
+        @MethodSource("de.cuioss.sheriff.token.client.quarkus.TokenSheriffClientDiscoveryCacheValidationTest#acceptedForms")
+        @DisplayName("Should start with every duration form the failure message names")
+        void shouldStartWithEveryNamedForm(String value, Duration expected) {
+            Config config = quarkusConfigOf(enabledWith(ClientRuntimeConfig.DISCOVERY_CACHE_TTL, value));
+
+            assertDoesNotThrow(() -> startUp(config), value + " is a form the Quarkus converter accepts");
+            assertEquals(expected, ClientConfigMapper.mapDiscoveryCache(config).orElseThrow().ttl(),
+                    value + " maps to the duration it names");
+        }
+
+        @Test
+        @DisplayName("Should fail startup naming the property and the accepted forms for an unparseable value")
+        void shouldFailNamingPropertyAndAcceptedForms() {
+            Config config = quarkusConfigOf(enabledWith(ClientRuntimeConfig.DISCOVERY_CACHE_GRACE_PERIOD,
+                    UNPARSEABLE));
+
+            IllegalStateException failure = assertThrows(IllegalStateException.class, () -> startUp(config),
+                    "an unparseable grace period must fail the start under the Quarkus converter");
+            String message = failure.getMessage();
+            assertAll("unparseable value failure under the Quarkus converter",
+                    () -> assertTrue(message.contains("'" + ClientRuntimeConfig.DISCOVERY_CACHE_GRACE_PERIOD + "'"),
+                            "the failure names the property: " + message),
+                    () -> assertTrue(message.contains("PT5M") && message.contains("300")
+                            && message.contains("ms, s, m, h or d") && message.contains("5m"),
+                            "the failure names every form the converter accepts: " + message),
+                    () -> assertInstanceOf(IllegalArgumentException.class, failure.getCause(),
+                            "the converter failure is kept as the cause"));
         }
     }
 

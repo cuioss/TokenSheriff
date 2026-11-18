@@ -21,6 +21,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
@@ -40,6 +41,20 @@ import static org.junit.jupiter.api.Assertions.*;
 @EnableGeneratorController
 @DisplayName("AuthorizationRequestOptions and its closed-set values")
 class AuthorizationRequestOptionsTest {
+
+    /** The message prefix every scope-token rejection keeps. */
+    private static final String SCOPE_TOKEN_PREFIX = "scopes must hold one scope-token per entry (RFC 6749 section 3.3)";
+
+    /** The message a {@code null} or blank entry is refused with. */
+    private static final String NULL_OR_BLANK = "scopes must not contain null or blank entries";
+
+    /** The message an empty override is refused with. */
+    private static final String EMPTY_OVERRIDE =
+            "a scope override must not be empty; omit it to request the configured scopes";
+
+    private static String tokenRefusal(int entry, String characterClass, String codePoint) {
+        return SCOPE_TOKEN_PREFIX + ", but entry " + entry + " holds a " + characterClass + " (U+" + codePoint + ")";
+    }
 
     @Nested
     @DisplayName("Defaults")
@@ -68,34 +83,48 @@ class AuthorizationRequestOptionsTest {
         void shouldRefuseNullResponseMode() {
             var optionsBuilder = AuthorizationRequestOptions.builder().responseMode(null);
 
-            assertThrows(NullPointerException.class, optionsBuilder::build,
+            var exception = assertThrows(NullPointerException.class, optionsBuilder::build,
                     "the response mode is never null");
+
+            assertEquals("responseMode must not be null", exception.getMessage());
         }
     }
 
     /**
-     * Scope overrides the shared scope-token rule refuses: a null, blank, multi-token or empty list, and
-     * entries holding a character outside the RFC 6749 §3.3 scope-token set
-     * {@code %x21 / %x23-5B / %x5D-7E}. Shared with {@code RefreshFlowScopeOverrideTest}, so both entry
-     * points are exercised against the same variants.
+     * Each scope override the shared scope-token rule refuses, paired with the exact message the options
+     * builder refuses it with: a null, blank, multi-token or empty list, and entries holding a character
+     * outside the RFC 6749 §3.3 scope-token set {@code %x21 / %x23-5B / %x5D-7E}.
      */
-    static Stream<List<String>> invalidScopeOverrides() {
+    static Stream<Arguments> invalidScopeOverridesWithMessage() {
         return Stream.of(
-                Arrays.asList("openid", null),
-                List.of("openid", " "),
-                List.of(""),
-                List.of("openid profile"),
-                List.of("openid\tprofile"),
-                List.of("openid\r\nprofile"),
-                List.of(),
-                List.of("openid", "say\"hello"),
-                List.of("openid", "back\\slash"),
-                List.of("openid", "nul\u0000byte"),
-                List.of("openid", "del\u007Fbyte"),
-                List.of("openid", "ctl\u0001byte"),
-                List.of("openid", "café"),
-                List.of("openid", "smile😀"),
-                List.of("openid", "non breaking"));
+                Arguments.of(Arrays.asList("openid", null), NULL_OR_BLANK),
+                Arguments.of(List.of("openid", " "), NULL_OR_BLANK),
+                Arguments.of(List.of(""), NULL_OR_BLANK),
+                Arguments.of(List.of("openid profile"), tokenRefusal(0, "whitespace character", "0020")),
+                Arguments.of(List.of("openid\tprofile"), tokenRefusal(0, "whitespace character", "0009")),
+                Arguments.of(List.of("openid\r\nprofile"), tokenRefusal(0, "whitespace character", "000D")),
+                Arguments.of(List.of(), EMPTY_OVERRIDE),
+                Arguments.of(List.of("openid", "say\"hello"), tokenRefusal(1, "double quote", "0022")),
+                Arguments.of(List.of("openid", "back\\slash"), tokenRefusal(1, "backslash", "005C")),
+                Arguments.of(List.of("openid", "nul\u0000byte"), tokenRefusal(1, "control character", "0000")),
+                Arguments.of(List.of("openid", "del\u007Fbyte"), tokenRefusal(1, "control character", "007F")),
+                Arguments.of(List.of("openid", "ctl\u0001byte"), tokenRefusal(1, "control character", "0001")),
+                Arguments.of(List.of("openid", "caf" + Character.toString(0x00E9)),
+                        tokenRefusal(1, "non-ASCII character", "00E9")),
+                Arguments.of(List.of("openid", "smile" + Character.toString(0x1F600)),
+                        tokenRefusal(1, "non-ASCII character", "1F600")),
+                Arguments.of(List.of("openid", "non" + Character.toString(0x00A0) + "breaking"),
+                        tokenRefusal(1, "whitespace character", "00A0")));
+    }
+
+    /**
+     * The scope overrides of {@link #invalidScopeOverridesWithMessage()} without their messages. Shared
+     * with {@code RefreshFlowScopeOverrideTest}, so both entry points are exercised against the same
+     * variants.
+     */
+    @SuppressWarnings("unchecked")
+    static Stream<List<String>> invalidScopeOverrides() {
+        return invalidScopeOverridesWithMessage().map(arguments -> (List<String>) arguments.get()[0]);
     }
 
     @Nested
@@ -105,13 +134,15 @@ class AuthorizationRequestOptionsTest {
         // The display name carries the index only: the variants hold control characters that must not
         // reach a test report.
         @ParameterizedTest(name = "refuses variant #{index}")
-        @MethodSource("de.cuioss.sheriff.token.client.flow.AuthorizationRequestOptionsTest#invalidScopeOverrides")
+        @MethodSource("de.cuioss.sheriff.token.client.flow.AuthorizationRequestOptionsTest#invalidScopeOverridesWithMessage")
         @DisplayName("Should refuse a null, blank, multi-token, empty or non-scope-token-character scope override")
-        void shouldRefuseInvalidOverride(List<String> scopes) {
+        void shouldRefuseInvalidOverride(List<String> scopes, String expectedMessage) {
             var optionsBuilder = AuthorizationRequestOptions.builder().scopes(scopes);
 
-            assertThrows(IllegalArgumentException.class, optionsBuilder::build,
-                    "an invalid scope override never reaches a request: " + scopes);
+            var exception = assertThrows(IllegalArgumentException.class, optionsBuilder::build,
+                    "an invalid scope override never reaches a request");
+
+            assertEquals(expectedMessage, exception.getMessage());
         }
 
         @Test
@@ -170,12 +201,33 @@ class AuthorizationRequestOptionsTest {
 
         @ParameterizedTest
         @NullAndEmptySource
-        @ValueSource(strings = {" ", "fragment", "query.jwt", "jwt", "FORM_POST", "Form_Post", "QUERY", "Query",
-                " query", "query ", "query\r\n"})
-        @DisplayName("Should refuse an unsupported, blank or case-mismatched value")
+        @ValueSource(strings = " ")
+        @DisplayName("Should refuse a null or blank value, naming the parameter")
+        void shouldRefuseBlankValue(String value) {
+            var exception = assertThrows(IllegalArgumentException.class, () -> ResponseMode.of(value),
+                    "response_mode refuses a blank value");
+
+            assertEquals("response_mode must not be null or blank", exception.getMessage());
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"fragment", "query.jwt", "jwt", "FORM_POST", "Form_Post", "QUERY", "Query",
+                " query", "query "})
+        @DisplayName("Should refuse an unsupported or case-mismatched value, naming it")
         void shouldRefuseUnsupportedValue(String value) {
-            assertThrows(IllegalArgumentException.class, () -> ResponseMode.of(value),
+            var exception = assertThrows(IllegalArgumentException.class, () -> ResponseMode.of(value),
                     "response_mode refuses " + value);
+
+            assertEquals("unsupported response_mode value: " + value, exception.getMessage());
+        }
+
+        @Test
+        @DisplayName("Should refuse a value carrying CR LF and render it escaped in the message")
+        void shouldRefuseControlCharacterValue() {
+            var exception = assertThrows(IllegalArgumentException.class, () -> ResponseMode.of("query\r\n"));
+
+            assertEquals("unsupported response_mode value: query\\r\\n", exception.getMessage(),
+                    "the refused value is log-sanitized, so it cannot forge a log line");
         }
     }
 
@@ -202,11 +254,33 @@ class AuthorizationRequestOptionsTest {
 
         @ParameterizedTest
         @NullAndEmptySource
-        @ValueSource(strings = {" ", "create", "login consent", "NONE", "Login", "SELECT_ACCOUNT", "select-account",
-                " login", "login ", "login\n"})
-        @DisplayName("Should refuse an unsupported, blank or case-mismatched value")
+        @ValueSource(strings = " ")
+        @DisplayName("Should refuse a null or blank value, naming the parameter")
+        void shouldRefuseBlankValue(String value) {
+            var exception = assertThrows(IllegalArgumentException.class, () -> Prompt.of(value),
+                    "prompt refuses a blank value");
+
+            assertEquals("prompt must not be null or blank", exception.getMessage());
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"create", "login consent", "NONE", "Login", "SELECT_ACCOUNT", "select-account",
+                " login", "login "})
+        @DisplayName("Should refuse an unsupported or case-mismatched value, naming it")
         void shouldRefuseUnsupportedValue(String value) {
-            assertThrows(IllegalArgumentException.class, () -> Prompt.of(value), "prompt refuses " + value);
+            var exception = assertThrows(IllegalArgumentException.class, () -> Prompt.of(value),
+                    "prompt refuses " + value);
+
+            assertEquals("unsupported prompt value: " + value, exception.getMessage());
+        }
+
+        @Test
+        @DisplayName("Should refuse a value carrying LF and render it escaped in the message")
+        void shouldRefuseControlCharacterValue() {
+            var exception = assertThrows(IllegalArgumentException.class, () -> Prompt.of("login\n"));
+
+            assertEquals("unsupported prompt value: login\\n", exception.getMessage(),
+                    "the refused value is log-sanitized, so it cannot forge a log line");
         }
     }
 }

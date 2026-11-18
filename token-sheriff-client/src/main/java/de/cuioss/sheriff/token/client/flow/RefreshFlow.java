@@ -236,6 +236,7 @@ public class RefreshFlow {
      * @throws ClientProtocolException if the granted scope is broader than {@code scopes} and
      *         {@code ClientConfiguration.strictScopeReconciliation} is enabled — thrown as the
      *         {@link RedeemedScopeRefusalException} subtype
+     * @since 1.0
      */
     public RotationResult refresh(ProviderMetadata metadata, String refreshToken, List<String> scopes) {
         List<String> requestedScopes = ClientConfiguration.validateScopes(scopes);

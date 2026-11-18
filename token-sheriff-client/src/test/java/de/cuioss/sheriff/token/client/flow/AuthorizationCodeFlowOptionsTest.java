@@ -47,8 +47,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * {@link AuthorizationRequestOptions#DEFAULTS} reproduces the request of
  * {@link AuthorizationCodeFlow#authorize(ProviderMetadata)}, a scope override applies to one call only and
  * leaves the shared configuration untouched, concurrent calls do not interfere, and a subclassed
- * {@link AuthorizationRequestBuilder} overriding the three-argument {@code build} is still dispatched by
- * the option-less entry point.
+ * {@link AuthorizationRequestBuilder} overriding the three-argument {@code build} is dispatched by the
+ * option-less entry point.
  */
 @EnableTestLogger
 @EnableGeneratorController
@@ -156,7 +156,7 @@ class AuthorizationCodeFlowOptionsTest {
         }
 
         @Test
-        @DisplayName("Should keep the default flow URL byte-identical to the request emitted before the refactor")
+        @DisplayName("Should emit the default flow URL with exactly the documented parameter order and encoding")
         void shouldKeepDefaultFlowUrlByteIdentical() {
             var flow = flow(config("client-1"));
 
@@ -165,7 +165,7 @@ class AuthorizationCodeFlowOptionsTest {
 
             assertAll("golden default URL",
                     () -> assertEquals(golden(plain.context()), plain.authorizationUrl(),
-                            "authorize(metadata) keeps its pre-refactor parameter order and encoding"),
+                            "authorize(metadata) carries the documented parameter order and encoding"),
                     () -> assertEquals(golden(withDefaults.context()), withDefaults.authorizationUrl(),
                             "authorize(metadata, DEFAULTS) emits the same byte sequence"));
         }
@@ -302,7 +302,7 @@ class AuthorizationCodeFlowOptionsTest {
     class Overridability {
 
         @Test
-        @DisplayName("Should still dispatch a subclass overriding the three-argument build from authorize(metadata)")
+        @DisplayName("Should dispatch a subclass overriding the three-argument build from authorize(metadata)")
         void shouldDispatchOverriddenThreeArgumentBuild() {
             var builder = new MarkerBuilder();
 
@@ -318,8 +318,8 @@ class AuthorizationCodeFlowOptionsTest {
     }
 
     /**
-     * Test double that replaces the three-argument {@code build}, as an application subclass written
-     * against the pre-options API does.
+     * Test double that replaces only the three-argument {@code build}, as an application subclass that
+     * customises the option-less request does.
      */
     static final class MarkerBuilder extends AuthorizationRequestBuilder {
 

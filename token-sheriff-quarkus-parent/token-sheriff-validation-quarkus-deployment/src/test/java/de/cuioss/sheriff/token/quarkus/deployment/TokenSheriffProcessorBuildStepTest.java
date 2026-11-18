@@ -15,6 +15,7 @@
  */
 package de.cuioss.sheriff.token.quarkus.deployment;
 
+import de.cuioss.sheriff.token.quarkus.config.JwtPropertyKeys;
 import de.cuioss.sheriff.token.quarkus.error.ProblemDetailExceptionMapper;
 import de.cuioss.sheriff.token.quarkus.health.JwksEndpointHealthCheck;
 import de.cuioss.sheriff.token.quarkus.health.TokenValidatorHealthCheck;
@@ -63,7 +64,7 @@ class TokenSheriffProcessorBuildStepTest {
     }
 
     @Test
-    @DisplayName("Should register Quarkus-specific types for reflection and no core types")
+    @DisplayName("Should register the bridge types and the reflectively read key definitions, and no core types")
     void shouldRegisterQuarkusSpecificClassesForReflection() {
         List<ReflectiveClassBuildItem> reflectiveItems = new ArrayList<>();
         BuildProducer<ReflectiveClassBuildItem> producer = reflectiveItems::add;
@@ -78,9 +79,11 @@ class TokenSheriffProcessorBuildStepTest {
                 MeterRegistry.class.getName(),
                 JsonWebToken.class.getName(),
                 JsonWebTokenAdapter.class.getName(),
-                DiscoverableClaimMapper.class.getName());
+                DiscoverableClaimMapper.class.getName(),
+                JwtPropertyKeys.ISSUERS.class.getName());
         assertEquals(expected, registered,
-                "The extension must register exactly its own bridge types. Core types such as "
+                "The extension must register exactly its own bridge types and the key definitions whose "
+                        + "fields are read reflectively. Core types such as "
                         + "TokenValidator and AccessTokenContent ship their own GraalVM metadata with "
                         + "token-sheriff-validation and must not creep back into the extension, and no "
                         + "further type may be added here without updating this contract.");
@@ -104,7 +107,8 @@ class TokenSheriffProcessorBuildStepTest {
                 () -> assertReflectionFlags(byClassName, MeterRegistry.class, true, false, true),
                 () -> assertReflectionFlags(byClassName, JsonWebToken.class, true, true, true),
                 () -> assertReflectionFlags(byClassName, JsonWebTokenAdapter.class, true, true, true),
-                () -> assertReflectionFlags(byClassName, DiscoverableClaimMapper.class, false, false, true));
+                () -> assertReflectionFlags(byClassName, DiscoverableClaimMapper.class, false, false, true),
+                () -> assertReflectionFlags(byClassName, JwtPropertyKeys.ISSUERS.class, false, true, false));
     }
 
     private static void assertReflectionFlags(Map<String, ReflectiveClassBuildItem> byClassName,

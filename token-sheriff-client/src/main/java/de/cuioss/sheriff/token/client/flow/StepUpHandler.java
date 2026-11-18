@@ -133,10 +133,7 @@ public class StepUpHandler {
         Objects.requireNonNull(configuration, "configuration must not be null");
         Objects.requireNonNull(metadata, "metadata must not be null");
         Objects.requireNonNull(challenge, "challenge must not be null");
-        String redirectUri = configuration.getRedirectUri();
-        if (redirectUri == null || redirectUri.isBlank()) {
-            throw new IllegalArgumentException("client declares no redirect URI");
-        }
+        String redirectUri = AuthorizationCodeFlow.requireRedirectUri(configuration);
         return FlowContext.create(redirectUri,
                 challenge.getAcrValues().orElse(null), challenge.getMaxAge().orElse(null));
     }
