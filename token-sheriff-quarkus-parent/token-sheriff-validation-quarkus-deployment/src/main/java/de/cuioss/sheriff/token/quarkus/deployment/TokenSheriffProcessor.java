@@ -54,6 +54,7 @@ import io.quarkus.arc.deployment.ValidationPhaseBuildItem.ValidationErrorBuildIt
 import io.quarkus.deployment.IsDevelopment;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
@@ -67,6 +68,7 @@ import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.ClassInfo;
+import org.jboss.jandex.CompositeIndex;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.MethodInfo;
@@ -305,18 +307,30 @@ public class TokenSheriffProcessor {
      * and member. Class-level and method-level {@code @BearerAuth} (merged per bean class as the interceptor
      * merges them) and every {@code @BearerToken} injection point are checked.
      * <p>
-     * The step scans the bean-archive index, not the combined index: the bean-archive index also holds the
-     * beans ArC generates during the build (for example from a {@code GeneratedBeanBuildItem}), which the
-     * combined index does not, so an invalid scope on a generated bean fails the deployment as well.
+     * The step scans the bean-archive index and the combined index together. The bean-archive index holds the
+     * bean archives and the beans ArC generates during the build (for example from a
+     * {@code GeneratedBeanBuildItem}), which the combined index does not, so an invalid scope on a generated
+     * bean fails the deployment. The combined index holds every indexed application archive, including a
+     * dependency that is no bean archive because it carries neither a {@code beans.xml} nor a bean-defining
+     * annotation, so a {@code @BearerAuth} method that an application bean class inherits from a base class in
+     * such a dependency is merged with that bean class's own scopes and checked as well. The bean-archive index
+     * resolves such a base class on demand when it is asked for it by name, but does not enumerate its
+     * annotations. A class in both indexes yields the same message twice, which is reported once.
+     * <p>
+     * A class in neither index is not checked, for example a base class in a dependency that is not indexed at
+     * all.
      *
      * @param validationPhase  orders this step into the ArC validation phase; not otherwise read
      * @param beanArchiveIndex the bean-archive Jandex index, generated beans included
+     * @param combinedIndex    the combined Jandex index of the indexed application archives
      * @param validationErrors producer for the deployment errors, one per refused scope set
      */
     @BuildStep
     public void validateAnnotationScopes(ValidationPhaseBuildItem validationPhase,
-            BeanArchiveIndexBuildItem beanArchiveIndex, BuildProducer<ValidationErrorBuildItem> validationErrors) {
-        List<String> violations = findScopeViolations(beanArchiveIndex.getIndex());
+            BeanArchiveIndexBuildItem beanArchiveIndex, CombinedIndexBuildItem combinedIndex,
+            BuildProducer<ValidationErrorBuildItem> validationErrors) {
+        List<String> violations = findScopeViolations(
+                CompositeIndex.create(beanArchiveIndex.getIndex(), combinedIndex.getIndex()));
         if (!violations.isEmpty()) {
             validationErrors.produce(new ValidationErrorBuildItem(violations.stream()
                     .map(DeploymentException::new)
@@ -342,7 +356,8 @@ public class TokenSheriffProcessor {
      * {@link ErrorTextSanitizer#sanitize(String)}, never raw.
      *
      * @param index the index to scan
-     * @return one message per refused scope set, sorted; empty when every annotation is valid
+     * @return one message per refused scope set, sorted and each message once, also when the index lists an
+     *         annotation or a bean class more than once; empty when every annotation is valid
      */
     static List<String> findScopeViolations(IndexView index) {
         Set<String> violations = new TreeSet<>();
