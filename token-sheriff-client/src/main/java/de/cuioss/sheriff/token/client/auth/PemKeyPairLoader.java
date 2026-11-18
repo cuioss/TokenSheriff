@@ -75,9 +75,9 @@ import java.util.Objects;
  *   <li>The regular-file check ({@link Files#isRegularFile(Path, java.nio.file.LinkOption...)}) follows
  *       symbolic links, so a symlink to a regular file is followed and loaded. That is what lets a
  *       mounted secret that is a symlink to a regular file load.</li>
- *   <li>The check and the open are two steps. A FIFO or other special file swapped in at the path after
- *       the check is not refused: the open blocks until a writer opens the other end, and the read then
- *       blocks until the writer sends data or closes it. The path is expected to be one only the deployment can write.</li>
+ *   <li>The check and the open are two steps. A FIFO swapped in at the path after the check is not
+ *       refused: the open blocks until a writer opens the other end, and the read then blocks until the
+ *       writer sends data or closes it. The path is expected to be one only the deployment can write.</li>
  *   <li>The key text is held in a {@link String} and the decoded key material in byte arrays. The loader
  *       does not overwrite the byte arrays and cannot overwrite the immutable String; both stay in
  *       memory until the garbage collector reclaims them.</li>

@@ -918,7 +918,7 @@ class ClientConfigurationTest {
                             config.getAllowedEgressHosts(),
                             "each entry is stored lower-case, a bare IPv6 literal in brackets"),
                     () -> assertEquals(lowerCase, upperCase,
-                            "two configurations differing only in an entry's spelling are equal"));
+                            "two configurations differing only in an entry's letter case are equal"));
         }
 
         @Test
