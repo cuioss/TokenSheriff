@@ -153,9 +153,10 @@ class BackChannelHttpMalformedResponseTest {
         BackChannelHttp backChannel = new BackChannelHttp(config(), 1024, BackChannelHttp.FIXED_PARSER_CONFIG_ORIGIN);
         HttpHandler handler = backChannel.validatedHandler(url, FAILURE_CONTEXT);
         HttpClient client = backChannel.sharedClient(handler);
+        HttpRequest request = get(handler);
 
         TransportException failure = assertThrows(TransportException.class,
-                () -> backChannel.send(client, get(handler), FAILURE_CONTEXT));
+                () -> backChannel.send(client, request, FAILURE_CONTEXT));
 
         assertAll("Fixed failure",
                 () -> assertEquals(FAILURE_CONTEXT + ": " + BackChannelHttp.MALFORMED_RESPONSE, failure.getMessage(),
@@ -170,9 +171,11 @@ class BackChannelHttpMalformedResponseTest {
         BackChannelHttp backChannel = new BackChannelHttp(config(), 1024, BackChannelHttp.FIXED_PARSER_CONFIG_ORIGIN);
         HttpHandler handler = backChannel.validatedHandler(url, FAILURE_CONTEXT);
         HttpClient client = backChannel.sharedClient(handler);
+        HttpRequest request = get(handler);
+        HttpResponse.BodyHandler<String> bodyHandler = backChannel.bodyHandler();
 
         IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
-                () -> client.send(get(handler), backChannel.bodyHandler()));
+                () -> client.send(request, bodyHandler));
 
         String text = failure.getMessage() + " " + (failure.getCause() == null ? "" : failure.getCause().getMessage());
         assertTrue(text.contains(RAW_VALUE), "Without the mapping the JDK exception carries the raw header value");

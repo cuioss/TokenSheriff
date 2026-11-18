@@ -908,7 +908,6 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
         // cui-rewrite:disable InvalidExceptionUsageRecipe
         catch (RuntimeException e) {
             LOGGER.debug("Refresh executor did not accept the unknown-kid fetch (%s)", e.getClass().getName());
-            return;
         } finally {
             // Every outcome other than an accepted task releases the guard, an Error included; an accepted
             // task releases it when it ends.
@@ -916,7 +915,9 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
                 fetchInFlight.set(false);
             }
         }
-        LOGGER.info(INFO.UNKNOWN_KID_REFRESH_SCHEDULED, ErrorTextSanitizer.sanitize(kid), loggableIssuerIdentifier());
+        if (accepted) {
+            LOGGER.info(INFO.UNKNOWN_KID_REFRESH_SCHEDULED, ErrorTextSanitizer.sanitize(kid), loggableIssuerIdentifier());
+        }
     }
 
     /**
