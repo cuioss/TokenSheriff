@@ -532,8 +532,8 @@ an isolated-component or server-capability test alone does not qualify the row a
 
 | xref:../requirements.adoc#CLIENT-26[CLIENT-26] | (native-image contract)
 | `ClientNativeReflectionMetadataTest` and `ClientNativeRuntimeInitializationTest`: the shipped
-  metadata registers exactly the converters and the classes holding a static `Random` (a
-  `SecureRandom` included) enumerated from the compiled classes (xref:#_native_image_contract[])
+  metadata registers exactly the converters and the classes declaring a static field of a `Random`
+  type (a `SecureRandom` included) enumerated from the compiled classes (xref:#_native_image_contract[])
 | `ClientNativeImageSpecIT`: inside the native executable, `credential_rejected` for Keycloak's
   `invalid_grant`, `jkt_mismatch` for a `cnf.jkt` naming another key, `accepted` for the matching
   key | all
