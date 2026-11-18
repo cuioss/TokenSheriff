@@ -138,9 +138,10 @@ class JwtPropertyKeysDerivationGuardTest {
         @Test
         @DisplayName("should refuse a derivation that falls short only because of an excluded key")
         void shouldRefuseDerivationShortAfterExclusion() {
+            Set<String> excluded = Set.of(TwoKeyFixture.FIRST);
+
             assertThrows(IllegalStateException.class,
-                    () -> JwtPropertyKeys.declaredKeysUnder(TwoKeyFixture.class, FIXTURE_BASE,
-                            Set.of(TwoKeyFixture.FIRST), 2));
+                    () -> JwtPropertyKeys.declaredKeysUnder(TwoKeyFixture.class, FIXTURE_BASE, excluded, 2));
         }
 
         @Test

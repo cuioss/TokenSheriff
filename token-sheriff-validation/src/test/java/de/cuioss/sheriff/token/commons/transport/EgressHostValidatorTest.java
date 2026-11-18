@@ -111,26 +111,22 @@ class EgressHostValidatorTest {
     }
 
     /**
-     * One entry per refusal class of the validator, with the fixed text each must produce. Shared by
-     * the builder tests ({@code EgressPolicyTest}, {@code WellKnownConfigTest},
-     * {@code HttpJwksLoaderConfigEgressHostTest}) so every allow-list builder is checked against the
-     * same classes.
+     * One row per refusal class of the validator, drawn from {@link Refusal} itself and from
+     * {@link #REPRESENTATIVE_ENTRIES}, with the fixed text each must produce, followed by boundary rows
+     * that reach a class by another route. A refusal class added without a representative entry yields a
+     * row whose entry is {@code null}, which the builder tests cannot satisfy. Shared by the builder tests
+     * ({@code EgressPolicyTest}, {@code WellKnownConfigTest}, {@code HttpJwksLoaderConfigEgressHostTest}) so
+     * every allow-list builder is checked against the same classes.
      */
     static Stream<Arguments> builderRefusalClasses() {
-        return Stream.of(
-                Arguments.of(null, Refusal.NULL_ENTRY.text()),
+        Stream<Arguments> everyClass = Stream.of(Refusal.values())
+                .map(refusal -> Arguments.of(REPRESENTATIVE_ENTRIES.get(refusal), refusal.text()));
+        Stream<Arguments> boundaries = Stream.of(
                 Arguments.of("", Refusal.BLANK_ENTRY.text()),
-                Arguments.of("   ", Refusal.BLANK_ENTRY.text()),
-                Arguments.of("keycloak:8443", Refusal.PORT.text()),
                 Arguments.of("[::1]:8443", Refusal.PORT.text()),
-                Arguments.of("key cloak", Refusal.WHITESPACE.text()),
-                Arguments.of("key\tcloak", Refusal.CONTROL_CHARACTER.text()),
-                Arguments.of("kéycloak", Refusal.NON_ASCII.text()),
-                Arguments.of("idp_internal", Refusal.INVALID_HOST.text()),
                 Arguments.of("idp.123", Refusal.INVALID_HOST.text()),
-                Arguments.of("https://keycloak", Refusal.URL_SYNTAX.text()),
-                Arguments.of("[fe80::1%eth0]", Refusal.URL_SYNTAX.text()),
-                Arguments.of("[::1", Refusal.INVALID_IPV6.text()));
+                Arguments.of("[fe80::1%eth0]", Refusal.URL_SYNTAX.text()));
+        return Stream.concat(everyClass, boundaries);
     }
 
     /**

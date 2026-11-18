@@ -160,7 +160,7 @@ class BackChannelHttpRequestRefusalTest {
 
     @Test
     @DisplayName("should let a request the client refuses before sending reach the caller as IllegalArgumentException")
-    void shouldPropagateRequestRefusalUnchanged() throws Exception {
+    void shouldPropagateRequestRefusalUnchanged() {
         BackChannelHttp backChannel = new BackChannelHttp(config(), 1024, BackChannelHttp.FIXED_PARSER_CONFIG_ORIGIN);
         HttpHandler handler = backChannel.validatedHandler("http://127.0.0.1:1/endpoint", FAILURE_CONTEXT);
         HttpClient client = backChannel.sharedClient(handler);
