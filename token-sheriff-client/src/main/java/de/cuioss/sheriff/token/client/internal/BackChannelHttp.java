@@ -411,7 +411,8 @@ public final class BackChannelHttp {
      * @param failureContext a short, caller-safe prefix identifying the endpoint for exception messages
      * @return the response, its body read under the payload ceiling
      * @throws IOException              if the exchange fails, including a body over the ceiling
-     * @throws InterruptedException     if the calling thread is interrupted while waiting
+     * @throws InterruptedException     if the calling thread is interrupted before the request is sent,
+     *                                  in which case nothing is sent, or while waiting, see {@link #exchange}
      * @throws TransportException       if the HTTP client refuses the response as malformed
      * @throws IllegalArgumentException if the HTTP client refuses the request before sending it
      */
@@ -438,6 +439,14 @@ public final class BackChannelHttp {
      * {@link IllegalArgumentException} thrown synchronously is a request-side fault and propagates
      * unchanged. Any other failure is rethrown as the client reported it.
      * </p>
+     * <p>
+     * A calling thread that is already interrupted when this method is entered sends nothing: the
+     * interrupt status is cleared and an {@link InterruptedException} is thrown before
+     * {@link HttpClient#sendAsync} is called, as {@link HttpClient#send} does. The request therefore never
+     * reaches the server, so a grant presented to the token endpoint is not redeemed. An interrupt that
+     * arrives while waiting for the response throws the same exception after the request may have been
+     * sent, and cancels the exchange. Either way the caller handles the interrupt on one path.
+     * </p>
      *
      * @param client            the client to send through; must not be {@code null}
      * @param request           the request to send; must not be {@code null}
@@ -447,14 +456,19 @@ public final class BackChannelHttp {
      * @param <T>               the response body type
      * @return the response
      * @throws IOException              if the exchange fails
-     * @throws InterruptedException     if the calling thread is interrupted while waiting; the exchange is
-     *                                  cancelled
+     * @throws InterruptedException     if the calling thread is already interrupted on entry, in which case
+     *                                  nothing is sent, or is interrupted while waiting, in which case the
+     *                                  exchange is cancelled
      * @throws IllegalArgumentException if the client refuses the request before sending it
      */
     public static <T> HttpResponse<T> exchange(HttpClient client, HttpRequest request,
             HttpResponse.BodyHandler<T> bodyHandler, Supplier<? extends RuntimeException> malformedResponse)
             throws IOException, InterruptedException {
         Objects.requireNonNull(malformedResponse, "malformedResponse must not be null");
+        // sendAsync has no interrupt check of its own: an interrupted caller must not dispatch the request.
+        if (Thread.interrupted()) {
+            throw new InterruptedException("the calling thread was interrupted before the request was sent");
+        }
         // A request the client refuses is thrown here, synchronously, and propagates unchanged.
         CompletableFuture<HttpResponse<T>> pending = client.sendAsync(request, bodyHandler);
         try {

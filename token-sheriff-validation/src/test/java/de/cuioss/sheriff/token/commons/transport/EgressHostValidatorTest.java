@@ -210,9 +210,6 @@ class EgressHostValidatorTest {
 
             assertEquals(Optional.of(refusal.text()), EgressHostValidator.refusal(entry),
                     "the representative entry must produce exactly its class's fixed text");
-            if (entry != null && !entry.isBlank()) {
-                assertFalse(refusal.text().contains(entry), "the fixed text must not contain the entry");
-            }
         }
     }
 

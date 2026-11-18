@@ -23,11 +23,16 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLParameters;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.Authenticator;
+import java.net.CookieHandler;
 import java.net.InetAddress;
+import java.net.ProxySelector;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
@@ -35,13 +40,17 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -56,6 +65,10 @@ import static org.junit.jupiter.api.Assertions.*;
  * The client refuses it while preparing the exchange, before any byte is written. The positive control sends a
  * valid request to a loopback server whose {@code Content-Length} is not a number and still sees the fixed
  * {@link BackChannelHttp#MALFORMED_RESPONSE} failure.
+ * <p>
+ * A calling thread that is already interrupted sends nothing: the call throws {@link InterruptedException}
+ * before the request is handed to the client, so neither the client nor the loopback server sees it. The
+ * positive control sends the same request from a thread that is not interrupted and receives the response.
  */
 @DisplayName("BackChannelHttp request refusal")
 class BackChannelHttpRequestRefusalTest {
@@ -64,6 +77,7 @@ class BackChannelHttpRequestRefusalTest {
     private static final String RESTRICTED_HEADER = "Connection";
 
     private final ExecutorService serverThread = Executors.newSingleThreadExecutor();
+    private final AtomicInteger receivedRequests = new AtomicInteger();
     private ServerSocket serverSocket;
 
     @AfterEach
@@ -90,10 +104,18 @@ class BackChannelHttpRequestRefusalTest {
      * {@code Content-Length} is not a number, and returns its URL.
      */
     private String serveMalformedResponse(String statusLine) throws IOException {
+        return serve(statusLine, "12raw34");
+    }
+
+    /**
+     * Starts a loopback server that reads the request head, counts it in {@link #receivedRequests} and answers
+     * with {@code statusLine}, the {@code {}} body and the given {@code Content-Length} value, and returns its URL.
+     */
+    private String serve(String statusLine, String contentLength) throws IOException {
         serverSocket = new ServerSocket(0, 50, InetAddress.getByAddress(new byte[]{127, 0, 0, 1}));
         byte[] answer = ("HTTP/1.1 " + statusLine + "\r\n"
                 + "Content-Type: application/json\r\n"
-                + "Content-Length: 12raw34\r\n"
+                + "Content-Length: " + contentLength + "\r\n"
                 + "Connection: close\r\n"
                 + "\r\n"
                 + "{}").getBytes(StandardCharsets.US_ASCII);
@@ -101,6 +123,7 @@ class BackChannelHttpRequestRefusalTest {
             while (!serverSocket.isClosed()) {
                 try (Socket socket = serverSocket.accept()) {
                     readRequestHead(socket.getInputStream());
+                    receivedRequests.incrementAndGet();
                     OutputStream out = socket.getOutputStream();
                     out.write(answer);
                     out.flush();
@@ -180,6 +203,131 @@ class BackChannelHttpRequestRefusalTest {
                         "A response the client refuses as malformed is the fixed malformed-response failure"),
                 () -> assertFalse(failure.getMessage().contains("12raw34"), "The raw header value is not echoed"),
                 () -> assertNull(failure.getCause(), "The JDK exception carrying the raw value is not chained"));
+    }
+
+    @Test
+    @DisplayName("should send nothing when the calling thread is already interrupted")
+    void shouldSendNothingWhenAlreadyInterrupted() throws Exception {
+        String url = serve("200 OK", "2");
+        BackChannelHttp backChannel = new BackChannelHttp(config(), 1024, BackChannelHttp.FIXED_PARSER_CONFIG_ORIGIN);
+        HttpHandler handler = backChannel.validatedHandler(url, FAILURE_CONTEXT);
+        RecordingClient client = new RecordingClient(backChannel.sharedClient(handler));
+        HttpRequest request = handler.requestBuilder().GET().build();
+
+        boolean interruptStatusAfterCall;
+        Thread.currentThread().interrupt();
+        try {
+            assertThrows(InterruptedException.class, () -> backChannel.send(client, request, FAILURE_CONTEXT),
+                    "An interrupted caller gets the InterruptedException the wait would raise");
+            interruptStatusAfterCall = Thread.currentThread().isInterrupted();
+        } finally {
+            Thread.interrupted();
+        }
+
+        assertAll("Already-interrupted caller",
+                () -> assertEquals(0, client.dispatched.get(), "The request is never handed to the client"),
+                () -> assertEquals(0, receivedRequests.get(), "No request reaches the server"),
+                () -> assertFalse(interruptStatusAfterCall,
+                        "The interrupt status is cleared with the exception, as HttpClient.send does"));
+    }
+
+    @Test
+    @DisplayName("positive control: the same call from a thread that is not interrupted is sent and answered")
+    void shouldSendWhenNotInterrupted() throws Exception {
+        String url = serve("200 OK", "2");
+        BackChannelHttp backChannel = new BackChannelHttp(config(), 1024, BackChannelHttp.FIXED_PARSER_CONFIG_ORIGIN);
+        HttpHandler handler = backChannel.validatedHandler(url, FAILURE_CONTEXT);
+        RecordingClient client = new RecordingClient(backChannel.sharedClient(handler));
+        HttpRequest request = handler.requestBuilder().GET().build();
+
+        HttpResponse<String> response = backChannel.send(client, request, FAILURE_CONTEXT);
+
+        assertAll("Caller that is not interrupted",
+                () -> assertEquals(200, response.statusCode(), "The server's status reaches the caller"),
+                () -> assertEquals("{}", response.body(), "The server's body reaches the caller"),
+                () -> assertEquals(1, client.dispatched.get(), "The request is handed to the client once"),
+                () -> assertEquals(1, receivedRequests.get(), "The request reaches the server once"));
+    }
+
+    /**
+     * A client that delegates to the shared client and counts every request handed to it, so a test can tell a
+     * request that was never dispatched from one that was dispatched and then cancelled.
+     */
+    private static final class RecordingClient extends HttpClient {
+
+        private final HttpClient delegate;
+        private final AtomicInteger dispatched = new AtomicInteger();
+
+        private RecordingClient(HttpClient delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public Optional<CookieHandler> cookieHandler() {
+            return delegate.cookieHandler();
+        }
+
+        @Override
+        public Optional<Duration> connectTimeout() {
+            return delegate.connectTimeout();
+        }
+
+        @Override
+        public Redirect followRedirects() {
+            return delegate.followRedirects();
+        }
+
+        @Override
+        public Optional<ProxySelector> proxy() {
+            return delegate.proxy();
+        }
+
+        @Override
+        public SSLContext sslContext() {
+            return delegate.sslContext();
+        }
+
+        @Override
+        public SSLParameters sslParameters() {
+            return delegate.sslParameters();
+        }
+
+        @Override
+        public Optional<Authenticator> authenticator() {
+            return delegate.authenticator();
+        }
+
+        @Override
+        public Version version() {
+            return delegate.version();
+        }
+
+        @Override
+        public Optional<Executor> executor() {
+            return delegate.executor();
+        }
+
+        @Override
+        public <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler)
+                throws IOException, InterruptedException {
+            dispatched.incrementAndGet();
+            return delegate.send(request, responseBodyHandler);
+        }
+
+        @Override
+        public <T> CompletableFuture<HttpResponse<T>> sendAsync(HttpRequest request,
+                HttpResponse.BodyHandler<T> responseBodyHandler) {
+            dispatched.incrementAndGet();
+            return delegate.sendAsync(request, responseBodyHandler);
+        }
+
+        @Override
+        public <T> CompletableFuture<HttpResponse<T>> sendAsync(HttpRequest request,
+                HttpResponse.BodyHandler<T> responseBodyHandler,
+                HttpResponse.PushPromiseHandler<T> pushPromiseHandler) {
+            dispatched.incrementAndGet();
+            return delegate.sendAsync(request, responseBodyHandler, pushPromiseHandler);
+        }
     }
 
     /**

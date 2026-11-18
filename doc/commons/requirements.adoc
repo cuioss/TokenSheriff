@@ -195,8 +195,8 @@ value, and the handler's fixed message is not delivered. The handler has no hook
 mapping belongs to the caller of `send`. The client's discovery, PAR, userinfo and revocation clients send
 through `BackChannelHttp.send`, and the token endpoint client through its own send; each catches that
 `IllegalArgumentException` and fails the call with a `TransportException` whose message is the endpoint's
-failure context and the fixed text `BackChannelHttp.MALFORMED_RESPONSE` (after a success status the token
-endpoint reports it as its post-redemption failure), neither chaining the JDK's exception nor echoing its
+failure context and the fixed text `BackChannelHttp.MALFORMED_RESPONSE` (when its body handler observed a
+success status, the token endpoint reports it as its post-redemption failure), neither chaining the JDK's exception nor echoing its
 message. Request-side and response-side faults are told apart by the documented `HttpClient.sendAsync`
 contract: an `IllegalArgumentException` thrown synchronously, for a request the client refuses before
 sending, is a request-side fault and propagates unchanged; one that completes the exchange exceptionally is

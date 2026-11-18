@@ -190,8 +190,10 @@ Each change below alters what an existing deployment observes:
   the one COMMONS-17 states for every bounded read.
 * **Malformed `Content-Length` on the client** — a back-channel response whose `Content-Length` is not a
   number now fails the client call with a `TransportException` carrying the endpoint's failure context and
-  the fixed text `BackChannelHttp.MALFORMED_RESPONSE` (after a success status the token endpoint reports it
-  as its post-redemption `RedeemedResponseException`). Before, the JDK's `IllegalArgumentException`, whose
+  the fixed text `BackChannelHttp.MALFORMED_RESPONSE` (when its body handler observed a success status, the
+  token endpoint reports it as its post-redemption `RedeemedResponseException`; for a `204` or other no-body
+  reply whose `Content-Length` the JDK refuses before any body handler runs, the status is never observed and
+  the token endpoint reports a pre-redemption failure). Before, the JDK's `IllegalArgumentException`, whose
   message carries the raw header value, escaped the call. An `IllegalArgumentException` the JDK throws
   synchronously from `HttpClient.sendAsync`, for a request it refuses before sending, is a request-side fault
   and still propagates unchanged.
