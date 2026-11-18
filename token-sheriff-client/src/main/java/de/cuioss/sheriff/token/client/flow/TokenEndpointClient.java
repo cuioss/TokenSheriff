@@ -575,6 +575,19 @@ public class TokenEndpointClient {
                 .filter(nonce -> !HeaderValues.containsLineBreakOrNul(nonce));
     }
 
+    /**
+     * Sends one token request with the bounded body handler, recording the status line the handler sees.
+     * <p>
+     * The exchange runs through {@link BackChannelHttp#exchange}, which tells request-side from
+     * response-side faults by the {@link HttpClient#sendAsync} contract. A failure of the exchange that
+     * {@link BackChannelHttp#isMalformedFraming(Throwable)} recognises is the malformed-response failure
+     * ({@link BackChannelHttp#MALFORMED_RESPONSE}):
+     * a {@link RedeemedResponseException} when the body handler recorded a success status, otherwise a
+     * pre-redemption {@link TransportException} — including a {@code 204} whose {@code Content-Length} the
+     * JDK refuses before any body handler runs. An {@link IllegalArgumentException} for a request the
+     * client refuses before sending is a request-side fault and propagates unchanged.
+     * </p>
+     */
     private HttpResponse<String> send(HttpHandler handler, HttpClient client, String body,
             Map<String, String> requestHeaders) {
         HttpRequest.Builder requestBuilder = handler.requestBuilder()
@@ -584,17 +597,11 @@ public class TokenEndpointClient {
         HttpResponse.BodyHandler<String> boundedBody = backChannel.bodyHandler();
         AtomicInteger observedStatus = new AtomicInteger(NO_STATUS);
         try {
-            return client.send(requestBuilder.build(), responseInfo -> {
+            return BackChannelHttp.exchange(client, requestBuilder.build(), responseInfo -> {
                 observedStatus.set(responseInfo.statusCode());
                 return boundedBody.apply(responseInfo);
-            });
+            }, () -> malformedResponse(observedStatus.get()));
         } catch (IOException e) {
-            if (BackChannelHttp.isMalformedFraming(e)) {
-                // Since JDK 27 the refusal of a Content-Length that is not a number is an IOException
-                // (a ProtocolException caused by a NumberFormatException) and must not reach the
-                // generic branch below, which would echo its message, the raw header value.
-                throw malformedResponse(observedStatus.get());
-            }
             LOGGER.debug(e, "Token endpoint request failed: %s", e.getMessage());
             if (HttpStatusFamily.isSuccess(observedStatus.get())) {
                 // The status line was a success before the body read failed (for example a body past
@@ -604,12 +611,6 @@ public class TokenEndpointClient {
                         + observedStatus.get() + ": " + e.getMessage(), e);
             }
             throw new TransportException("Token endpoint request failed: " + e.getMessage(), e);
-        } catch (IllegalArgumentException ignored) {
-            // The JDK client parses Content-Length itself after the body handler returned and refuses a
-            // value that is not a number with this exception, whose message carries the raw header value:
-            // it is neither chained nor reused (CWE-117, CWE-532). The status line was already read, so a
-            // success status still means the grant is redeemed.
-            throw malformedResponse(observedStatus.get());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new TransportException("Token endpoint request interrupted", e);
@@ -617,8 +618,11 @@ public class TokenEndpointClient {
     }
 
     /**
-     * The failure for a response the HTTP client refused as malformed: fixed text only, the JDK's
-     * exception is neither chained nor reused. After a success status the grant is already redeemed.
+     * Builds the failure for a response the JDK client refused as malformed, such as a
+     * {@code Content-Length} that is not a number; the JDK's exception carries the raw header value and is
+     * neither chained nor reused (CWE-117, CWE-532). Only a success status the body handler actually saw
+     * proves the grant redeemed; for a {@code 204} or other no-body reply the JDK refuses the header before
+     * any body handler runs, so the status is never observed and the failure is a pre-redemption one.
      */
     private static TransportException malformedResponse(int observedStatus) {
         LOGGER.debug("Token endpoint response refused by the HTTP client as malformed");

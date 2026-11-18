@@ -181,15 +181,23 @@ public class BearerTokenProducer {
 
     /**
      * Gets comprehensive bearer token validation result with detailed status information.
+     * <p>
+     * The three requirement sets are copied on entry, so the returned result never shares a set with the
+     * caller: a later change to a caller's set, such as a {@code clear()}, does not change the result.
+     * </p>
      *
-     * @param requiredScopes Required scopes for the token
-     * @param requiredRoles Required roles for the token
-     * @param requiredGroups Required groups for the token
+     * @param requiredScopes Required scopes for the token; must not be {@code null} or hold {@code null}
+     * @param requiredRoles Required roles for the token; must not be {@code null} or hold {@code null}
+     * @param requiredGroups Required groups for the token; must not be {@code null} or hold {@code null}
      * @return BearerTokenResult containing detailed validation information
      */
-
     @Timed(value = MetricIdentifier.BEARERTOKEN.VALIDATION, description = "Bearer token validation duration")
     public BearerTokenResult getBearerTokenResult(
+            Set<String> requiredScopes, Set<String> requiredRoles, Set<String> requiredGroups) {
+        return validate(Set.copyOf(requiredScopes), Set.copyOf(requiredRoles), Set.copyOf(requiredGroups));
+    }
+
+    private BearerTokenResult validate(
             Set<String> requiredScopes, Set<String> requiredRoles, Set<String> requiredGroups) {
 
         LOGGER.debug("Validating bearer token with required scopes: %s, roles: %s, groups: %s",

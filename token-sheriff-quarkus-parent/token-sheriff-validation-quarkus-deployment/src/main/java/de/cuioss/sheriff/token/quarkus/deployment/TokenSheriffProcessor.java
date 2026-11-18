@@ -47,13 +47,13 @@ import de.cuioss.tools.logging.LogRecord;
 import de.cuioss.tools.logging.LogRecordModel;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
+import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.arc.deployment.ValidationPhaseBuildItem;
 import io.quarkus.arc.deployment.ValidationPhaseBuildItem.ValidationErrorBuildItem;
 import io.quarkus.deployment.IsDevelopment;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
@@ -147,8 +147,8 @@ public class TokenSheriffProcessor {
      * reflectively: {@link JwtPropertyKeys.ISSUERS#DPOP_SUB_PROPERTIES} is derived from them, and the
      * orphaned-DPoP guard checks exactly that list. This registration is what makes the list derivable in
      * a native build. The runtime jar is not indexed, so the {@code @RegisterForReflection} on
-     * {@code ISSUERS} alone is not enough, and without its fields the list would be empty and the guard
-     * would check nothing.
+     * {@code ISSUERS} alone is not enough: without its fields the derivation would come up short and fail
+     * the initialization of {@code ISSUERS}, and so the startup.
      *
      * @param reflectiveClasses producer for reflective class build items
      */
@@ -304,15 +304,19 @@ public class TokenSheriffProcessor {
      * misconfiguration fails the deployment, with one error per refused scope set naming its declaring class
      * and member. Class-level and method-level {@code @BearerAuth} (merged per bean class as the interceptor
      * merges them) and every {@code @BearerToken} injection point are checked.
+     * <p>
+     * The step scans the bean-archive index, not the combined index: the bean-archive index also holds the
+     * beans ArC generates during the build (for example from a {@code GeneratedBeanBuildItem}), which the
+     * combined index does not, so an invalid scope on a generated bean fails the deployment as well.
      *
      * @param validationPhase  orders this step into the ArC validation phase; not otherwise read
-     * @param combinedIndex    the application's combined Jandex index
+     * @param beanArchiveIndex the bean-archive Jandex index, generated beans included
      * @param validationErrors producer for the deployment errors, one per refused scope set
      */
     @BuildStep
-    public void validateAnnotationScopes(ValidationPhaseBuildItem validationPhase, CombinedIndexBuildItem combinedIndex,
-            BuildProducer<ValidationErrorBuildItem> validationErrors) {
-        List<String> violations = findScopeViolations(combinedIndex.getIndex());
+    public void validateAnnotationScopes(ValidationPhaseBuildItem validationPhase,
+            BeanArchiveIndexBuildItem beanArchiveIndex, BuildProducer<ValidationErrorBuildItem> validationErrors) {
+        List<String> violations = findScopeViolations(beanArchiveIndex.getIndex());
         if (!violations.isEmpty()) {
             validationErrors.produce(new ValidationErrorBuildItem(violations.stream()
                     .map(DeploymentException::new)

@@ -19,6 +19,7 @@ import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import de.cuioss.sheriff.token.client.dpop.DpopProofGenerator;
 import de.cuioss.sheriff.token.client.dpop.SenderConstraint;
+import de.cuioss.sheriff.token.client.internal.BackChannelHttp;
 import de.cuioss.sheriff.token.client.token.TokenResponse;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.test.generator.Generators;
@@ -94,6 +95,8 @@ import static org.junit.jupiter.api.Assertions.*;
 @EnableMockWebServer
 @DisplayName("TokenEndpointClient parse-error sanitization (M8) and use_dpop_nonce retry boundaries")
 class TokenEndpointClientTest {
+
+    private static final String MALFORMED_CONTENT_LENGTH = "12raw34remote56";
 
     /** Cached 2048-bit RSA key pair, generated once for the whole class (DPoP proof material). */
     private static final KeyPair RSA_KEY_PAIR;
@@ -187,6 +190,38 @@ class TokenEndpointClientTest {
 
         assertTrue(thrown.getMessage().startsWith("Failed to parse token endpoint response"),
                 "the rejection must take the existing parse-failure path, but was: " + thrown.getMessage());
+    }
+
+    @Test
+    @DisplayName("a 204 with a Content-Length that is not a number is a pre-redemption malformed-response failure")
+    void shouldReportMalformedContentLengthAfterNoContentAsNotRedeemed(URIBuilder uriBuilder) {
+        moduleDispatcher.respondWithRawContentLength(204, MALFORMED_CONTENT_LENGTH);
+
+        TransportException thrown = redeemExpectingFailure(uriBuilder, null);
+
+        assertAll("malformed no-body response whose status is never observed",
+                () -> assertFalse(thrown instanceof RedeemedResponseException,
+                        "the JDK refuses the header of a 204 before any body handler sees the status, so no "
+                                + "redemption is observed"),
+                () -> assertEquals("Token endpoint request failed: " + BackChannelHttp.MALFORMED_RESPONSE,
+                        thrown.getMessage(), "the failure carries the fixed text only, not an IllegalArgumentException"),
+                () -> assertFalse(thrown.getMessage().contains(MALFORMED_CONTENT_LENGTH),
+                        "the raw header value must not reach the caller"),
+                () -> assertNull(thrown.getCause(), "the JDK exception carrying the raw value is not chained"));
+    }
+
+    @Test
+    @DisplayName("negative control: a 400 with a Content-Length that is not a number is a pre-redemption failure")
+    void shouldReportMalformedContentLengthAfterBadRequestAsNotRedeemed(URIBuilder uriBuilder) {
+        moduleDispatcher.respondWithRawContentLength(400, MALFORMED_CONTENT_LENGTH);
+
+        TransportException thrown = redeemExpectingFailure(uriBuilder, null);
+
+        assertAll("malformed response after an error status",
+                () -> assertFalse(thrown instanceof RedeemedResponseException, "an error status is no redemption"),
+                () -> assertEquals("Token endpoint request failed: " + BackChannelHttp.MALFORMED_RESPONSE,
+                        thrown.getMessage(), "the failure carries the fixed text only"),
+                () -> assertNull(thrown.getCause(), "the JDK exception carrying the raw value is not chained"));
     }
 
     @Test
@@ -758,6 +793,15 @@ class TokenEndpointClientTest {
         /** The status the {@link #errorBody} is served with. */
         private volatile int errorStatus = HTTP_BAD_REQUEST;
 
+        /**
+         * The {@code Content-Length} value written verbatim on a {@code {}} body, or {@code null} for the other
+         * shapes.
+         */
+        private volatile String rawContentLength;
+
+        /** The status the {@link #rawContentLength} response is served with. */
+        private volatile int rawContentLengthStatus;
+
         private static final List<String> DEFAULT_CONTENT_TYPES = List.of("application/json");
 
         /** The {@code Content-Type} lines the success and error bodies are served with. */
@@ -772,6 +816,12 @@ class TokenEndpointClientTest {
         void failWith(int status, String body) {
             this.errorStatus = status;
             this.errorBody = body;
+        }
+
+        /** Serve {@code status} with a {@code Content-Length} of {@code value}, written verbatim, on every call. */
+        void respondWithRawContentLength(int status, String value) {
+            this.rawContentLengthStatus = status;
+            this.rawContentLength = value;
         }
 
         /** Serve a {@code use_dpop_nonce} challenge carrying {@code nonce} on every call. */
@@ -808,6 +858,7 @@ class TokenEndpointClientTest {
             this.successBody = null;
             this.errorBody = null;
             this.errorStatus = HTTP_BAD_REQUEST;
+            this.rawContentLength = null;
             this.contentTypes = DEFAULT_CONTENT_TYPES;
             this.callCounter.set(0);
         }
@@ -825,6 +876,15 @@ class TokenEndpointClientTest {
         @Override
         public Optional<MockResponse> handlePost(RecordedRequest request) {
             callCounter.incrementAndGet();
+            String contentLength = this.rawContentLength;
+            if (contentLength != null) {
+                return Optional.of(new MockResponse.Builder().code(rawContentLengthStatus)
+                        .headers(contentTypeHeaders())
+                        .body("{}")
+                        .removeHeader("Content-Length")
+                        .addHeaderLenient("Content-Length", contentLength)
+                        .build());
+            }
             String error = this.errorBody;
             if (error != null) {
                 return Optional.of(new MockResponse(errorStatus, contentTypeHeaders(), error));

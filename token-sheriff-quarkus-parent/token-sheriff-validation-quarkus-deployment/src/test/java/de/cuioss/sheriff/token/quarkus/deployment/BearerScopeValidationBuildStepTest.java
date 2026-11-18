@@ -19,8 +19,8 @@ import de.cuioss.sheriff.token.commons.http.BearerChallenge;
 import de.cuioss.sheriff.token.quarkus.annotation.BearerAuth;
 import de.cuioss.sheriff.token.quarkus.annotation.BearerToken;
 import de.cuioss.sheriff.token.quarkus.producer.BearerTokenResult;
+import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
 import io.quarkus.arc.deployment.ValidationPhaseBuildItem.ValidationErrorBuildItem;
-import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import jakarta.enterprise.inject.spi.DeploymentException;
 import org.jboss.jandex.Index;
 import org.junit.jupiter.api.DisplayName;
@@ -240,8 +240,8 @@ class BearerScopeValidationBuildStepTest {
                 InvalidInjectionPointScope.class, ScopeUnionOverBound.class);
         List<ValidationErrorBuildItem> produced = new ArrayList<>();
 
-        new TokenSheriffProcessor().validateAnnotationScopes(null, new CombinedIndexBuildItem(index, index),
-                produced::add);
+        new TokenSheriffProcessor().validateAnnotationScopes(null,
+                new BeanArchiveIndexBuildItem(index, index, Set.of()), produced::add);
 
         assertEquals(1, produced.size(), "the refusals must be produced as one validation error item");
         List<Throwable> errors = produced.getFirst().getValues();
@@ -261,8 +261,8 @@ class BearerScopeValidationBuildStepTest {
         Index index = Index.of(ValidScopesResource.class, ValidInjectionPoint.class);
         List<ValidationErrorBuildItem> produced = new ArrayList<>();
 
-        new TokenSheriffProcessor().validateAnnotationScopes(null, new CombinedIndexBuildItem(index, index),
-                produced::add);
+        new TokenSheriffProcessor().validateAnnotationScopes(null,
+                new BeanArchiveIndexBuildItem(index, index, Set.of()), produced::add);
 
         assertEquals(List.of(), produced, "valid scopes must not fail the deployment");
     }

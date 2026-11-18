@@ -247,7 +247,8 @@ total would exceed the ceiling, so the full body is never materialised first.
 | Memory bound
 | While the body streams, both policies keep the bytes read so far in one array that grows by doubling,
   and ignore every chunk that arrives after the first crossing. The array never exceeds the ceiling and is
-  at most twice the bytes received, or the first allocation when that is larger. During a growth step the
+  at most twice the bytes received, or the first allocation (1024 bytes, or the ceiling when that is
+  smaller) when that is larger. During a growth step the
   old and the new array are both live, so the memory held while streaming peaks below twice the ceiling
   plus the buffers of the delivery in flight; the object count grows with the logarithm of the body size. Completion is not covered by that
   bound: the held bytes are assembled into the result and, for the string variant, decoded into a string

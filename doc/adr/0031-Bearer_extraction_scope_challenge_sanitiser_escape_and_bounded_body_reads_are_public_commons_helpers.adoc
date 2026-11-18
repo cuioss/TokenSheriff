@@ -188,6 +188,13 @@ Each change below alters what an existing deployment observes:
 * **Client body buffer** — the client's back-channel reads no longer collect the body in a
   `ByteArrayOutputStream`; they keep it in the shared handler's one doubling array, so their memory bound is
   the one COMMONS-17 states for every bounded read.
+* **Malformed `Content-Length` on the client** — a back-channel response whose `Content-Length` is not a
+  number now fails the client call with a `TransportException` carrying the endpoint's failure context and
+  the fixed text `BackChannelHttp.MALFORMED_RESPONSE` (after a success status the token endpoint reports it
+  as its post-redemption `RedeemedResponseException`). Before, the JDK's `IllegalArgumentException`, whose
+  message carries the raw header value, escaped the call. An `IllegalArgumentException` the JDK throws
+  synchronously from `HttpClient.sendAsync`, for a request it refuses before sending, is a request-side fault
+  and still propagates unchanged.
 * **Logout freshness window** — `LogoutTokenValidator`'s builder refuses a freshness window longer than
   `LogoutTokenValidator.MAX_FRESHNESS_WINDOW` (100 years); ADR-0029 records that bound in its amendment
   "`iat` / `exp` reading and the freshness window are bounded".
@@ -308,16 +315,15 @@ received buffer, and its own read of an unparsable `Content-Length` threw a `Num
   its messages stay at `build()`.
 * **The body handler bounds its own work.** The bytes read so far are kept in one array that grows by
   doubling, so the object count grows with the logarithm of the body size, not with the number of buffers.
-  The array never exceeds the ceiling and is at most twice the bytes received, or the first allocation when
-  that is larger. During a growth step the old and the new array are both live, so the memory held while
-  streaming peaks below twice the ceiling plus the buffers of the delivery in flight; this is the one memory
-  bound of the handler, stated identically in COMMONS-17 and the transport specification. A capacity test pins
-  the retained array's capacity after each delivery; the transient peak while a growth step copies is a
-  property of the allocation logic.
+  The array never exceeds the ceiling and is at most twice the bytes received, or the first allocation
+  (1024 bytes, or the ceiling when that is smaller) when that is larger. During a growth step the old and
+  the new array are both live, so the memory held while streaming peaks below twice the ceiling plus the
+  buffers of the delivery in flight; this is the one memory bound of the handler, stated identically in
+  COMMONS-17 and the transport specification. A capacity test pins the retained array's capacity after each
+  delivery; the transient peak while a growth step copies is a property of the allocation logic.
   The byte ceiling on the assembled body and the `OverLimitPolicy` behaviour are unchanged. The cost of the
   decision is that the worst-case streaming peak of a read of a remote response is about twice what one
-  array of the ceiling costs. It conflicts with the PLAN-09 specification, which kept COMMONS-17's bound of
-  the ceiling plus one in-flight chunk; this decision replaces that bound. Under `FAIL`, when the handler observes a `Content-Length`
+  array of the ceiling costs. Under `FAIL`, when the handler observes a `Content-Length`
   that is not a valid number, it cancels the subscription without requesting a byte and fails the body
   future with an `IOException` carrying a fixed message that does not echo the header value. That guarantee
   is the handler's own; whether the surrounding client reaches the handler, and whether it parses the header
@@ -325,7 +331,12 @@ received buffer, and its own read of an unparsable `Content-Length` threw a `Num
   own parse, so the fixed failure is delivered by the caller of `send`: `BackChannelHttp.send`, through
   which the client's discovery, PAR, userinfo and revocation clients send, and the token endpoint client's
   own send map the JDK's `IllegalArgumentException` to a `TransportException` with a fixed text, without
-  chaining it. The validation-side discovery and JWKS reads
+  chaining it. Request-side and response-side faults are told apart by the documented
+  `HttpClient.sendAsync` contract: a request the client refuses is thrown synchronously and propagates
+  unchanged, so it is never reported as a malformed response, while a response failure completes the future
+  exceptionally and is mapped — including a `204` or other no-body reply, whose `Content-Length` the JDK
+  parses before any body handler runs. For such a reply the token endpoint never observes the status, so it
+  reports the failure as a pre-redemption `TransportException`. The validation-side discovery and JWKS reads
   hand the handler to cui-http, whose adapter performs the send, so no mapping is made for them here.
 
 === Consequences

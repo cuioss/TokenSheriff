@@ -242,7 +242,7 @@ class EgressPolicyTest {
             var builder = EgressPolicy.builder();
 
             var exception = assertThrows(IllegalArgumentException.class, () -> builder.allowedHost(null));
-            assertEquals(EgressHostValidator.NULL_ENTRY, exception.getMessage());
+            assertEquals(EgressHostValidator.Refusal.NULL_ENTRY.text(), exception.getMessage());
         }
 
         @ParameterizedTest(name = "refuses [{0}]")

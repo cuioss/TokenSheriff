@@ -121,7 +121,7 @@ class WellKnownConfigTest {
 
         var exception = assertThrows(IllegalArgumentException.class, () -> builder.allowedEgressHost(null),
                 "a null entry must be refused at the setter instead of being ignored");
-        assertEquals(EgressHostValidator.NULL_ENTRY, exception.getMessage());
+        assertEquals(EgressHostValidator.Refusal.NULL_ENTRY.text(), exception.getMessage());
     }
 
     @ParameterizedTest(name = "refuses [{0}]")
