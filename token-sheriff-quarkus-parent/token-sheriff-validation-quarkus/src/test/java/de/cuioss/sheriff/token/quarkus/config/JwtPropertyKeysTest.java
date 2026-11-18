@@ -334,20 +334,18 @@ class JwtPropertyKeysTest {
     class DpopSubPropertyList {
 
         @Test
-        @DisplayName("should hold exactly the four dpop sub-properties, sorted and each once")
-        void shouldHoldExactlyTheFourSubPropertiesSorted() {
+        @DisplayName("should hold every dpop sub-property declared on ISSUERS, sorted and each once")
+        void shouldHoldEveryDpopSubPropertySortedAndEachOnce() {
             List<String> subProperties = JwtPropertyKeys.ISSUERS.DPOP_SUB_PROPERTIES;
             List<String> sorted = new ArrayList<>(subProperties);
-            Collections.sort(sorted);
+            sorted.sort(Comparator.naturalOrder());
+            Set<String> expected = new TreeSet<>(declaredIssuerKeysUnder(JwtPropertyKeys.ISSUERS.DPOP_BASE));
+            expected.remove(JwtPropertyKeys.ISSUERS.DPOP_ENABLED);
 
             assertAll("DPoP sub-property list",
-                    () -> assertEquals(Set.of(
-                                    JwtPropertyKeys.ISSUERS.DPOP_REQUIRED,
-                                    JwtPropertyKeys.ISSUERS.DPOP_PROOF_MAX_AGE_SECONDS,
-                                    JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_SIZE,
-                                    JwtPropertyKeys.ISSUERS.DPOP_NONCE_CACHE_TTL_SECONDS),
-                            Set.copyOf(subProperties),
-                            "existing callers see the same keys as before the derivation"),
+                    () -> assertEquals(expected, Set.copyOf(subProperties),
+                            "the list must hold exactly the dpop.* keys declared on ISSUERS, "
+                                    + "without the dpop base and the enabled switch"),
                     () -> assertEquals(subProperties.size(), Set.copyOf(subProperties).size(),
                             "the list must not repeat a key: " + subProperties),
                     () -> assertEquals(sorted, subProperties,

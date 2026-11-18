@@ -22,10 +22,7 @@ import lombok.experimental.UtilityClass;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Constants for JWT property keys used in the Token-Sheriff Quarkus module.
@@ -76,7 +73,7 @@ public final class JwtPropertyKeys {
                 }
             }
         }
-        Collections.sort(keys);
+        keys.sort(Comparator.naturalOrder());
         return List.copyOf(keys);
     }
 
@@ -393,9 +390,11 @@ public final class JwtPropertyKeys {
          * <p>
          * The list is derived once, when this class is initialized, from the {@code dpop.*} key
          * definitions of this class: every {@code public static final String} whose value starts with
-         * {@link #DPOP_BASE}, without {@link #DPOP_BASE} itself and {@link #DPOP_ENABLED}. A configured
-         * value of any of them on an issuer whose DPoP validation is not enabled fails startup instead of
-         * being ignored, so a new {@code dpop.*} key is covered as soon as it is declared here.
+         * {@link #DPOP_BASE}, without {@link #DPOP_BASE} itself and {@link #DPOP_ENABLED}. On an enabled
+         * issuer whose DPoP validation is not enabled, the orphaned-DPoP guard rejects a configured value of
+         * any of them and fails startup instead of ignoring it, so a new {@code dpop.*} key is covered as soon
+         * as it is declared here. A disabled issuer is skipped before that guard runs, so its {@code dpop.*}
+         * values are not checked.
          * </p>
          */
         public static final List<String> DPOP_SUB_PROPERTIES = Collections.unmodifiableList(
