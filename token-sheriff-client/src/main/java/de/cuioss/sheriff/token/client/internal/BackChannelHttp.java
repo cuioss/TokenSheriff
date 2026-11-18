@@ -30,6 +30,7 @@ import org.jspecify.annotations.Nullable;
 
 import javax.net.ssl.SSLContext;
 import java.io.IOException;
+import java.net.ProtocolException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -108,7 +109,8 @@ import java.util.concurrent.ConcurrentMap;
  *       wraps the body handler to observe the status line, maps the same exception in its own send. The
  *       JDK HTTP/1.1 client parses a response's {@code Content-Length} itself, after the body handler
  *       returned, and refuses a value that is not a number with an {@link IllegalArgumentException}
- *       carrying the raw header value. The send maps that exception to a {@link TransportException} with
+ *       carrying the raw header value (a {@link ProtocolException} caused by a
+ *       {@link NumberFormatException} further down its cause chain since JDK 27, see {@link #isMalformedFraming(Throwable)}). The send maps that exception to a {@link TransportException} with
  *       the failure context and the fixed text {@value #MALFORMED_RESPONSE}; the JDK's exception is
  *       neither chained nor echoed, because its message is remote content.</li>
  * </ul>
@@ -131,6 +133,37 @@ public final class BackChannelHttp {
      * status apart — reports the same text.
      */
     public static final String MALFORMED_RESPONSE = "the HTTP client refused the response as malformed";
+
+    /** Bound of the cause-chain walk of {@link #isMalformedFraming(Throwable)}. */
+    private static final int MAX_CAUSE_DEPTH = 8;
+
+    /**
+     * Tells whether {@code failure} is the JDK HTTP client's refusal of a response whose
+     * {@code Content-Length} is not a number. Up to JDK 26 the client throws an
+     * {@link IllegalArgumentException}; since JDK 27 it throws a {@link ProtocolException} whose cause chain ends in
+     * a {@link ProtocolException} caused by the {@link NumberFormatException}. Both carry the raw header value in their message, so a caller
+     * that recognises either maps it to a fixed text and never chains or echoes it. Any other
+     * {@link ProtocolException} is a different failure and is not matched.
+     *
+     * @param failure the exception thrown out of {@link HttpClient#send}; may be {@code null}
+     * @return {@code true} if it is the malformed {@code Content-Length} refusal
+     */
+    public static boolean isMalformedFraming(Throwable failure) {
+        if (failure instanceof IllegalArgumentException) {
+            return true;
+        }
+        // JDK 27 wraps it: the ProtocolException thrown by send has the ProtocolException of the
+        // Content-Length parser as its cause, and that one has the NumberFormatException. The walk
+        // is bounded, so a cyclic cause chain cannot loop.
+        Throwable current = failure;
+        for (int depth = 0; current != null && depth < MAX_CAUSE_DEPTH; depth++) {
+            if (current instanceof ProtocolException && current.getCause() instanceof NumberFormatException) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
 
     /**
      * Bound origin for the back-channel clients (token, PAR, userinfo, revocation) that build their
@@ -370,7 +403,10 @@ public final class BackChannelHttp {
         HttpResponse.BodyHandler<String> boundedBody = bodyHandler();
         try {
             return client.send(request, boundedBody);
-        } catch (IllegalArgumentException ignored) {
+        } catch (IOException | IllegalArgumentException e) {
+            if (!isMalformedFraming(e)) {
+                throw e;
+            }
             // Deliberately neither chained nor reused: the JDK's message carries the raw header value.
             LOGGER.debug("The HTTP client refused the response as malformed");
             throw new TransportException(failureContext + ": " + MALFORMED_RESPONSE);

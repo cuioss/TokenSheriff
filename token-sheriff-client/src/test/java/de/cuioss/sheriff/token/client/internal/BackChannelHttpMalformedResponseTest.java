@@ -33,6 +33,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetAddress;
+import java.net.ProtocolException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
@@ -174,11 +175,37 @@ class BackChannelHttpMalformedResponseTest {
         HttpRequest request = get(handler);
         HttpResponse.BodyHandler<String> bodyHandler = backChannel.bodyHandler();
 
-        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
-                () -> client.send(request, bodyHandler));
+        // IllegalArgumentException up to JDK 26, ProtocolException caused by a NumberFormatException since JDK 27
+        Exception failure = assertThrows(Exception.class, () -> client.send(request, bodyHandler));
+
+        assertTrue(BackChannelHttp.isMalformedFraming(failure), "The JDK refuses it as malformed framing");
 
         String text = failure.getMessage() + " " + (failure.getCause() == null ? "" : failure.getCause().getMessage());
         assertTrue(text.contains(RAW_VALUE), "Without the mapping the JDK exception carries the raw header value");
+    }
+
+    @Test
+    @DisplayName("should recognise the JDK's refusal of a Content-Length that is not a number, on every JDK")
+    void shouldRecogniseMalformedFramingOfEveryJdk() {
+        ProtocolException parser = new ProtocolException("invalid \"Content-Length\": " + RAW_VALUE);
+        parser.initCause(new NumberFormatException(RAW_VALUE));
+        ProtocolException wrapped = new ProtocolException("invalid \"Content-Length\": " + RAW_VALUE);
+        wrapped.initCause(parser);
+        ProtocolException unrelated = new ProtocolException("other protocol error");
+        unrelated.initCause(new IOException("connection reset"));
+
+        assertAll("Malformed framing",
+                () -> assertTrue(BackChannelHttp.isMalformedFraming(new IllegalArgumentException(RAW_VALUE)),
+                        "The IllegalArgumentException of JDK 26 and earlier"),
+                () -> assertTrue(BackChannelHttp.isMalformedFraming(parser),
+                        "A ProtocolException caused by a NumberFormatException"),
+                () -> assertTrue(BackChannelHttp.isMalformedFraming(wrapped),
+                        "JDK 27: send's ProtocolException wraps the parser's, which carries the NumberFormatException"),
+                () -> assertFalse(BackChannelHttp.isMalformedFraming(unrelated),
+                        "A ProtocolException of another cause is a different failure"),
+                () -> assertFalse(BackChannelHttp.isMalformedFraming(new IOException("connection reset")),
+                        "Other IOExceptions are not malformed framing"),
+                () -> assertFalse(BackChannelHttp.isMalformedFraming(null), "Null is not malformed framing"));
     }
 
     @Test
