@@ -323,9 +323,10 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
 
     /**
      * Package-private test seam, an {@link AtomicReference} holding the action an initial-load retry
-     * attempt runs right before it claims {@link #fetchInFlight}; it holds a no-op otherwise. A test
-     * sets its own action to complete another fetch at exactly that point without a sleep, to prove
-     * the eligibility re-check runs after the claim (see {@link #performInitialLoadRetryCycle(long)}).
+     * attempt runs right before its combined eligibility check and claim of {@link #fetchInFlight}; it
+     * holds a no-op otherwise. A test sets its own action to complete another fetch at exactly that
+     * point without a sleep, to prove the eligibility check is not taken ahead of that critical section
+     * (see {@link #performInitialLoadRetryCycle(long)}).
      */
     final AtomicReference<Runnable> beforeInitialLoadRetryClaim = new AtomicReference<>(() -> {
     });
@@ -1374,10 +1375,10 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
 
     /**
      * One retry attempt of a failed initial load. The attempt runs
-     * {@link #performInitialLoadRetryCycle(long)}: it takes the in-flight guard first, then re-checks
-     * under {@link #lifecycleLock}, while it holds the guard, that a retry is still wanted, and only then
-     * runs one regular refresh cycle (which re-resolves a failed discovery and never publishes
-     * {@link LoaderStatus#LOADING}). An attempt that became pending before a terminal rejection, a
+     * {@link #performInitialLoadRetryCycle(long)}: under {@link #lifecycleLock} it checks that a retry is
+     * still wanted and, only then, claims the in-flight guard in the same critical section, leaving the
+     * guard untouched when the attempt is ineligible; a claimed attempt runs one regular refresh cycle
+     * (which re-resolves a failed discovery and never publishes {@link LoaderStatus#LOADING}). An attempt that became pending before a terminal rejection, a
      * periodic cycle that installed keys or a {@link #close()} therefore runs no cycle. It then schedules
      * the next attempt with the doubled delay, also when the cycle threw; the scheduling applies the same
      * condition, so the attempts stop by themselves. Attempts are strictly sequential, since each
@@ -1396,33 +1397,33 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
     }
 
     /**
-     * The refresh cycle of one initial-load retry attempt, in a fixed order: the in-flight guard first,
-     * then the eligibility re-check of {@link #isInitialLoadRetryWanted(long)} under
-     * {@link #lifecycleLock} while the guard is held, then the cycle. A periodic cycle or an unknown-kid
-     * fetch needs the same guard to install keys or publish {@link LoaderStatus#ERROR}, so once the
-     * attempt holds it the check cannot go stale before the cycle starts, and a fetch that completed
-     * before the claim is seen by the check, which then releases the guard without a cycle. When another
-     * fetch holds the guard, the attempt skips its cycle.
+     * The refresh cycle of one initial-load retry attempt. The eligibility check of
+     * {@link #isInitialLoadRetryWanted(long)} and the claim of the in-flight guard are one critical
+     * section under {@link #lifecycleLock}: only a wanted attempt claims the guard, by a non-blocking
+     * compare-and-set, so an ineligible attempt never touches it. A periodic cycle or an unknown-kid
+     * fetch needs the same guard to install keys or publish {@link LoaderStatus#ERROR}, so a fetch that
+     * completed before the critical section is seen by the check, and a fetch that claimed the guard
+     * before it makes the claim fail; the attempt then skips its cycle. A successful claim releases
+     * {@link #lifecycleLock} before the cycle runs, and the guard is released when the cycle ends.
      *
      * @param startEpoch the {@link #epoch} of the initialization whose initial load failed
      */
     private void performInitialLoadRetryCycle(long startEpoch) {
         beforeInitialLoadRetryClaim.get().run();
-        if (!fetchInFlight.compareAndSet(false, true)) {
-            LOGGER.debug("Skipping an initial-load retry cycle, another JWKS fetch is in flight");
-            return;
+        lifecycleLock.lock();
+        try {
+            if (!isInitialLoadRetryWanted(startEpoch)) {
+                return;
+            }
+            if (!fetchInFlight.compareAndSet(false, true)) {
+                LOGGER.debug("Skipping an initial-load retry cycle, another JWKS fetch is in flight");
+                return;
+            }
+        } finally {
+            lifecycleLock.unlock();
         }
         try {
-            boolean wanted;
-            lifecycleLock.lock();
-            try {
-                wanted = isInitialLoadRetryWanted(startEpoch);
-            } finally {
-                lifecycleLock.unlock();
-            }
-            if (wanted) {
-                runRefreshCycle(startEpoch);
-            }
+            runRefreshCycle(startEpoch);
         } finally {
             fetchInFlight.set(false);
         }
@@ -1526,8 +1527,9 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * <p>
      * The cycle takes the in-flight guard shared with the unknown-kid fetch first. When another fetch
      * holds it, the cycle skips its fetch and is not counted as a failed cycle. The initial-load retry
-     * does not come through here: {@link #performInitialLoadRetryCycle(long)} takes the same guard first,
-     * then re-checks its eligibility while holding it, then runs the cycle.
+     * does not come through here: {@link #performInitialLoadRetryCycle(long)} checks its eligibility and
+     * claims the same guard in one critical section, leaves the guard untouched when it is ineligible,
+     * and then runs the cycle.
      *
      * @param cycleEpoch the {@link #epoch} of the generation this cycle belongs to
      */

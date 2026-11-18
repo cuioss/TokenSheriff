@@ -39,21 +39,21 @@ import static de.cuioss.sheriff.token.validation.jwks.http.HttpJwksLoaderInitial
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Order of the opt-in initial-load retry of {@link HttpJwksLoader}: an attempt claims the in-flight guard
- * first and re-checks its eligibility only while it holds the guard. A periodic cycle that completes
- * between the moment an attempt becomes due and the moment it claims the guard is therefore seen by the
- * re-check, and the attempt fetches nothing.
+ * Order of the opt-in initial-load retry of {@link HttpJwksLoader}: an attempt checks its eligibility and
+ * claims the in-flight guard as one step, and an ineligible attempt leaves the guard free. A periodic
+ * cycle that completes between the moment an attempt becomes due and that step is therefore seen by the
+ * eligibility check, and the attempt fetches nothing.
  * <p>
  * The periodic cycle is placed at exactly that point through the package-private seam
- * {@code HttpJwksLoader#beforeInitialLoadRetryClaim}, whose action runs right before the claim, and the
- * {@link RecordingScheduler} of {@link HttpJwksLoaderInitialRetryTest}, whose recorded periodic task the
- * seam runs on the attempt's own thread, so no sleep is involved. Were the eligibility check moved back
- * in front of the claim, it would run before the seam and the attempt would fetch after the periodic
- * cycle had installed keys or published {@code ERROR}; both interleaving tests fail on that order.
+ * {@code HttpJwksLoader#beforeInitialLoadRetryClaim}, whose action runs right before the combined check
+ * and claim, and the {@link RecordingScheduler} of {@link HttpJwksLoaderInitialRetryTest}, whose recorded
+ * periodic task the seam runs on the attempt's own thread, so no sleep is involved. Were the eligibility
+ * check moved in front of the seam, the attempt would fetch after the periodic cycle had installed keys
+ * or published {@code ERROR}; both interleaving tests fail on that order.
  */
 @EnableTestLogger
 @EnableMockWebServer
-@DisplayName("HttpJwksLoader initial-load retry claims the in-flight guard before it re-checks eligibility")
+@DisplayName("HttpJwksLoader initial-load retry checks eligibility and claims the in-flight guard as one step")
 class HttpJwksLoaderInitialRetryGuardOrderTest {
 
     private static final String WELL_KNOWN_PATH = "/.well-known/openid-configuration";
