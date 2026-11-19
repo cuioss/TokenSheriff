@@ -47,13 +47,13 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Tests that {@link BackChannelHttp#send} maps an {@link IllegalArgumentException} to the malformed-response
  * failure only when it fails the exchange: a request the JDK HTTP client refuses before sending is thrown
- * synchronously by {@link HttpClient#sendAsync}, a request-side fault that reaches the caller unchanged as
- * {@link IllegalArgumentException}.
+ * synchronously by {@link HttpClient#sendAsync}, a request-side fault that reaches the caller as the
+ * {@link IllegalArgumentException} the client threw.
  * <p>
  * The refused request is hand-built: it carries the restricted {@code Connection} header, which
  * {@link HttpRequest.Builder} refuses to set, so only a custom {@link HttpRequest} can hand it to the client.
  * The client refuses it while preparing the exchange, before any byte is written. The positive control sends a
- * valid request to a loopback server whose {@code Content-Length} is not a number and still sees the fixed
+ * valid request to a loopback server whose {@code Content-Length} is not a number and sees the fixed
  * {@link BackChannelHttp#MALFORMED_RESPONSE} failure.
  * <p>
  * A calling thread that is already interrupted sends nothing: the call throws {@link InterruptedException}

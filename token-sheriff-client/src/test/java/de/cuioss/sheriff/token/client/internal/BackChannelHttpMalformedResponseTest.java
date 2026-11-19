@@ -177,7 +177,7 @@ class BackChannelHttpMalformedResponseTest {
     }
 
     @Test
-    @DisplayName("positive control: a valid Content-Length is read unchanged")
+    @DisplayName("positive control: a response with a valid Content-Length reaches the caller with its status and body")
     void shouldReadValidResponse() throws Exception {
         String url = serve(response(200, "2"));
         BackChannelHttp backChannel = new BackChannelHttp(config(), 1024, BackChannelHttp.FIXED_PARSER_CONFIG_ORIGIN);
