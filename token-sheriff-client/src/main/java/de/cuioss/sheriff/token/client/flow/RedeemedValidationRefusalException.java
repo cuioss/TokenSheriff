@@ -39,8 +39,8 @@ import java.util.Objects;
 // (TokenValidationException and its ancestors); this type adds exactly one level to it. The subtype
 // relation is what makes the post-redemption signal a TokenValidationException for every catch block,
 // assertThrows and documented @throws that names that type, and what gives it the EventCategory-driven
-// RFC 9457 mapping at an HTTP edge; a flattened hierarchy would take it out of consumer
-// catch (TokenValidationException) blocks.
+// RFC 9457 mapping at an HTTP edge; a flattened hierarchy would take it out of every consumer
+// catch block for TokenValidationException.
 @SuppressWarnings("java:S110")
 public class RedeemedValidationRefusalException extends TokenValidationException
         implements RedeemedRefreshFailure {

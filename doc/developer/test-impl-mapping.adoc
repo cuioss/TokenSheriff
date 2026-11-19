@@ -520,4 +520,6 @@ defect in this document. The same holds for the fixtures that are not test class
 each module table.
 
 The mapping is kept by hand. Its check is a search of this document for every test class and
-every fixture the pull request adds, moves, renames or splits; each must be found.
+every fixture the pull request adds, moves, renames or splits; each must be found in the section of
+its module, naming its test package where that differs from the production package. After a rename
+or a move, the search for the old name must find no entry.

@@ -38,7 +38,7 @@ import java.util.Objects;
 // (ClientProtocolException and its ancestors); this type adds exactly one level to it. The subtype
 // relation is what makes the post-redemption signal a ClientProtocolException for every catch block,
 // assertThrows and documented @throws that names that type; a flattened hierarchy would take it out of
-// consumer catch (ClientProtocolException) blocks.
+// every consumer catch block for ClientProtocolException.
 @SuppressWarnings("java:S110")
 public class RedeemedScopeRefusalException extends ClientProtocolException implements RedeemedRefreshFailure {
 
