@@ -260,8 +260,8 @@ class BearerTokenProducerTest {
     }
 
     @Test
-    @DisplayName("Should keep the result unchanged when the caller clears its requirement sets afterwards")
-    void resultUnchangedAfterCallerClearsRequirementSets() {
+    @DisplayName("The result is independent of requirement sets the caller clears afterwards")
+    void resultIsIndependentOfCallerRequirementSets() {
         BearerTokenResult result = scopeViolationFor(new HashSet<>(Set.of("admin", "write")),
                 new HashSet<>(Set.of("reader")), new HashSet<>(Set.of("staff")), true);
 
