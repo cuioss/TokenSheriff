@@ -43,19 +43,18 @@ import java.io.Serial;
  * successor, but the credential is dead. Everything else there is
  * {@link RefreshFailureClassification.Kind#PRE_REDEMPTION}.
  * <p>
- * It extends {@link TransportException} so every existing caller and every documented
- * {@code @throws TransportException} contract keeps holding unchanged; only a caller that needs the
- * pre-/post-redemption distinction catches this narrower type.
+ * It is a {@link TransportException}: a {@code catch (TransportException)} catches it and a documented
+ * {@code @throws TransportException} covers it. A caller that needs the pre-/post-redemption
+ * distinction catches this narrower type.
  *
  * @since 1.0
  * @author Oliver Wolff
  */
-// java:S110 — the inheritance depth is inherited wholesale from the library's existing exception
-// taxonomy (TransportException and its ancestors); this type adds exactly one level to it.
-// The subtype relation is load-bearing for source compatibility: it is what lets the post-redemption
-// signal be added without touching a single existing catch block, assertThrows or documented
-// @throws. Flattening the hierarchy to satisfy a parent-count heuristic would break consumer catch
-// (TransportException) blocks — a public API break this design exists to avoid.
+// java:S110 — the inheritance depth comes from the library's exception taxonomy (TransportException
+// and its ancestors); this type adds exactly one level to it. The subtype relation is what makes the
+// post-redemption signal a TransportException for every catch block, assertThrows and documented
+// @throws that names that type; a flattened hierarchy would take it out of consumer
+// catch (TransportException) blocks.
 @SuppressWarnings("java:S110")
 public class RedeemedResponseException extends TransportException {
 

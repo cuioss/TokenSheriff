@@ -646,9 +646,9 @@ public class TokenEndpointClient {
 
     // Every branch below runs only after HttpStatusFamily.isSuccess(...) held for the response, so the
     // authorization server has already accepted the request and consumed the presented grant. Each
-    // therefore raises RedeemedResponseException — a TransportException subtype, so every existing
-    // caller and every documented @throws TransportException contract is unchanged — which is what
-    // lets a caller that must fail closed tell a post-redemption failure from a pre-redemption one.
+    // therefore raises RedeemedResponseException — a TransportException subtype, caught by a
+    // catch (TransportException) and covered by a documented @throws TransportException — which is
+    // what lets a caller that must fail closed tell a post-redemption failure from a pre-redemption one.
     //
     // java:S2589 — body is non-null by every current caller/handler wiring, but the guard is kept
     // (consistent with the equivalent parse() entry guards in UserInfoClient / ParClient) as

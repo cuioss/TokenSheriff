@@ -49,20 +49,20 @@ import java.util.Optional;
  *       there is no token to revoke.</li>
  * </ul>
  * <p>
- * It extends {@link ClientProtocolException}, so every existing
- * {@code catch (ClientProtocolException)} and every documented {@code @throws ClientProtocolException}
- * contract keeps holding unchanged. It lives beside the family rather than in the flow package so the
- * {@code token} package keeps no dependency on {@code flow}, which already depends on {@code token}.
+ * It is a {@link ClientProtocolException}: a {@code catch (ClientProtocolException)} catches it and a
+ * documented {@code @throws ClientProtocolException} covers it. It lives beside the family rather than
+ * in the flow package so the {@code token} package has no dependency on {@code flow}, which depends on
+ * {@code token}.
  *
  * @since 1.0
  * @author Oliver Wolff
  * @see <a href="https://datatracker.ietf.org/doc/html/draft-ietf-oauth-security-topics">OAuth 2.0 Security BCP</a>
  */
-// java:S110 — the inheritance depth is inherited wholesale from the library's existing exception
-// taxonomy (ClientProtocolException and its ancestors); this type adds exactly one level to it, exactly
-// as RedeemedScopeRefusalException does. The subtype relation is load-bearing for source compatibility:
-// it is what lets the family signal get its own type without touching a single existing catch block,
-// assertThrows or documented @throws.
+// java:S110 — the inheritance depth comes from the library's exception taxonomy
+// (ClientProtocolException and its ancestors); this type adds exactly one level to it, exactly as
+// RedeemedScopeRefusalException does. The subtype relation is what makes the family signal a
+// ClientProtocolException for every catch block, assertThrows and documented @throws that names that
+// type.
 @SuppressWarnings("java:S110")
 public class RefreshTokenFamilyRevokedException extends ClientProtocolException {
 

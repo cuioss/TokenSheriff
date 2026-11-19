@@ -26,11 +26,10 @@ import java.util.Objects;
  * name the subject the session is bound to — raised after the authorization server had already redeemed
  * the presented refresh token.
  * <p>
- * It extends {@link IllegalStateException} and keeps the original refusal's message, with the refusal
- * itself as its cause, so every existing {@code catch (IllegalStateException)} and every documented
- * {@code @throws IllegalStateException} contract keeps holding unchanged. Only a caller that needs the
- * pre-/post-redemption distinction reads the additional {@link #redemption()}, normally through
- * {@link RefreshFlow#classify(Throwable)}.
+ * It is an {@link IllegalStateException} carrying the original refusal's message, with the refusal
+ * itself as its cause: a {@code catch (IllegalStateException)} catches it and a documented
+ * {@code @throws IllegalStateException} covers it. A caller that needs the pre-/post-redemption
+ * distinction reads {@link #redemption()}, normally through {@link RefreshFlow#classify(Throwable)}.
  *
  * @since 1.0
  * @author Oliver Wolff
