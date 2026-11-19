@@ -130,7 +130,7 @@ export async function goToStatusConfig(page) {
 export async function goToTokenDebugger(page) {
   await navigateToDevUIPage(page, 'Token Debugger');
   await expect(
-    page.locator(PAGES['Token Debugger']).getByTestId('jwt-debugger-container'),
+    page.locator(PAGES['Token Debugger']).locator(CONSTANTS.SELECTORS.JWT_DEBUGGER_CONTAINER),
   ).toBeVisible({ timeout: CONSTANTS.TIMEOUTS.ELEMENT_VISIBLE });
   testLogger.info('Navigation', 'Token Debugger rendered (jwt-debugger-container visible)');
 }
