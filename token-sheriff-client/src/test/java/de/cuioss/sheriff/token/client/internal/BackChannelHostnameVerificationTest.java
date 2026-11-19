@@ -253,8 +253,8 @@ class BackChannelHostnameVerificationTest {
     }
 
     @Test
-    @DisplayName("exchange() is still refused with verifyHostname(false) when the issuer is untrusted")
-    void shouldStillRefuseUntrustedIssuerWhenVerificationDisabled(URIBuilder uriBuilder) throws Exception {
+    @DisplayName("exchange() is refused with verifyHostname(false) when the issuer is untrusted")
+    void shouldRefuseUntrustedIssuerWhenVerificationDisabled(URIBuilder uriBuilder) throws Exception {
         // Arrange — trust an unrelated certificate, so chain validation must fail on its own merits
         installClientTrustStore(UNRELATED_CERTIFICATE.certificate());
         var config = tlsConfig(false);
@@ -287,7 +287,7 @@ class BackChannelHostnameVerificationTest {
      * Runs the back-channel exchange, but names a timeout for what it is before the failure can be read
      * as a verification outcome.
      * <p>
-     * This restores symmetry with {@link #shouldStillRefuseUntrustedIssuerWhenVerificationDisabled},
+     * This restores symmetry with {@link #shouldRefuseUntrustedIssuerWhenVerificationDisabled},
      * which already pins its refusal to chain trust. An escaping {@link TransportException} is only
      * meaningful on the positive control if it came from the TLS decision under test; a connect or read
      * timeout wraps into the same exception type, so without this discrimination a slow machine would
