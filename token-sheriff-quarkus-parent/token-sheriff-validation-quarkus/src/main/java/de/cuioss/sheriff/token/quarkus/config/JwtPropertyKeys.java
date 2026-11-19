@@ -673,8 +673,8 @@ public final class JwtPropertyKeys {
          * Template: "sheriff.token.issuers.%s.jwks.http.read-timeout-seconds"
          * <p>
          * Sets the read timeout in seconds for HTTP requests to JWKS endpoints.
-         * This timeout controls how long to wait for data to be received from the remote server
-         * after the connection has been established.
+         * It is the request timeout and bounds the wait until the response headers arrive. The body
+         * read that follows is bounded in size by the response-size limit but carries no time bound.
          * </p>
          * <p>
          * <strong>Only applicable</strong> for {@link #JWKS_URL} and {@link #WELL_KNOWN_URL}.

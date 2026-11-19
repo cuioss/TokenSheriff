@@ -171,8 +171,9 @@ public class ClientConfiguration {
     int connectTimeoutSeconds = DEFAULT_CONNECT_TIMEOUT_SECONDS;
 
     /**
-     * The response read timeout, in seconds, applied to every outbound discovery and back-channel call.
-     * Defaults to {@value #DEFAULT_READ_TIMEOUT_SECONDS} seconds. Configurable for the same reason as
+     * The response read timeout, in seconds, applied to every outbound discovery and back-channel call as
+     * the request timeout. It bounds the wait until the response headers arrive; the body read that follows
+     * is bounded in size by the payload ceiling but carries no time bound. Defaults to {@value #DEFAULT_READ_TIMEOUT_SECONDS} seconds. Configurable for the same reason as
      * {@link #connectTimeoutSeconds} (L15).
      */
     @Builder.Default

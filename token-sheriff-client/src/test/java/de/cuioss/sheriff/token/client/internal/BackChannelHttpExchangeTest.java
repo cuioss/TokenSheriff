@@ -68,8 +68,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * The branch tests drive {@code exchange} through a stub {@link HttpClient} whose {@code sendAsync} returns a
  * future the test prepared, so each outcome — a response, a failure cause, a cancellation, an incomplete future
  * — is reached without a socket. The request-timeout tests use a loopback server socket that accepts the
- * connection in its backlog and never answers, so the wait of every endpoint client ends only through the
- * request's timeout.
+ * connection in its backlog and never sends response headers, so the wait of every endpoint client for the
+ * headers ends only through the request's timeout. They cover the headers phase only: the request timeout
+ * does not bound the body read that follows the headers.
  */
 @DisplayName("BackChannelHttp exchange")
 class BackChannelHttpExchangeTest {
@@ -262,7 +263,7 @@ class BackChannelHttpExchangeTest {
                 () -> assertFalse(future.isCancelled(), "The exchange is not cancelled"));
     }
 
-    // --- request timeout: the bound of the wait --------------------------------------------------------
+    // --- request timeout: the bound of the wait for the response headers -------------------------------
 
     private String silentEndpoint(String path) throws IOException {
         silentServer = new ServerSocket(0, 50, InetAddress.getByAddress(new byte[]{127, 0, 0, 1}));
@@ -324,7 +325,7 @@ class BackChannelHttpExchangeTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("callSites")
-    @DisplayName("should end the wait of every endpoint client through the request timeout")
+    @DisplayName("should end the wait for the response headers of every endpoint client through the request timeout")
     void shouldBoundWaitByRequestTimeout(String clientName, CallSite callSite) throws Exception {
         String endpoint = silentEndpoint("/endpoint");
         ClientConfiguration configuration = config(endpoint);

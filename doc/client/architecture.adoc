@@ -194,7 +194,8 @@ target. The engine therefore *owns* an in-module egress control, applied uniform
   before a byte of it is read, and a body that crosses the ceiling while streaming is refused at the
   crossing (see the
   xref:../commons/specification/transport.adoc#bounded_response_body[transport specification]);
-  connect / read timeouts come from `ClientConfiguration`.
+  connect / read timeouts come from `ClientConfiguration`. The read timeout bounds the wait until the
+  response headers arrive; the body read that follows is bounded in size, not in time.
 |===
 
 [IMPORTANT]

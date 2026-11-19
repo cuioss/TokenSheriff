@@ -204,8 +204,11 @@ case-insensitively, and a bracketed IPv6 entry matches the bracketed host of an 
 === Resilience / DoS bounds (COMMONS-4)
 
 Each fetch applies a connect/read timeout, a response-size limit, and bounded
-retry/backoff. No unbounded buffering of response bodies. Mitigates
-xref:../threat-model.adoc#T-DOS[T-DOS].
+retry/backoff. No unbounded buffering of response bodies. The read timeout is the request timeout
+`HttpHandler.requestBuilder()` sets and bounds the wait until the response headers arrive. The body read
+that follows is bounded in size by the response-size limit but carries no time bound, so a host that sends
+the headers and then stalls or trickles the body keeps the calling thread waiting. Mitigates
+xref:../threat-model.adoc#T-DOS[T-DOS] within that limit.
 
 === [[bounded_response_body]] Bounded response body (COMMONS-17)
 

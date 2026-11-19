@@ -590,9 +590,11 @@ public class TokenEndpointClient {
      * ({@link BackChannelHttp#MALFORMED_RESPONSE}):
      * a {@link RedeemedResponseException} when the body handler recorded a success status, otherwise a
      * pre-redemption {@link TransportException} — including a {@code 204} whose {@code Content-Length} the
-     * JDK refuses before any body handler runs. Every other {@link IOException} of the exchange — a request
-     * timeout, a cancelled exchange, a body past the payload bound — is a {@link RedeemedResponseException}
-     * after a recorded success status and a pre-redemption {@link TransportException} otherwise. An
+     * JDK refuses before any body handler runs. Every other {@link IOException} of the exchange — a cancelled
+     * exchange, a body past the payload bound — is a {@link RedeemedResponseException} after a recorded
+     * success status and a pre-redemption {@link TransportException} otherwise. A request timeout ends the
+     * wait before the response headers arrive, so no status has been recorded and it is always a
+     * {@link TransportException}. An
      * {@link IllegalArgumentException} for a request the client refuses before sending is a request-side
      * fault: it is not caught here and reaches the caller of {@code requestToken} as thrown.
      * </p>
