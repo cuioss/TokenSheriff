@@ -38,8 +38,12 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutionException;
+import java.util.function.Supplier;
 
 /**
  * Shared back-channel transport control for the OIDC/OAuth endpoint clients.
@@ -107,12 +111,16 @@ import java.util.concurrent.ConcurrentMap;
  *   <li><strong>Malformed response framing:</strong> {@link #send(HttpClient, HttpRequest, String)} is
  *       the send of the discovery, PAR, userinfo and revocation clients; the token endpoint client, which
  *       wraps the body handler to observe the status line, maps the same exception in its own send. The
- *       JDK HTTP/1.1 client parses a response's {@code Content-Length} itself, after the body handler
- *       returned, and refuses a value that is not a number with an {@link IllegalArgumentException}
- *       carrying the raw header value (a {@link ProtocolException} caused by a
- *       {@link NumberFormatException} further down its cause chain since JDK 27, see {@link #isMalformedFraming(Throwable)}). The send maps that exception to a {@link TransportException} with
- *       the failure context and the fixed text {@value #MALFORMED_RESPONSE}; the JDK's exception is
- *       neither chained nor echoed, because its message is remote content.</li>
+ *       JDK HTTP/1.1 client parses a response's {@code Content-Length} itself — after the body handler
+ *       returned, or for a {@code 204} or other no-body reply before any body handler runs — and refuses
+ *       a value that is not a number with an {@link IllegalArgumentException} carrying the raw header
+ *       value (a {@link ProtocolException} caused by a {@link NumberFormatException} further down its
+ *       cause chain since JDK 27, see {@link #isMalformedFraming(Throwable)}). Both sends wait on
+ *       {@link HttpClient#sendAsync} through {@link #exchange}: a malformed-framing failure of the
+ *       exchange is mapped to a {@link TransportException} with the failure context and the fixed text
+ *       {@value #MALFORMED_RESPONSE}, the JDK's exception neither chained nor echoed because its message
+ *       is remote content; an {@link IllegalArgumentException} thrown synchronously, for a request the
+ *       client refuses before sending, is a request-side fault and propagates unchanged.</li>
  * </ul>
  *
  * @since 1.0
@@ -145,14 +153,16 @@ public final class BackChannelHttp {
      * that recognises either maps it to a fixed text and never chains or echoes it. Any other
      * {@link ProtocolException} is a different failure and is not matched.
      *
-     * @param failure the exception thrown out of {@link HttpClient#send}; may be {@code null}
+     * @param failure the failure of an exchange, as {@link #exchange} passes it: the cause that completed
+     *                the {@link HttpClient#sendAsync} future, unwrapped from its
+     *                {@link ExecutionException} and any {@link CompletionException}; may be {@code null}
      * @return {@code true} if it is the malformed {@code Content-Length} refusal
      */
     public static boolean isMalformedFraming(Throwable failure) {
         if (failure instanceof IllegalArgumentException) {
             return true;
         }
-        // JDK 27 wraps it: the ProtocolException thrown by send has the ProtocolException of the
+        // JDK 27 may wrap it: the client's ProtocolException has the ProtocolException of the
         // Content-Length parser as its cause, and that one has the NumberFormatException. The walk
         // is bounded, so a cyclic cause chain cannot loop.
         Throwable current = failure;
@@ -381,35 +391,111 @@ public final class BackChannelHttp {
      * Sends {@code request} through {@code client} with this helper's {@link #bodyHandler() bounded body
      * handler}.
      * <p>
-     * The JDK HTTP/1.1 client parses a response's {@code Content-Length} itself after the body handler
-     * returned, so a value that is not a number never reaches the handler's own fixed failure: the JDK
-     * throws an {@link IllegalArgumentException} carrying the raw header value out of
-     * {@link HttpClient#send}. This method maps that exception to a {@link TransportException} whose
-     * message is {@code failureContext} and {@value #MALFORMED_RESPONSE}; the JDK's exception is neither
-     * chained nor reused, because its message is remote content (CWE-117, CWE-532).
+     * The JDK HTTP/1.1 client parses a response's {@code Content-Length} itself — after the body handler
+     * returned, or for a {@code 204} or other no-body reply before any body handler runs — so a value that
+     * is not a number never reaches the handler's own fixed failure: the JDK refuses the response with an
+     * exception carrying the raw header value, recognised by {@link #isMalformedFraming(Throwable)}. This
+     * method maps that exception to a
+     * {@link TransportException} whose message is {@code failureContext} and {@value #MALFORMED_RESPONSE};
+     * the JDK's exception is neither chained nor reused, because its message is remote content (CWE-117,
+     * CWE-532).
+     * <p>
+     * Request-side and response-side faults are told apart by the documented {@link HttpClient#sendAsync}
+     * contract, see {@link #exchange}: an {@link IllegalArgumentException} for a request the client refuses
+     * is thrown synchronously and propagates unchanged; a malformed-framing failure of the exchange is a
+     * malformed response, whether or not the body handler was invoked.
+     * </p>
      *
      * @param client         the client from {@link #sharedClient(HttpHandler)}; must not be {@code null}
      * @param request        the request to send; must not be {@code null}
      * @param failureContext a short, caller-safe prefix identifying the endpoint for exception messages
      * @return the response, its body read under the payload ceiling
-     * @throws IOException          if the exchange fails, including a body over the ceiling
-     * @throws InterruptedException if the calling thread is interrupted while waiting
-     * @throws TransportException   if the HTTP client refuses the response as malformed
+     * @throws IOException              if the exchange fails, including a body over the ceiling
+     * @throws InterruptedException     if the calling thread is interrupted before the request is sent,
+     *                                  in which case nothing is sent, or while waiting, see {@link #exchange}
+     * @throws TransportException       if the HTTP client refuses the response as malformed
+     * @throws IllegalArgumentException if the HTTP client refuses the request before sending it
      */
     public HttpResponse<String> send(HttpClient client, HttpRequest request, String failureContext)
             throws IOException, InterruptedException {
         Objects.requireNonNull(client, "client must not be null");
         Objects.requireNonNull(request, "request must not be null");
-        HttpResponse.BodyHandler<String> boundedBody = bodyHandler();
+        return exchange(client, request, bodyHandler(),
+                () -> new TransportException(failureContext + ": " + MALFORMED_RESPONSE));
+    }
+
+    /**
+     * Sends {@code request} through {@code client} and waits for the response, telling a request-side
+     * fault from a response-side one by the documented {@link HttpClient#sendAsync} contract: a request
+     * the client refuses is thrown synchronously from {@code sendAsync}, while every failure of the
+     * exchange, the response included, completes the returned future exceptionally.
+     * <p>
+     * A failure of the future that {@link #isMalformedFraming(Throwable)} recognises — checked on the cause
+     * unwrapped from the {@link ExecutionException} and any {@link CompletionException} — is a response the
+     * client refused as malformed: a {@code Content-Length} that is not a number, which the JDK HTTP/1.1
+     * client parses itself, for a {@code 204} or other no-body reply even before any body handler runs. It is
+     * replaced by the exception {@code malformedResponse} supplies; the JDK's exception is neither chained
+     * nor reused, because its message carries the raw header value (CWE-117, CWE-532). An
+     * {@link IllegalArgumentException} thrown synchronously is a request-side fault and propagates
+     * unchanged. Any other failure is rethrown as the client reported it.
+     * </p>
+     * <p>
+     * A calling thread that is already interrupted when this method is entered sends nothing: the
+     * interrupt status is cleared and an {@link InterruptedException} is thrown before
+     * {@link HttpClient#sendAsync} is called, as {@link HttpClient#send} does. The request therefore never
+     * reaches the server, so a grant presented to the token endpoint is not redeemed. An interrupt that
+     * arrives while waiting for the response throws the same exception after the request may have been
+     * sent, and cancels the exchange. Either way the caller handles the interrupt on one path.
+     * </p>
+     *
+     * @param client            the client to send through; must not be {@code null}
+     * @param request           the request to send; must not be {@code null}
+     * @param bodyHandler       the body handler for the response; must not be {@code null}
+     * @param malformedResponse supplies the caller-safe exception that replaces a response-side
+     *                          malformed-framing failure; must not be {@code null}
+     * @param <T>               the response body type
+     * @return the response
+     * @throws IOException              if the exchange fails
+     * @throws InterruptedException     if the calling thread is already interrupted on entry, in which case
+     *                                  nothing is sent, or is interrupted while waiting, in which case the
+     *                                  exchange is cancelled
+     * @throws IllegalArgumentException if the client refuses the request before sending it
+     */
+    public static <T> HttpResponse<T> exchange(HttpClient client, HttpRequest request,
+            HttpResponse.BodyHandler<T> bodyHandler, Supplier<? extends RuntimeException> malformedResponse)
+            throws IOException, InterruptedException {
+        Objects.requireNonNull(malformedResponse, "malformedResponse must not be null");
+        // sendAsync has no interrupt check of its own: an interrupted caller must not dispatch the request.
+        if (Thread.interrupted()) {
+            throw new InterruptedException("the calling thread was interrupted before the request was sent");
+        }
+        // A request the client refuses is thrown here, synchronously, and propagates unchanged.
+        CompletableFuture<HttpResponse<T>> pending = client.sendAsync(request, bodyHandler);
         try {
-            return client.send(request, boundedBody);
-        } catch (IOException | IllegalArgumentException e) {
-            if (!isMalformedFraming(e)) {
-                throw e;
+            return pending.get();
+        } catch (InterruptedException e) {
+            pending.cancel(true);
+            throw e;
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            while (cause instanceof CompletionException && cause.getCause() != null) {
+                cause = cause.getCause();
             }
-            // Deliberately neither chained nor reused: the JDK's message carries the raw header value.
-            LOGGER.debug("The HTTP client refused the response as malformed");
-            throw new TransportException(failureContext + ": " + MALFORMED_RESPONSE);
+            if (isMalformedFraming(cause)) {
+                // Deliberately neither chained nor reused: the JDK's message carries the raw header value.
+                LOGGER.debug("The HTTP client refused the response as malformed");
+                throw malformedResponse.get();
+            }
+            if (cause instanceof IOException ioException) {
+                throw ioException;
+            }
+            if (cause instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            if (cause instanceof Error error) {
+                throw error;
+            }
+            throw new IOException("the HTTP exchange failed", cause);
         }
     }
 

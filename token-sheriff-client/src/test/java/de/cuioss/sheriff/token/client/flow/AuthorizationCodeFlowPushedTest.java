@@ -214,12 +214,34 @@ class AuthorizationCodeFlowPushedTest {
         var flow = flow(configuration);
         var clientAuthentication = auth(configuration);
 
-        var thrown = assertThrows(ClientProtocolException.class,
+        var thrown = assertThrows(PushedAuthorizationEndpointMissingException.class,
                 () -> flow.authorizePushed(metadata, clientAuthentication, AuthorizationRequestOptions.DEFAULTS));
 
         assertAll("no PAR endpoint",
                 () -> assertEquals("provider metadata is missing the pushed authorization request endpoint",
                         thrown.getMessage(), "the refusal names the missing endpoint"),
+                () -> assertInstanceOf(ClientProtocolException.class, thrown,
+                        "the dedicated type is still a ClientProtocolException"),
+                () -> assertEquals(0, server.getRequestCount(), "the server records zero requests"));
+    }
+
+    @Test
+    @DisplayName("Control: should refuse a missing authorization endpoint with a plain ClientProtocolException")
+    void shouldRefuseMissingAuthorizationEndpointWithPlainProtocolException(URIBuilder uriBuilder,
+            MockWebServer server) {
+        var configuration = config();
+        var metadata = metadata(uriBuilder, null, true);
+        var flow = flow(configuration);
+        var clientAuthentication = auth(configuration);
+
+        var thrown = assertThrows(ClientProtocolException.class,
+                () -> flow.authorizePushed(metadata, clientAuthentication, AuthorizationRequestOptions.DEFAULTS));
+
+        assertAll("PAR endpoint present, authorization endpoint missing",
+                () -> assertEquals("provider metadata is missing the authorization endpoint", thrown.getMessage(),
+                        "the refusal names the missing authorization endpoint"),
+                () -> assertFalse(PushedAuthorizationEndpointMissingException.class.isInstance(thrown),
+                        "only a missing PAR endpoint raises the dedicated type"),
                 () -> assertEquals(0, server.getRequestCount(), "the server records zero requests"));
     }
 

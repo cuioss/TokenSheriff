@@ -41,10 +41,7 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Field;
 import java.security.KeyPair;
 import java.time.OffsetDateTime;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.WARN;
 import static de.cuioss.test.juli.LogAsserts.assertSingleLogMessagePresentContaining;
@@ -260,6 +257,57 @@ class BearerTokenProducerTest {
                 WARN.BEARER_TOKEN_REQUIREMENTS_NOT_MET_DETAILED.resolveIdentifierString());
 
         verify(tokenValidator);
+    }
+
+    @Test
+    @DisplayName("Should keep the result unchanged when the caller clears its requirement sets afterwards")
+    void resultUnchangedAfterCallerClearsRequirementSets() {
+        BearerTokenResult result = scopeViolationFor(new HashSet<>(Set.of("admin", "write")),
+                new HashSet<>(Set.of("reader")), new HashSet<>(Set.of("staff")), true);
+
+        assertAll("result after the caller cleared its sets",
+                () -> assertEquals(Set.of("admin", "write"), result.getRequiredScopes(), "required scopes"),
+                () -> assertEquals(Set.of("reader"), result.getRequiredRoles(), "required roles"),
+                () -> assertEquals(Set.of("staff"), result.getRequiredGroups(), "required groups"),
+                () -> assertEquals(Set.of("admin"), result.getMissingScopes(), "missing scopes"));
+    }
+
+    @Test
+    @DisplayName("negative control: the result for untouched requirement sets carries the same values")
+    void resultForUntouchedRequirementSets() {
+        BearerTokenResult result = scopeViolationFor(new HashSet<>(Set.of("admin", "write")),
+                new HashSet<>(Set.of("reader")), new HashSet<>(Set.of("staff")), false);
+
+        assertAll("result for untouched sets",
+                () -> assertEquals(Set.of("admin", "write"), result.getRequiredScopes(), "required scopes"),
+                () -> assertEquals(Set.of("reader"), result.getRequiredRoles(), "required roles"),
+                () -> assertEquals(Set.of("staff"), result.getRequiredGroups(), "required groups"),
+                () -> assertEquals(Set.of("admin"), result.getMissingScopes(), "missing scopes"));
+    }
+
+    /**
+     * Validates a token carrying only the {@code write} scope against the caller's mutable requirement
+     * sets and, when {@code clearAfterwards} is set, clears every one of those sets after the call.
+     */
+    private BearerTokenResult scopeViolationFor(Set<String> requiredScopes, Set<String> requiredRoles,
+            Set<String> requiredGroups, boolean clearAfterwards) {
+        servletResolverMock.setBearerToken("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature");
+        AccessTokenContent tokenContent = createAccessToken(Map.of(
+                ClaimName.SCOPE.getName(), ClaimValue.forList("write", List.of("write"))));
+        expect(tokenValidator.createAccessToken(anyObject(AccessTokenRequest.class))).andReturn(tokenContent);
+        replay(tokenValidator);
+
+        BearerTokenResult result = producer.getBearerTokenResult(requiredScopes, requiredRoles, requiredGroups);
+        if (clearAfterwards) {
+            requiredScopes.clear();
+            requiredRoles.clear();
+            requiredGroups.clear();
+        }
+
+        assertEquals(BearerTokenStatus.CONSTRAINT_VIOLATION, result.getStatus(),
+                "the token lacks the admin scope, so the requirements are not met");
+        verify(tokenValidator);
+        return result;
     }
 
     @Test

@@ -362,10 +362,12 @@ integration test proves the engine's refusals still hold inside the native execu
   `@CompiledJson` type it serves from the compiled classes and asserts that the shipped
   `reflect-config.json` registers exactly that set — an addition and an omission both fail. A
   non-vacuity check asserts the enumeration finds known converters, so an empty scan cannot pass.
-* `ClientNativeRuntimeInitializationTest` enumerates every class holding a static `Random` (a
-  `SecureRandom` included) from the compiled classes and asserts that the shipped `native-image.properties` initializes
-  exactly that set at run time; its non-vacuity check asserts the enumeration finds `FlowContext`
-  and `PkceChallenge`.
+* `ClientNativeRuntimeInitializationTest` loads every compiled main class without initializing it,
+  selects each class that itself declares a static field whose declared type is `Random` or a
+  subtype of it (a `SecureRandom` field included), and asserts that the `--initialize-at-run-time`
+  argument of the shipped `native-image.properties` lists exactly that set. A generator held in a
+  field of another declared type, such as `Object`, is not detected. Its non-vacuity check asserts
+  the enumeration finds `FlowContext` and `PkceChallenge`.
 * `ClientNativeImageSpecIT` runs against the native executable of
   `token-sheriff-quarkus-integration-tests` and calls the `ClientEngineNativeEndpoint` probes, which
   drive the production `TokenEndpointClient` from `src/main`: a Keycloak `invalid_grant` answer is

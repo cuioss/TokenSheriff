@@ -17,6 +17,8 @@ package de.cuioss.sheriff.token.client.discovery;
 
 import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
 import de.cuioss.sheriff.token.client.config.ClientConfiguration;
+import de.cuioss.sheriff.token.client.internal.BackChannelHttp;
+import de.cuioss.sheriff.token.client.internal.ClientLogMessages;
 import de.cuioss.sheriff.token.commons.error.TransportException;
 import de.cuioss.sheriff.token.validation.test.dispatcher.WellKnownDispatcher;
 import de.cuioss.test.generator.Generators;
@@ -42,6 +44,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.UnaryOperator;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -50,6 +53,8 @@ import static org.junit.jupiter.api.Assertions.*;
 @EnableMockWebServer
 @DisplayName("DiscoveryResolver against a mocked well-known endpoint")
 class DiscoveryResolverTest {
+
+    private static final String MALFORMED_CONTENT_LENGTH = "12raw34remote56";
 
     @Getter
     private final DiscoveryTestDispatcher moduleDispatcher = new DiscoveryTestDispatcher();
@@ -159,22 +164,62 @@ class DiscoveryResolverTest {
                         "the truncated-escape parse failure must be carried as the cause"));
     }
 
+    @Test
+    @DisplayName("Should report a Content-Length that is not a number as the fixed malformed-response failure")
+    void shouldReportMalformedContentLengthAsFixedFailure(URIBuilder uriBuilder) {
+        moduleDispatcher.returnRewrittenContentLength(real -> MALFORMED_CONTENT_LENGTH);
+        var issuer = uriBuilder.buildAsString();
+        var resolver = new DiscoveryResolver(configFor(issuer));
+
+        var failure = assertThrows(TransportException.class, resolver::resolve);
+
+        assertAll("fixed malformed-response failure",
+                () -> assertEquals(ClientLogMessages.ERROR.DISCOVERY_FAILED.format(issuer, "discovery request failed")
+                        + ": " + BackChannelHttp.MALFORMED_RESPONSE, failure.getMessage(),
+                        "the discovery resolver reports the fixed text"),
+                () -> assertFalse(failure.getMessage().contains(MALFORMED_CONTENT_LENGTH),
+                        "the raw header value must not reach the caller"),
+                () -> assertNull(failure.getCause(), "the JDK exception carrying the raw value is not chained"));
+    }
+
+    @Test
+    @DisplayName("positive control: the document with its numeric Content-Length written verbatim resolves")
+    void shouldResolveWithVerbatimNumericContentLength(URIBuilder uriBuilder) {
+        moduleDispatcher.returnRewrittenContentLength(UnaryOperator.identity());
+
+        var metadata = new DiscoveryResolver(configFor(uriBuilder.buildAsString())).resolve();
+
+        assertTrue(metadata.getTokenEndpoint().isPresent(), "a numeric Content-Length resolves the document");
+    }
+
     /**
      * Serves the {@link WellKnownDispatcher} strategies and, on demand, a fixed response body, so a
      * malformed discovery document can be fed to the parser.
      */
     static final class DiscoveryTestDispatcher implements ModuleDispatcherElement {
 
+        private static final String CONTENT_LENGTH = "Content-Length";
+
         private final WellKnownDispatcher delegate = new WellKnownDispatcher();
         private @Nullable String fixedBody;
+        private @Nullable UnaryOperator<String> contentLengthRewrite;
 
         void returnDefault() {
             fixedBody = null;
+            contentLengthRewrite = null;
             delegate.returnDefault();
         }
 
         void returnBody(String body) {
             fixedBody = body;
+        }
+
+        /**
+         * Serves the default document with its {@code Content-Length} value replaced by {@code rewrite} of
+         * the real value and written to the wire verbatim, so it may be a value that is not a number.
+         */
+        void returnRewrittenContentLength(UnaryOperator<String> rewrite) {
+            contentLengthRewrite = rewrite;
         }
 
         void setCallCounter(int callCounter) {
@@ -200,6 +245,14 @@ class DiscoveryResolverTest {
             if (fixedBody != null) {
                 delegate.setCallCounter(delegate.getCallCounter() + 1);
                 return Optional.of(new MockResponse(200, Headers.of("Content-Type", "application/json"), fixedBody));
+            }
+            UnaryOperator<String> rewrite = contentLengthRewrite;
+            if (rewrite != null) {
+                return delegate.handleGet(request).map(response -> response.newBuilder()
+                        .removeHeader(CONTENT_LENGTH)
+                        .addHeaderLenient(CONTENT_LENGTH,
+                                rewrite.apply(String.valueOf(response.getHeaders().get(CONTENT_LENGTH))))
+                        .build());
             }
             return delegate.handleGet(request);
         }

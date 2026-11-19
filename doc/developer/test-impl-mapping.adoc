@@ -1,8 +1,9 @@
 = Test-to-Implementation Mapping
 :toc: left
-:toclevels: 2
+:toclevels: 3
 :toc-title: Table of Contents
 :sectnums:
+:source-highlighter: highlight.js
 
 This document maps each production package of the production modules to the test
 classes that exercise it. It also lists the cross-cutting guards that check the code base
@@ -58,7 +59,7 @@ parser is `InsufficientScopeChallengeRoundTripTest` in token-sheriff-client (`cl
 `IssuerConfigCachePerformanceTest`, `IssuerConfigCacheRecoveryTest`,
 `IssuerConfigCacheSynchronizationTest`, `IssuerConfigCacheTest`,
 `IssuerConfigClaimSubOptionalTest`, `IssuerConfigDiscoveryIssuerTest`, `IssuerConfigTest`,
-`OAuth2JWTBestPracticesComplianceTest`, `OpenIDConnectComplianceTest`,
+`JWTValidationLogMessagesIdentifierTest`, `OAuth2JWTBestPracticesComplianceTest`, `OpenIDConnectComplianceTest`,
 `RFC7519JWTComplianceTest`, `TokenTypeTest`, `TokenValidatorConcurrencyTest`,
 `TokenValidatorIssuerStatusTest`, `TokenValidatorJweTest`, `TokenValidatorMetricsTest`,
 `TokenValidatorMetricsVerificationTest`, `TokenValidatorPerformanceIntegrationTest`,
@@ -87,7 +88,7 @@ parser is `InsufficientScopeChallengeRoundTripTest` in token-sheriff-client (`cl
 
 |`validation.dpop`
 |`DpopConfigTest`, `DpopPipelineIntegrationTest`, `DpopProofValidatorAlgorithmAndClaimTest`,
-`DpopProofValidatorTest`, `DpopReplayProtectionTest`
+`DpopProofValidatorLogSanitizationTest`, `DpopProofValidatorTest`, `DpopReplayProtectionTest`
 
 |`validation.exception`
 |No test class of its own.
@@ -107,7 +108,8 @@ parser is `InsufficientScopeChallengeRoundTripTest` in token-sheriff-client (`cl
 |`HttpJwksLoaderAsyncInitializationTest`, `HttpJwksLoaderDefaultBehaviourUnchangedTest`,
 `HttpJwksLoaderEgressRefreshTest`, `HttpJwksLoaderExecutorHandOffTest`,
 `HttpJwksLoaderFailureAdvertisedJwksUriTest`, `HttpJwksLoaderFailureTest`,
-`HttpJwksLoaderGracePeriodTest`, `HttpJwksLoaderInitialRetryLifecycleTest`,
+`HttpJwksLoaderGracePeriodTest`, `HttpJwksLoaderInitialRetryGuardOrderTest`,
+`HttpJwksLoaderInitialRetryLifecycleTest`,
 `HttpJwksLoaderInitialRetryTest`, `HttpJwksLoaderIssuerTest`, `HttpJwksLoaderKeyRotationTest`,
 `HttpJwksLoaderLockFreeStatusTest`, `HttpJwksLoaderRediscoveryTest`, `HttpJwksLoaderSchedulerTest`,
 `HttpJwksLoaderTest`, `HttpJwksLoaderUnknownKidAttackTest`, `HttpJwksLoaderUnknownKidGapsTest`,
@@ -187,34 +189,42 @@ Package prefix: `de.cuioss.sheriff.token.client`.
 `WeakAuthRefusedTest`
 
 |`config`
-|`ClientConfigurationTest`, `ClientConfigurationScopeValidationTest`, `ClientConfigurationTransportTest`
+|`BackChannelOriginValidatorTest`, `ClientConfigurationScopeValidationTest`,
+`ClientConfigurationTest`, `ClientConfigurationTransportTest`
 
 |`discovery`
-|`DiscoveryAdversarialTest`, `DiscoveryResolverTest`, `ProviderMetadataTest`
+|`CachingDiscoveryResolverAdversarialTest`, `CachingDiscoveryResolverFailureHandlingTest`,
+`CachingDiscoveryResolverHookFailureTest`, `CachingDiscoveryResolverRefreshRegressionTest`,
+`CachingDiscoveryResolverStalePolicyTest`, `CachingDiscoveryResolverTest`,
+`DiscoveryAdversarialTest`, `DiscoveryResolverSizeCapTest`, `DiscoveryResolverTest`,
+`ProviderMetadataTest`
 
 |`dpop`
 |`DpopProofGeneratorJktGoldenTest`, `DpopProofGeneratorTest`, `JwkPublicMembersTest`,
 `SenderConstraintTest`
 
 |`flow`
-|`AuthorizationCodeFlowOptionsTest`, `AuthorizationCodeFlowPushedTest`,
-`AuthorizationCodeFlowTest`, `AuthorizationRequestBuilderParametersTest`,
-`AuthorizationRequestBuilderTest`, `AuthorizationRequestInjectionAttackDatabaseTest`,
-`AuthorizationRequestOptionsTest`, `CallbackHandlerTest`,
-`CallbackParametersAttackDatabaseTest`, `CallbackParametersTest`, `ClientCredentialsFlowTest`,
-`CodeInjectionTest`, `InsufficientScopeChallengeAttackDatabaseTest`,
-`InsufficientScopeChallengeParserTest`, `InsufficientScopeChallengeRoundTripTest`, `IssValidatorTest`, `ParClientTest`, `PkceChallengeTest`,
-`PkceDowngradeTest`, `RedeemedRefreshFailureTest`, `RefreshFailureClassificationTest`,
-`RefreshFlowScopeOverrideTest`, `RefreshFlowTest`, `RefreshRedemptionTest`,
+|`AuthorizationCodeFlowOptionsTest`, `AuthorizationCodeFlowPushedGuardTest`,
+`AuthorizationCodeFlowPushedTest`, `AuthorizationCodeFlowTest`,
+`AuthorizationRequestBuilderParametersTest`, `AuthorizationRequestBuilderTest`,
+`AuthorizationRequestInjectionAttackDatabaseTest`, `AuthorizationRequestOptionsTest`,
+`CallbackHandlerTest`, `CallbackParametersAttackDatabaseTest`, `CallbackParametersTest`,
+`ClientCredentialsFlowTest`, `CodeInjectionTest`, `InsufficientScopeChallengeAttackDatabaseTest`,
+`InsufficientScopeChallengeParserTest`, `InsufficientScopeChallengeRoundTripTest`,
+`IssValidatorTest`, `ParClientMalformedResponseTest`, `ParClientTest`, `PkceChallengeTest`,
+`PkceDowngradeTest`, `RedeemedIdentityRefusalExceptionTest`, `RedeemedRefreshFailureTest`,
+`RefreshFailureClassificationTest`, `RefreshFlowScopeOverrideTest`, `RefreshFlowTest`,
+`RefreshRedemptionTest`, `RefreshResultVerifierAdversarialTest`, `RefreshResultVerifierTest`,
 `StepUpChallengeAttackDatabaseTest`, `StepUpChallengeParserTest`, `StepUpHandlerOptionsTest`,
-`StepUpHandlerTest`, `StepUpResultVerifierTest`, `TokenEndpointClientTest`, `WiredFlowHttpsTest`,
-`WiredFlowNegativePathIT`
+`StepUpHandlerTest`, `StepUpResultVerifierTest`, `TokenEndpointClientScopeNonceTest`,
+`TokenEndpointClientTest`, `WiredFlowHttpsTest`, `WiredFlowNegativePathIT`
 
 |`internal`
 |`BackChannelEgressPolicyTest`, `BackChannelHostnameVerificationTest`,
-`BackChannelHttpBoundedBodyTest`, `BackChannelHttpMalformedResponseTest`, `BackChannelHttpTlsTrustTest`,
+`BackChannelHttpBoundedBodyTest`, `BackChannelHttpMalformedResponseTest`,
+`BackChannelHttpRequestRefusalTest`, `BackChannelHttpTlsTrustTest`,
 `BackChannelOriginMappingTest`, `BackChannelOriginRoutingTest`,
-`EndpointQueryTest`, `EndpointSchemePolicyTest`, `FormEncoderTest`, `JsonEscaperTest`,
+`ClientLogMessagesIdentifierTest`, `EndpointQueryTest`, `EndpointSchemePolicyTest`, `FormEncoderTest`, `JsonEscaperTest`,
 `JsonResponseMediaTypeTest`, `LogSanitizerTest`
 
 |`lifecycle`
@@ -230,7 +240,7 @@ Package prefix: `de.cuioss.sheriff.token.client`.
 `RefreshFamilyReseedTest`, `RefreshIdTokenValidationQuarantineTest`,
 `RefreshInFlightFailureTest`, `RefreshPostRedemptionQuarantineTest`, `RotationResultTest`,
 `RotationReuseDetectionTest`, `SubBindingValidatorTest`, `TokenResponseTest`,
-`UserInfoClientTest`
+`UserInfoClientMalformedResponseTest`, `UserInfoClientTest`
 
 |`hardening` (test package only; no production package of that name)
 |`FetchPathAttackDatabaseTest`, `RetrievalParsingAttackDatabaseTest`,
@@ -238,8 +248,10 @@ Package prefix: `de.cuioss.sheriff.token.client`.
 drive the retrieval path across several production packages.
 |===
 
-Fixtures that are not test classes: `DpopBoundAccessTokens` and `WiredFlowTestSupport`
-(`flow`), `HeaderLineBreakAttackDatabase` (`hardening`) and `RefreshTestSupport` (`token`).
+Fixtures that are not test classes: `NativeImageClassScanner` (root package),
+`CachingDiscoveryResolverSupport` (`discovery`), `DpopBoundAccessTokens` and
+`WiredFlowTestSupport` (`flow`), `HeaderLineBreakAttackDatabase` (`hardening`) and
+`RefreshTestSupport` (`token`).
 
 [#validation-quarkus]
 == token-sheriff-validation-quarkus
@@ -253,7 +265,7 @@ Package prefix: `de.cuioss.sheriff.token.quarkus`.
 |Production package |Test classes
 
 |`quarkus` (log messages)
-|No test class of its own.
+|`TokenSheriffQuarkusLogMessagesIdentifierTest`
 
 |`annotation`
 |No test class of its own; the binding is exercised through the `interceptor` tests and
@@ -264,7 +276,9 @@ Package prefix: `de.cuioss.sheriff.token.quarkus`.
 `AccessTokenCacheConfigResolverTest`, `ConfigValueParserTest`,
 `IssuerConfigResolverDpopTransportAndLoggingTest`, `IssuerConfigResolverEgressHostTest`,
 `IssuerConfigResolverJwksLoaderOptInTest`,
-`IssuerConfigResolverJwksLoaderOrphanedTest`, `IssuerConfigResolverMaxStalenessTest`, `IssuerConfigResolverTest`, `JwtPropertyKeysTest`, `ParserConfigResolverTest`,
+`IssuerConfigResolverJwksLoaderOrphanedTest`, `IssuerConfigResolverMaxStalenessTest`,
+`IssuerConfigResolverOrphanedDpopTest`, `IssuerConfigResolverTest`,
+`JwtPropertyKeysDerivationGuardTest`, `JwtPropertyKeysTest`, `ParserConfigResolverTest`,
 `RetryStrategyConfigResolverTest`
 
 |`error`
@@ -297,7 +311,8 @@ Package prefix: `de.cuioss.sheriff.token.quarkus`.
 `ObservedValidatorResolverTest`
 
 |`producer`
-|`BearerTokenProducerSchemeRuleTest`, `BearerTokenProducerTest`, `BearerTokenResponseFactoryTest`,
+|`AlternativeValidatorOrphanedPropertyTest`, `BearerTokenProducerSchemeRuleTest`,
+`BearerTokenProducerTest`, `BearerTokenResponseFactoryTest`,
 `BearerTokenResponseFactoryUnrepresentableScopesTest`, `BearerTokenResultTest`,
 `EmptyJsonWebTokenTest`, `JsonWebTokenAdapterTest`, `NativeTokenValidatorProducerIT`,
 `QuarkusTokenValidatorProducerTest`, `TokenValidatorProducerUnitTest`,
@@ -331,7 +346,9 @@ Package prefix: `de.cuioss.sheriff.token.quarkus`.
 
 |`deployment`
 |`BearerScopeValidationBootTest`, `BearerScopeValidationBuildStepTest`,
-`BearerScopeValidationDefaultMethodBuildStepTest`, `BearerScopeValidationRefusalBootTest`,
+`BearerScopeValidationCombinedIndexBuildStepTest`,
+`BearerScopeValidationDefaultMethodBuildStepTest`, `BearerScopeValidationGeneratedBeanBootTest`,
+`BearerScopeValidationGeneratedBeanControlBootTest`, `BearerScopeValidationRefusalBootTest`,
 `TokenSheriffDevUIIntegrationTest`, `TokenSheriffIntegrationTest`,
 `TokenSheriffProcessorBuildStepTest`, `TokenSheriffProcessorTest`,
 `TokenValidatorEagerStartupTest`; the extension as a whole is booted by
@@ -350,7 +367,9 @@ Package prefix: `de.cuioss.sheriff.token.client.quarkus`.
 |Production package |Test classes
 
 |`quarkus`
-|`ClientExceptionMapperTest`, `TokenSheriffClientProducerEgressTest`, `TokenSheriffClientProducerTest`
+|`ClientExceptionMapperTest`, `TokenSheriffClientDiscoveryCacheTest`,
+`TokenSheriffClientDiscoveryCacheValidationTest`, `TokenSheriffClientProducerEgressTest`,
+`TokenSheriffClientProducerTest`
 
 |`config`
 |No test class of its own; `ClientConfigMapper` is exercised directly by `ClientConfigMapperContract`
@@ -371,6 +390,7 @@ Package prefix: `de.cuioss.sheriff.token.client.quarkus`.
 
 |`deployment`
 |`DefaultBeanReplacementTest`, `DiscoveryCacheDisabledNoInjectionDeploymentTest`,
+`DiscoveryCacheDisabledRemovedInjectionDeploymentTest`,
 `DiscoveryCacheEnabledInjectionDeploymentTest`, `DiscoveryCacheInjectionDeploymentTest`,
 `TokenSheriffClientProcessorTest`
 |===

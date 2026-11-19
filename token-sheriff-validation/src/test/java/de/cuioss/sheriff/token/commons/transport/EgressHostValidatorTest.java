@@ -15,16 +15,20 @@
  */
 package de.cuioss.sheriff.token.commons.transport;
 
+import de.cuioss.sheriff.token.commons.transport.EgressHostValidator.Refusal;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.net.URI;
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -32,6 +36,26 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("EgressHostValidator bare-host contract")
 class EgressHostValidatorTest {
+
+    /**
+     * One representative entry per refusal class. The {@link EnumSource} test below draws its cases from
+     * {@link Refusal} itself, so a refusal class added without an entry here fails that test.
+     */
+    private static final Map<Refusal, @Nullable String> REPRESENTATIVE_ENTRIES = representativeEntries();
+
+    private static Map<Refusal, @Nullable String> representativeEntries() {
+        Map<Refusal, @Nullable String> entries = new EnumMap<>(Refusal.class);
+        entries.put(Refusal.NULL_ENTRY, null);
+        entries.put(Refusal.BLANK_ENTRY, "   ");
+        entries.put(Refusal.CONTROL_CHARACTER, "key\tcloak");
+        entries.put(Refusal.WHITESPACE, "key cloak");
+        entries.put(Refusal.NON_ASCII, "kéycloak");
+        entries.put(Refusal.URL_SYNTAX, "https://keycloak");
+        entries.put(Refusal.PORT, "keycloak:8443");
+        entries.put(Refusal.INVALID_IPV6, "[::1");
+        entries.put(Refusal.INVALID_HOST, "idp_internal");
+        return entries;
+    }
 
     static Stream<Arguments> admittedEntries() {
         return Stream.of(
@@ -51,62 +75,58 @@ class EgressHostValidatorTest {
 
     static Stream<Arguments> refusedEntries() {
         return Stream.of(
-                Arguments.of("host:8080", EgressHostValidator.PORT),
-                Arguments.of("[::1]:443", EgressHostValidator.PORT),
-                Arguments.of("host/path", EgressHostValidator.URL_SYNTAX),
-                Arguments.of("user@host", EgressHostValidator.URL_SYNTAX),
-                Arguments.of("host?query", EgressHostValidator.URL_SYNTAX),
-                Arguments.of("host#fragment", EgressHostValidator.URL_SYNTAX),
-                Arguments.of("host%20", EgressHostValidator.URL_SYNTAX),
-                Arguments.of("https://keycloak", EgressHostValidator.URL_SYNTAX),
-                Arguments.of("key\tcloak", EgressHostValidator.CONTROL_CHARACTER),
-                Arguments.of("key\rcloak", EgressHostValidator.CONTROL_CHARACTER),
-                Arguments.of("key\ncloak", EgressHostValidator.CONTROL_CHARACTER),
-                Arguments.of("key\u0000cloak", EgressHostValidator.CONTROL_CHARACTER),
-                Arguments.of("key\u007Fcloak", EgressHostValidator.CONTROL_CHARACTER),
-                Arguments.of("key cloak", EgressHostValidator.WHITESPACE),
-                Arguments.of("kéycloak", EgressHostValidator.NON_ASCII),
-                Arguments.of("１０.０.０.１", EgressHostValidator.NON_ASCII),
-                Arguments.of("[::1", EgressHostValidator.INVALID_IPV6),
-                Arguments.of("[keycloak]", EgressHostValidator.INVALID_IPV6),
-                Arguments.of("1:2:3:4:5:6:7:8:9", EgressHostValidator.INVALID_IPV6),
-                Arguments.of("-keycloak", EgressHostValidator.INVALID_HOST),
-                Arguments.of("keycloak-", EgressHostValidator.INVALID_HOST),
-                Arguments.of("idp..internal", EgressHostValidator.INVALID_HOST),
-                Arguments.of("idp_internal", EgressHostValidator.INVALID_HOST),
-                Arguments.of("256.0.0.1", EgressHostValidator.INVALID_HOST),
-                Arguments.of("10.0.0", EgressHostValidator.INVALID_HOST),
-                Arguments.of("10.0.0.1.", EgressHostValidator.INVALID_HOST),
-                Arguments.of(".", EgressHostValidator.INVALID_HOST),
-                Arguments.of("idp.example.com..", EgressHostValidator.INVALID_HOST),
-                Arguments.of("idp.123", EgressHostValidator.INVALID_HOST),
-                Arguments.of("idp.1example", EgressHostValidator.INVALID_HOST),
-                Arguments.of("idp.1example.", EgressHostValidator.INVALID_HOST),
-                Arguments.of("a".repeat(64) + ".example", EgressHostValidator.INVALID_HOST),
-                Arguments.of("a.".repeat(127) + "ab", EgressHostValidator.INVALID_HOST));
+                Arguments.of("host:8080", Refusal.PORT.text()),
+                Arguments.of("[::1]:443", Refusal.PORT.text()),
+                Arguments.of("host/path", Refusal.URL_SYNTAX.text()),
+                Arguments.of("user@host", Refusal.URL_SYNTAX.text()),
+                Arguments.of("host?query", Refusal.URL_SYNTAX.text()),
+                Arguments.of("host#fragment", Refusal.URL_SYNTAX.text()),
+                Arguments.of("host%20", Refusal.URL_SYNTAX.text()),
+                Arguments.of("https://keycloak", Refusal.URL_SYNTAX.text()),
+                Arguments.of("key\tcloak", Refusal.CONTROL_CHARACTER.text()),
+                Arguments.of("key\rcloak", Refusal.CONTROL_CHARACTER.text()),
+                Arguments.of("key\ncloak", Refusal.CONTROL_CHARACTER.text()),
+                Arguments.of("key\u0000cloak", Refusal.CONTROL_CHARACTER.text()),
+                Arguments.of("key\u007Fcloak", Refusal.CONTROL_CHARACTER.text()),
+                Arguments.of("key cloak", Refusal.WHITESPACE.text()),
+                Arguments.of("kéycloak", Refusal.NON_ASCII.text()),
+                Arguments.of("１０.０.０.１", Refusal.NON_ASCII.text()),
+                Arguments.of("[::1", Refusal.INVALID_IPV6.text()),
+                Arguments.of("[keycloak]", Refusal.INVALID_IPV6.text()),
+                Arguments.of("1:2:3:4:5:6:7:8:9", Refusal.INVALID_IPV6.text()),
+                Arguments.of("-keycloak", Refusal.INVALID_HOST.text()),
+                Arguments.of("keycloak-", Refusal.INVALID_HOST.text()),
+                Arguments.of("idp..internal", Refusal.INVALID_HOST.text()),
+                Arguments.of("idp_internal", Refusal.INVALID_HOST.text()),
+                Arguments.of("256.0.0.1", Refusal.INVALID_HOST.text()),
+                Arguments.of("10.0.0", Refusal.INVALID_HOST.text()),
+                Arguments.of("10.0.0.1.", Refusal.INVALID_HOST.text()),
+                Arguments.of(".", Refusal.INVALID_HOST.text()),
+                Arguments.of("idp.example.com..", Refusal.INVALID_HOST.text()),
+                Arguments.of("idp.123", Refusal.INVALID_HOST.text()),
+                Arguments.of("idp.1example", Refusal.INVALID_HOST.text()),
+                Arguments.of("idp.1example.", Refusal.INVALID_HOST.text()),
+                Arguments.of("a".repeat(64) + ".example", Refusal.INVALID_HOST.text()),
+                Arguments.of("a.".repeat(127) + "ab", Refusal.INVALID_HOST.text()));
     }
 
     /**
-     * One entry per refusal class of the validator, with the fixed text each must produce. Shared by
-     * the builder tests ({@code EgressPolicyTest}, {@code WellKnownConfigTest},
-     * {@code HttpJwksLoaderConfigEgressHostTest}) so every allow-list builder is checked against the
-     * same classes.
+     * One row per refusal class of the validator, drawn from {@link Refusal} itself and from
+     * {@link #REPRESENTATIVE_ENTRIES}, with the fixed text each must produce, followed by boundary rows
+     * that reach a class by another route. A refusal class added without a representative entry yields a
+     * row whose entry is {@code null}, which the builder tests cannot satisfy. Shared by the builder tests
+     * ({@code EgressPolicyTest}, {@code WellKnownConfigTest}, {@code HttpJwksLoaderConfigEgressHostTest}) so
+     * every allow-list builder is checked against the same classes.
      */
     static Stream<Arguments> builderRefusalClasses() {
-        return Stream.of(
-                Arguments.of(null, EgressHostValidator.NULL_ENTRY),
-                Arguments.of("", EgressHostValidator.BLANK_ENTRY),
-                Arguments.of("   ", EgressHostValidator.BLANK_ENTRY),
-                Arguments.of("keycloak:8443", EgressHostValidator.PORT),
-                Arguments.of("[::1]:8443", EgressHostValidator.PORT),
-                Arguments.of("key cloak", EgressHostValidator.WHITESPACE),
-                Arguments.of("key\tcloak", EgressHostValidator.CONTROL_CHARACTER),
-                Arguments.of("kéycloak", EgressHostValidator.NON_ASCII),
-                Arguments.of("idp_internal", EgressHostValidator.INVALID_HOST),
-                Arguments.of("idp.123", EgressHostValidator.INVALID_HOST),
-                Arguments.of("https://keycloak", EgressHostValidator.URL_SYNTAX),
-                Arguments.of("[fe80::1%eth0]", EgressHostValidator.URL_SYNTAX),
-                Arguments.of("[::1", EgressHostValidator.INVALID_IPV6));
+        Stream<Arguments> everyClass = Stream.of(Refusal.values())
+                .map(refusal -> Arguments.of(REPRESENTATIVE_ENTRIES.get(refusal), refusal.text()));
+        Stream<Arguments> boundaries = Stream.of(
+                Arguments.of("", Refusal.BLANK_ENTRY.text()),
+                Arguments.of("[::1]:8443", Refusal.PORT.text()),
+                Arguments.of("idp.123", Refusal.INVALID_HOST.text()),
+                Arguments.of("[fe80::1%eth0]", Refusal.URL_SYNTAX.text()));
+        return Stream.concat(everyClass, boundaries);
     }
 
     /**
@@ -162,6 +182,31 @@ class EgressHostValidatorTest {
             assertEquals(host, EgressHostValidator.requireBareHost("idp.example.com."),
                     "the canonical form must match the host URI reports");
         }
+
+        @ParameterizedTest(name = "admits [{0}]")
+        @ValueSource(strings = {"idp.example.com", "idp.example.com.", "10.0.0.5", "::1", "[::1]"})
+        @DisplayName("Should admit every accepted form the class documentation names")
+        void shouldAdmitDocumentedForms(String entry) {
+            assertEquals(Optional.empty(), EgressHostValidator.refusal(entry),
+                    "a documented accepted form must carry no refusal");
+        }
+    }
+
+    @Nested
+    @DisplayName("Refusal classes")
+    class RefusalClasses {
+
+        @ParameterizedTest(name = "refusal class {0}")
+        @EnumSource(Refusal.class)
+        @DisplayName("Should produce every refusal class from its representative entry")
+        void shouldProduceRefusalClassFromRepresentativeEntry(Refusal refusal) {
+            assertTrue(REPRESENTATIVE_ENTRIES.containsKey(refusal),
+                    "every refusal class needs a representative entry, missing: " + refusal);
+            String entry = REPRESENTATIVE_ENTRIES.get(refusal);
+
+            assertEquals(Optional.of(refusal.text()), EgressHostValidator.refusal(entry),
+                    "the representative entry must produce exactly its class's fixed text");
+        }
     }
 
     @Nested
@@ -171,20 +216,20 @@ class EgressHostValidatorTest {
         @Test
         @DisplayName("Should refuse a null entry")
         void shouldRefuseNull() {
-            assertEquals(Optional.of(EgressHostValidator.NULL_ENTRY), EgressHostValidator.refusal(null));
+            assertEquals(Optional.of(Refusal.NULL_ENTRY.text()), EgressHostValidator.refusal(null));
             var exception = assertThrows(IllegalArgumentException.class,
                     () -> EgressHostValidator.requireBareHost(null));
-            assertEquals(EgressHostValidator.NULL_ENTRY, exception.getMessage());
+            assertEquals(Refusal.NULL_ENTRY.text(), exception.getMessage());
         }
 
         @ParameterizedTest(name = "refuses blank \"{0}\"")
         @ValueSource(strings = {"", " ", "   ", "\t"})
         @DisplayName("Should refuse a blank entry")
         void shouldRefuseBlank(String entry) {
-            assertEquals(Optional.of(EgressHostValidator.BLANK_ENTRY), EgressHostValidator.refusal(entry));
+            assertEquals(Optional.of(Refusal.BLANK_ENTRY.text()), EgressHostValidator.refusal(entry));
             var exception = assertThrows(IllegalArgumentException.class,
                     () -> EgressHostValidator.requireBareHost(entry));
-            assertEquals(EgressHostValidator.BLANK_ENTRY, exception.getMessage());
+            assertEquals(Refusal.BLANK_ENTRY.text(), exception.getMessage());
         }
 
         @ParameterizedTest(name = "refuses [{0}]")
@@ -204,7 +249,7 @@ class EgressHostValidatorTest {
         void shouldRefuseHostNameUriReportsNoHostFor(String entry) {
             assertNull(URI.create("https://" + entry + "/token").getHost(),
                     "URI must report no host, so every URL to it is refused before the allow-list lookup");
-            assertEquals(Optional.of(EgressHostValidator.INVALID_HOST), EgressHostValidator.refusal(entry));
+            assertEquals(Optional.of(Refusal.INVALID_HOST.text()), EgressHostValidator.refusal(entry));
         }
 
         @Test
@@ -214,9 +259,9 @@ class EgressHostValidatorTest {
 
             assertEquals("[fe80::1%eth0]", host,
                     "URI accepts the zone id and reports it as part of the bracketed host");
-            assertEquals(Optional.of(EgressHostValidator.URL_SYNTAX), EgressHostValidator.refusal(host),
+            assertEquals(Optional.of(Refusal.URL_SYNTAX.text()), EgressHostValidator.refusal(host),
                     "the entry URI reports as the host is refused by the % rule");
-            assertEquals(Optional.of(EgressHostValidator.URL_SYNTAX), EgressHostValidator.refusal("fe80::1%eth0"),
+            assertEquals(Optional.of(Refusal.URL_SYNTAX.text()), EgressHostValidator.refusal("fe80::1%eth0"),
                     "the bare zoned literal is refused by the same rule");
         }
 

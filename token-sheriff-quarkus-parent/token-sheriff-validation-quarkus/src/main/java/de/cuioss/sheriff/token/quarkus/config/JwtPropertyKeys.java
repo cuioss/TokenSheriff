@@ -47,21 +47,61 @@ public final class JwtPropertyKeys {
     public static final String DOT_ENABLED = ".enabled";
 
     /**
-     * Derives the keys declared under a base: the values of the {@code public static final String}
-     * fields of {@code declaringClass} that start with {@code base}, without {@code base} itself and
-     * without {@code excluded}, sorted in natural {@link String} order.
+     * Derives the keys declared under a base, expecting at least one key.
      * <p>
-     * The order is the sort, not the source order of the fields: {@link Class#getDeclaredFields()}
-     * returns the fields in no particular order, so the result is sorted to stay the same on every JVM.
+     * Equivalent to {@link #declaredKeysUnder(Class, String, Set, int)} with a minimum of {@code 1}, so an
+     * empty derivation is refused.
      * </p>
      *
      * @param declaringClass the class whose key definitions are read
      * @param base           the prefix the derived keys share
      * @param excluded       the keys under {@code base} that are not part of the result
      * @return the derived keys, sorted in natural {@link String} order, as an unmodifiable list
-     * @throws IllegalStateException if a matching field cannot be read
+     * @throws IllegalStateException if a field cannot be read, if a field reads {@code null}, or if no key
+     *                               is derived
      */
     static List<String> declaredKeysUnder(Class<?> declaringClass, String base, Set<String> excluded) {
+        return declaredKeysUnder(declaringClass, base, excluded, 1);
+    }
+
+    /**
+     * Derives the keys declared under a base: the values of the {@code public static final String}
+     * fields of {@code declaringClass} that start with {@code base}, without {@code base} itself and
+     * without {@code excluded}, sorted in natural {@link String} order.
+     * <p>
+     * The order is the natural {@link String} sort, not the source order of the fields:
+     * {@link Class#getDeclaredFields()} returns the fields in no particular order, so the result is sorted
+     * to stay the same on every JVM and in a native image.
+     * </p>
+     * <p>
+     * The derivation fails closed, it never returns a shorter list than the caller expects:
+     * </p>
+     * <ul>
+     *   <li>A {@code public static final String} field that reads {@code null} is refused with an
+     *       {@link IllegalStateException} naming the field: such a field is not a compile-time constant, or it
+     *       is declared after the list that is derived from it, so its value is not known yet. The message
+     *       carries the field name only, never a value.</li>
+     *   <li>A result with fewer than {@code minimumKeys} keys is refused with an {@link IllegalStateException}
+     *       whose fixed message names {@code declaringClass} and {@code base}, never a derived value: an empty
+     *       or short derivation, for example when the fields are not visible to reflection, is not mistaken
+     *       for a class that declares fewer keys.</li>
+     * </ul>
+     * <p>
+     * Called from a static initializer, either refusal fails the initialization of the declaring class, and
+     * so the startup, in any image: on the JVM and in a native image alike.
+     * </p>
+     *
+     * @param declaringClass the class whose key definitions are read
+     * @param base           the prefix the derived keys share
+     * @param excluded       the keys under {@code base} that are not part of the result
+     * @param minimumKeys    the minimum number of keys the caller expects the derivation to return
+     * @return the derived keys, at least {@code minimumKeys} of them, sorted in natural {@link String} order,
+     * as an unmodifiable list
+     * @throws IllegalStateException if a field cannot be read, if a field reads {@code null}, or if fewer than
+     *                               {@code minimumKeys} keys are derived
+     */
+    static List<String> declaredKeysUnder(Class<?> declaringClass, String base, Set<String> excluded,
+            int minimumKeys) {
         List<String> keys = new ArrayList<>();
         for (Field field : declaringClass.getDeclaredFields()) {
             int modifiers = field.getModifiers();
@@ -73,16 +113,26 @@ public final class JwtPropertyKeys {
                 }
             }
         }
+        if (keys.size() < minimumKeys) {
+            throw new IllegalStateException("Key derivation on " + declaringClass.getName() + " under base " + base
+                    + " returned " + keys.size() + " keys, expected at least " + minimumKeys);
+        }
         keys.sort(Comparator.naturalOrder());
         return List.copyOf(keys);
     }
 
     private static String constantValue(Field field) {
+        Object value;
         try {
-            return (String) field.get(null);
+            value = field.get(null);
         } catch (IllegalAccessException e) {
             throw new IllegalStateException("Key definition " + field.getName() + " is not readable", e);
         }
+        if (value == null) {
+            throw new IllegalStateException("Key definition " + field.getName()
+                    + " reads null: it is not a compile-time constant or is declared after the derived list");
+        }
+        return (String) value;
     }
 
     /**
@@ -396,9 +446,19 @@ public final class JwtPropertyKeys {
          * as it is declared here. A disabled issuer is skipped before that guard runs, so its {@code dpop.*}
          * values are not checked.
          * </p>
+         * <p>
+         * The derivation fails closed: it expects at least the four sub-properties declared above
+         * ({@link #DPOP_NONCE_CACHE_SIZE}, {@link #DPOP_NONCE_CACHE_TTL_SECONDS},
+         * {@link #DPOP_PROOF_MAX_AGE_SECONDS} and {@link #DPOP_REQUIRED}), and refuses an empty or shorter
+         * result with an {@link IllegalStateException}; a {@code public static final String} field of this
+         * class that reads {@code null} (not a compile-time constant, or declared after this list) is refused
+         * the same way. Either refusal fails the initialization of this class, and so the startup, in any
+         * image: on the JVM and in a native image alike. The guard never lets the orphaned-DPoP check run
+         * against a short list.
+         * </p>
          */
         public static final List<String> DPOP_SUB_PROPERTIES = Collections.unmodifiableList(
-                declaredKeysUnder(ISSUERS.class, DPOP_BASE, Set.of(DPOP_ENABLED)));
+                declaredKeysUnder(ISSUERS.class, DPOP_BASE, Set.of(DPOP_ENABLED), 4));
 
         // === JWKS Source Configuration (Mutually Exclusive) ===
 

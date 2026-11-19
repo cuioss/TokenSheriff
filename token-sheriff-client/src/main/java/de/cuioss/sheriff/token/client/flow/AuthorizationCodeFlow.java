@@ -55,8 +55,9 @@ import java.util.Objects;
  *       with the options applied;</li>
  *   <li>{@link #authorizePushed(ProviderMetadata, ClientAuthentication, AuthorizationRequestOptions)}
  *       pushes the parameters to the RFC 9126 PAR endpoint and returns a URL that carries only
- *       {@code client_id} and the issued {@code request_uri}. It is refused when the AS advertises no PAR
- *       endpoint; there is no fallback to a front-channel request.</li>
+ *       {@code client_id} and the issued {@code request_uri}. It is refused with a
+ *       {@link PushedAuthorizationEndpointMissingException} when the AS advertises no PAR endpoint; there
+ *       is no fallback to a front-channel request.</li>
  * </ul>
  * {@code response_mode=form_post} stays the default on every entry point. {@link ResponseMode#QUERY}
  * is an explicit opt-in that re-opens {@code T-URL-LEAK} and leaves the mitigation to the caller.
@@ -222,8 +223,15 @@ public class AuthorizationCodeFlow {
      * @return the authorization redirect (URL carrying {@code client_id} and {@code request_uri} + flow
      *         context to persist)
      * @throws IllegalArgumentException if the client declares no redirect URI
-     * @throws ClientProtocolException  if the AS advertises no PAR endpoint, no authorization endpoint,
-     *                                  a non-TLS authorization endpoint, or no PKCE {@code S256}
+     * @throws PushedAuthorizationEndpointMissingException if the AS advertises no PAR endpoint; raised
+     *                                  before any HTTP request
+     * @throws ClientProtocolException  if the AS advertises no authorization endpoint, a non-TLS
+     *                                  authorization endpoint, or no PKCE {@code S256}
+     * @throws IllegalStateException    if a subclass of {@link AuthorizationRequestBuilder} overrides
+     *                                  {@code parameters(...)} and skips its authorization-endpoint check,
+     *                                  so the metadata carries no authorization endpoint after
+     *                                  {@code parameters(...)} returned; a broken invariant, not a protocol
+     *                                  refusal
      * @throws de.cuioss.sheriff.token.commons.error.TransportException if the PAR request fails or its
      *         response carries no {@code request_uri}
      * @since 1.0
@@ -234,7 +242,7 @@ public class AuthorizationCodeFlow {
         Objects.requireNonNull(clientAuthentication, "clientAuthentication must not be null");
         Objects.requireNonNull(options, "options must not be null");
         String parEndpoint = metadata.getPushedAuthorizationRequestEndpoint()
-                .orElseThrow(() -> new ClientProtocolException(
+                .orElseThrow(() -> new PushedAuthorizationEndpointMissingException(
                         "provider metadata is missing the pushed authorization request endpoint"));
         FlowContext context = FlowContext.create(requireRedirectUri());
         Map<String, String> parameters = authorizationRequestBuilder.parameters(configuration, metadata, context,

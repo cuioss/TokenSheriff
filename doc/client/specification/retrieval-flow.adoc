@@ -110,7 +110,9 @@ context, pushes exactly the parameters `AuthorizationRequestBuilder.parameters(.
 authorization-endpoint TLS check and the PKCE `S256` check apply as on the front channel — and returns a redirect to
 the authorization endpoint that carries only `client_id` and the issued `request_uri`. When the AS
 advertises no `pushed_authorization_request_endpoint` the call is refused with
-`ClientProtocolException` before any HTTP request; it never falls back to a front-channel request.
+`PushedAuthorizationEndpointMissingException`, a dedicated `ClientProtocolException`, before any HTTP
+request; it never falls back to a front-channel request. Because it is a `ClientProtocolException`,
+every existing catch and the HTTP-edge 4xx mapping stay as they were.
 The plain `authorize` entry points build the authorization URL with the parameters above on the
 front channel, whether or not the AS advertises a PAR endpoint. A caller that needs PAR — FAPI 2.0
 makes it mandatory — calls the pushed path, or composes `ParClient` itself and builds the redirect
@@ -303,8 +305,10 @@ exception reaches the interrupted caller with its interrupt flag kept, and every
 the aborted refresh re-evaluates, so one of them starts a fresh refresh. This includes a caller
 whose interrupt flag is already set when it calls `resolve()`: a failing delegate's refusal is
 rethrown to it unrecorded, so that thread never writes a failure state or a retry backoff, however
-often it calls; the next caller without a set flag records the failure. An `Error` thrown by the
-delegate aborts the refresh in the same way.
+often it calls; the next caller without a set flag records the failure. Because nothing is recorded,
+the one-request-per-refresh bound above does not hold for such a caller: every call it makes while
+the delegate fails reaches the delegate again. An `Error` thrown by the delegate aborts the refresh in
+the same way.
 
 *Defensive copy.* Every `resolve()` returns an independent copy (`ProviderMetadata.copy()`). The
 cache holds its own copy, so a caller that mutates the returned metadata never changes what the next

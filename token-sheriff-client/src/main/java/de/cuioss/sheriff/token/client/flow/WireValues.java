@@ -15,7 +15,6 @@
  */
 package de.cuioss.sheriff.token.client.flow;
 
-import de.cuioss.sheriff.token.client.internal.LogSanitizer;
 import de.cuioss.tools.string.MoreStrings;
 
 import java.util.function.Function;
@@ -28,8 +27,8 @@ import java.util.function.Function;
  * {@code null}, a blank value, an unsupported value, a value in another letter case, and a value
  * carrying a delimiter such as {@code &}, {@code #}, {@code =}, a space, {@code CR} or {@code LF} — is
  * refused, so a caller-supplied string can never smuggle a second parameter into the request. The
- * refused value is passed through {@link LogSanitizer} before it is placed in the exception message,
- * so {@code CR}/{@code LF} never reach a log or a message raw.
+ * refusal is a fixed text that names the parameter only; the refused value is never placed in the
+ * exception message, so neither it nor a {@code CR}/{@code LF} it carries reaches a log or a message.
  *
  * @since 1.0
  * @author Oliver Wolff
@@ -65,6 +64,7 @@ final class WireValues {
                 return constant;
             }
         }
-        throw new IllegalArgumentException("unsupported " + parameter + " value: " + LogSanitizer.sanitize(value));
+        // Fixed text naming the parameter only: the refused value is caller input and is not echoed.
+        throw new IllegalArgumentException("unsupported " + parameter + " value");
     }
 }

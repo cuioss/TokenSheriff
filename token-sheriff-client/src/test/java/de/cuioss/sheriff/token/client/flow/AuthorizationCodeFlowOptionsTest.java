@@ -156,8 +156,8 @@ class AuthorizationCodeFlowOptionsTest {
         }
 
         @Test
-        @DisplayName("Should emit the default flow URL with exactly the documented parameter order and encoding")
-        void shouldKeepDefaultFlowUrlByteIdentical() {
+        @DisplayName("Should build the default flow URL from the defaults with the documented parameter order and encoding")
+        void shouldBuildDefaultFlowUrlFromDefaults() {
             var flow = flow(config("client-1"));
 
             var plain = flow.authorize(metadata());

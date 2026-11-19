@@ -178,8 +178,9 @@ ceiling into the assembled body, and offers two policies:
 The handler bounds its own work as well as the bytes: the body read so far is kept in one array that
 grows by doubling, so the objects a body costs grow with the logarithm of its size, not with the number of
 buffers it arrives in, and an empty buffer costs nothing. The array never exceeds the ceiling and is at most
-twice the bytes received, or the first allocation when that is larger. During a growth step the old and the
-new array are both live, so the memory held while the body streams peaks below twice the ceiling plus the
+twice the bytes received, or the first allocation (1024 bytes, or the ceiling when that is smaller) when
+that is larger. During a growth step the old and the new array are both live, so the memory held while the
+body streams peaks below twice the ceiling plus the
 buffers of the delivery in flight; assembling and, for the string variant, decoding the result at
 completion peaks at a small constant multiple of the ceiling. Under the fail policy, when the handler
 observes a `Content-Length` header that is not a valid number, it cancels the subscription without
@@ -194,9 +195,14 @@ value, and the handler's fixed message is not delivered. The handler has no hook
 mapping belongs to the caller of `send`. The client's discovery, PAR, userinfo and revocation clients send
 through `BackChannelHttp.send`, and the token endpoint client through its own send; each catches that
 `IllegalArgumentException` and fails the call with a `TransportException` whose message is the endpoint's
-failure context and the fixed text `BackChannelHttp.MALFORMED_RESPONSE` (after a success status the token
-endpoint reports it as its post-redemption failure), neither chaining the JDK's exception nor echoing its
-message. The validation-side discovery and JWKS reads hand the handler to cui-http, whose adapter performs
+failure context and the fixed text `BackChannelHttp.MALFORMED_RESPONSE` (when its body handler observed a
+success status, the token endpoint reports it as its post-redemption failure), neither chaining the JDK's exception nor echoing its
+message. Request-side and response-side faults are told apart by the documented `HttpClient.sendAsync`
+contract: an `IllegalArgumentException` thrown synchronously, for a request the client refuses before
+sending, is a request-side fault and propagates unchanged; one that completes the exchange exceptionally is
+mapped, including for a `204` or other no-body reply whose `Content-Length` the JDK parses before any body
+handler runs (the token endpoint, never seeing that status, reports it as a pre-redemption failure). The
+validation-side discovery and JWKS reads hand the handler to cui-http, whose adapter performs
 the send, so this repository has no send call there to map. A caller therefore treats the message of any
 exception that comes out of an HTTP exchange as remote content and sanitises it before logging.
 

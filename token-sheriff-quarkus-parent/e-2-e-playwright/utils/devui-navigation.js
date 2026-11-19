@@ -24,6 +24,7 @@
  * We scope to <qwc-extension-link> elements to avoid matching sidebar items.
  */
 
+import { expect } from '@playwright/test';
 import { CONSTANTS } from './constants.js';
 import { testLogger } from './test-logger.js';
 
@@ -115,11 +116,23 @@ export async function goToStatusConfig(page) {
 }
 
 /**
- * Navigate to the Token Debugger page
+ * Navigate to the Token Debugger page and wait until the debugger has rendered.
+ *
+ * `navigateToDevUIPage` returns once `<qwc-jwt-debugger>` is attached. Dev-UI inserts the
+ * element into the page outlet before the module that defines it has loaded, so an attached
+ * element can still be un-upgraded and have no shadow content. A caller that inspects the page
+ * at that point (an axe-core scan, keyboard navigation) sees an empty component. The debugger's
+ * container is rendered by the component itself, so waiting for it to be visible proves the
+ * first render has happened.
+ *
  * @param {import('@playwright/test').Page} page
  */
 export async function goToTokenDebugger(page) {
   await navigateToDevUIPage(page, 'Token Debugger');
+  await expect(
+    page.locator(PAGES['Token Debugger']).getByTestId('jwt-debugger-container'),
+  ).toBeVisible({ timeout: CONSTANTS.TIMEOUTS.ELEMENT_VISIBLE });
+  testLogger.info('Navigation', 'Token Debugger rendered (jwt-debugger-container visible)');
 }
 
 /**

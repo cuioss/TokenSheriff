@@ -47,6 +47,7 @@ import de.cuioss.tools.logging.LogRecord;
 import de.cuioss.tools.logging.LogRecordModel;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
+import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.arc.deployment.ValidationPhaseBuildItem;
 import io.quarkus.arc.deployment.ValidationPhaseBuildItem.ValidationErrorBuildItem;
@@ -61,12 +62,14 @@ import io.quarkus.devui.spi.JsonRPCProvidersBuildItem;
 import io.quarkus.devui.spi.page.CardPageBuildItem;
 import io.quarkus.devui.spi.page.Page;
 import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
+import jakarta.enterprise.inject.Vetoed;
 import jakarta.enterprise.inject.spi.DeploymentException;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.ClassInfo;
+import org.jboss.jandex.CompositeIndex;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.MethodInfo;
@@ -121,6 +124,8 @@ public class TokenSheriffProcessor {
 
     private static final DotName BEARER_TOKEN = DotName.createSimple(BearerToken.class.getName());
 
+    private static final DotName VETOED = DotName.createSimple(Vetoed.class.getName());
+
     private static final String REQUIRED_SCOPES = "requiredScopes";
 
     /**
@@ -147,8 +152,8 @@ public class TokenSheriffProcessor {
      * reflectively: {@link JwtPropertyKeys.ISSUERS#DPOP_SUB_PROPERTIES} is derived from them, and the
      * orphaned-DPoP guard checks exactly that list. This registration is what makes the list derivable in
      * a native build. The runtime jar is not indexed, so the {@code @RegisterForReflection} on
-     * {@code ISSUERS} alone is not enough, and without its fields the list would be empty and the guard
-     * would check nothing.
+     * {@code ISSUERS} alone is not enough: without its fields the derivation would come up short and fail
+     * the initialization of {@code ISSUERS}, and so the startup.
      *
      * @param reflectiveClasses producer for reflective class build items
      */
@@ -304,15 +309,31 @@ public class TokenSheriffProcessor {
      * misconfiguration fails the deployment, with one error per refused scope set naming its declaring class
      * and member. Class-level and method-level {@code @BearerAuth} (merged per bean class as the interceptor
      * merges them) and every {@code @BearerToken} injection point are checked.
+     * <p>
+     * The step scans the bean-archive index and the combined index together. The bean-archive index holds the
+     * bean archives and the beans ArC generates during the build (for example from a
+     * {@code GeneratedBeanBuildItem}), which the combined index does not, so an invalid scope on a generated
+     * bean fails the deployment. The combined index holds every indexed application archive, including a
+     * dependency that is no bean archive because it carries neither a {@code beans.xml} nor a bean-defining
+     * annotation, so a {@code @BearerAuth} method that an application bean class inherits from a base class in
+     * such a dependency is merged with that bean class's own scopes and checked as well. The bean-archive index
+     * resolves such a base class on demand when it is asked for it by name, but does not enumerate its
+     * annotations. A class in both indexes yields the same message twice, which is reported once.
+     * <p>
+     * A class in neither index is not checked, for example a base class in a dependency that is not indexed at
+     * all.
      *
      * @param validationPhase  orders this step into the ArC validation phase; not otherwise read
-     * @param combinedIndex    the application's combined Jandex index
+     * @param beanArchiveIndex the bean-archive Jandex index, generated beans included
+     * @param combinedIndex    the combined Jandex index of the indexed application archives
      * @param validationErrors producer for the deployment errors, one per refused scope set
      */
     @BuildStep
-    public void validateAnnotationScopes(ValidationPhaseBuildItem validationPhase, CombinedIndexBuildItem combinedIndex,
+    public void validateAnnotationScopes(ValidationPhaseBuildItem validationPhase,
+            BeanArchiveIndexBuildItem beanArchiveIndex, CombinedIndexBuildItem combinedIndex,
             BuildProducer<ValidationErrorBuildItem> validationErrors) {
-        List<String> violations = findScopeViolations(combinedIndex.getIndex());
+        List<String> violations = findScopeViolations(
+                CompositeIndex.create(beanArchiveIndex.getIndex(), combinedIndex.getIndex()));
         if (!violations.isEmpty()) {
             validationErrors.produce(new ValidationErrorBuildItem(violations.stream()
                     .map(DeploymentException::new)
@@ -328,7 +349,8 @@ public class TokenSheriffProcessor {
      * class, as the union {@code BearerTokenInterceptor} enforces (ADR-0024): the interceptor reads the
      * class-level annotation from the bean class, not from the class declaring the method, and
      * {@code @BearerAuth} is not {@code @Inherited}, so an inherited method is merged with the subclass's own
-     * annotation only. A {@code @BearerToken} on a field, a method, a method parameter or a producer parameter
+     * annotation only. An interface, an abstract class and a class declaring {@code @Vetoed} are no bean classes,
+     * so their class-level scopes are never merged. A {@code @BearerToken} on a field, a method, a method parameter or a producer parameter
      * is checked on its own. Each scope set is checked by building the challenge through
      * {@link BearerTokenResponseFactory#insufficientScopeChallenge}, so the rule and the length bound are
      * exactly the ones applied to the challenge that is sent.
@@ -338,7 +360,8 @@ public class TokenSheriffProcessor {
      * {@link ErrorTextSanitizer#sanitize(String)}, never raw.
      *
      * @param index the index to scan
-     * @return one message per refused scope set, sorted; empty when every annotation is valid
+     * @return one message per refused scope set, sorted and each message once, also when the index lists an
+     *         annotation or a bean class more than once; empty when every annotation is valid
      */
     static List<String> findScopeViolations(IndexView index) {
         Set<String> violations = new TreeSet<>();
@@ -363,10 +386,11 @@ public class TokenSheriffProcessor {
      * class's own class-level {@code @BearerAuth} as {@code BearerTokenInterceptor} merges them.
      * <p>
      * A bean class runs the method when it is the declaring class or a subclass of it that neither it nor a
-     * class between it and the declaring class overrides; abstract classes and interfaces are no bean classes.
-     * When no such bean class is in the index, the method's own scopes are checked alone. A bean class whose
-     * class-level annotation is refused on its own is already reported at that class, so for it only the
-     * method's own scopes are checked: a bad class-level scope is never reported as the method's.
+     * class between it and the declaring class overrides; interfaces, abstract classes and classes declaring
+     * {@code @Vetoed} are no bean classes. When no such bean class is in the index, the method's own scopes are
+     * checked alone. A bean class whose class-level annotation is refused on its own is already reported at
+     * that class, so for it only the method's own scopes are checked: a bad class-level scope is never reported
+     * as the method's.
      */
     private static void checkMethodLevel(IndexView index, MethodInfo method, Set<String> methodScopes,
             Set<String> violations) {
@@ -391,6 +415,14 @@ public class TokenSheriffProcessor {
         }
     }
 
+    /**
+     * Lists the bean classes in the index that run the method: the declaring class and every subclass that
+     * inherits the method unchanged, each only when it is a bean class candidate. An interface, an abstract
+     * class and a class declaring {@code @Vetoed} are no bean classes, whether it declares the method or
+     * inherits it.
+     *
+     * @return the bean classes running the method, empty when there is none in the index
+     */
     private static List<ClassInfo> beanClassesRunning(IndexView index, MethodInfo method) {
         ClassInfo declaringClass = method.declaringClass();
         List<ClassInfo> beanClasses = new ArrayList<>();
@@ -408,8 +440,13 @@ public class TokenSheriffProcessor {
         return beanClasses;
     }
 
+    /**
+     * A bean class candidate is a concrete class that does not declare {@code @Vetoed}: interfaces, abstract
+     * classes and {@code @Vetoed} classes are no bean classes.
+     */
     private static boolean isBeanClassCandidate(ClassInfo classInfo) {
-        return !classInfo.isInterface() && !Modifier.isAbstract(classInfo.flags());
+        return !classInfo.isInterface() && !Modifier.isAbstract(classInfo.flags())
+                && classInfo.declaredAnnotation(VETOED) == null;
     }
 
     private static boolean inheritsUnchanged(IndexView index, ClassInfo subclass, MethodInfo method) {

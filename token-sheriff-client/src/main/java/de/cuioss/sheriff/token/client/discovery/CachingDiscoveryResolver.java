@@ -87,7 +87,10 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p>
  * <strong>Accepted behaviours.</strong> A caller that joins an in-flight refresh waits for the whole
  * refresh, even when a stale document could be served; this bounds the upstream load to one request
- * per refresh. {@link ClientLogMessages.WARN#DISCOVERY_CACHE_EXPIRED_FAILING_CLOSED} can be logged
+ * per refresh. The bound does not hold for a caller whose interrupt flag is set while the delegate
+ * fails: its refusal is rethrown unrecorded on every call, so no failure state and no retry backoff
+ * is written, and each of its calls reaches the delegate again.
+ * {@link ClientLogMessages.WARN#DISCOVERY_CACHE_EXPIRED_FAILING_CLOSED} can be logged
  * more than once in one failure episode: a caller past the grace period marks the current state as
  * having logged the expiry, but a refresh winner that read the state before that mark derives its
  * failed state from its own read and publishes it with an unconditional {@code state.set(refreshed)},
@@ -109,8 +112,11 @@ import java.util.concurrent.atomic.AtomicReference;
  * non-{@code https} endpoint in an {@code https} issuer's document and a missing
  * {@code token_endpoint}. A body the bounded read stops is an I/O failure and is logged as one. The
  * refusals of the shared back-channel transport — a malformed endpoint URL, a path that fails the
- * egress validation, a host the egress policy refuses and an endpoint the HTTP handler refuses — log
- * at most a {@code DEBUG} line of the transport. The cache adds a {@code DEBUG} line per recorded
+ * egress validation, a host the egress policy refuses, an endpoint the HTTP handler refuses and a
+ * response the HTTP client refuses as malformed, which {@code BackChannelHttp.send} maps to its fixed
+ * malformed-response text — log at most a {@code DEBUG} line of the transport. A request the HTTP
+ * client refuses before sending is not such a refusal: its {@link IllegalArgumentException} propagates
+ * unchanged. The cache adds a {@code DEBUG} line per recorded
  * failed refresh and per successful refresh, except that the first successful refresh after a
  * failure logs {@link ClientLogMessages.INFO#DISCOVERY_CACHE_RECOVERED} instead of the {@code DEBUG}
  * line. An interrupted refresh is not recorded and writes no cache line at all. Two more records

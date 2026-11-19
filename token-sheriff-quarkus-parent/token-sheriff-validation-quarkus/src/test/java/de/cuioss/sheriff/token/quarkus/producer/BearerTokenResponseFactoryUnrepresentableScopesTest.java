@@ -90,6 +90,23 @@ class BearerTokenResponseFactoryUnrepresentableScopesTest {
     }
 
     @Test
+    @DisplayName("should answer 65 required scopes with the 500 response logged as TokenSheriff_Q-201, 64 with the 401 challenge")
+    void shouldAnswerOnePastMaximumScopeCountAsMisconfiguration() {
+        assertEquals(64, BearerChallenge.MAX_SCOPE_TOKENS, "the challenge carries at most 64 distinct scopes");
+        BearerTokenResult atBound = scopeViolation(scopes(64));
+        BearerTokenResult pastBound = scopeViolation(scopes(65));
+
+        Response atBoundResponse = atBound.createErrorResponse();
+        assertNoLogMessagePresent(TestLogLevel.ERROR, "TokenSheriff_Q-201");
+        Response pastBoundResponse = pastBound.createErrorResponse();
+
+        assertInsufficientScopeChallenge(atBoundResponse);
+        assertMisconfigurationResponse(pastBoundResponse);
+        assertSingleLogMessagePresentContaining(TestLogLevel.ERROR, "TokenSheriff_Q-201");
+        assertSingleLogMessagePresentContaining(TestLogLevel.ERROR, "65 scope(s)");
+    }
+
+    @Test
     @DisplayName("should answer the longest scope that fits with a challenge of exactly the bound")
     void shouldAnswerLongestFittingScopeWithChallengeAtBound() {
         // Arrange

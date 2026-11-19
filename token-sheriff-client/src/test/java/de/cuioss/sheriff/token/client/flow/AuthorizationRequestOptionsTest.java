@@ -48,8 +48,8 @@ class AuthorizationRequestOptionsTest {
     /** The message a {@code null} or blank entry is refused with. */
     private static final String NULL_OR_BLANK = "scopes must not contain null or blank entries";
 
-    /** The message an empty override is refused with. */
-    private static final String EMPTY_OVERRIDE =
+    /** The message the options builder refuses an empty override with. */
+    static final String EMPTY_OVERRIDE =
             "a scope override must not be empty; omit it to request the configured scopes";
 
     private static String tokenRefusal(int entry, String characterClass, String codePoint) {
@@ -93,7 +93,9 @@ class AuthorizationRequestOptionsTest {
     /**
      * Each scope override the shared scope-token rule refuses, paired with the exact message the options
      * builder refuses it with: a null, blank, multi-token or empty list, and entries holding a character
-     * outside the RFC 6749 §3.3 scope-token set {@code %x21 / %x23-5B / %x5D-7E}.
+     * outside the RFC 6749 §3.3 scope-token set {@code %x21 / %x23-5B / %x5D-7E}. Shared with
+     * {@code RefreshFlowScopeOverrideTest}, so both entry points are held to the same variants and
+     * messages; only the empty override names the entry point and carries its own message there.
      */
     static Stream<Arguments> invalidScopeOverridesWithMessage() {
         return Stream.of(
@@ -115,16 +117,6 @@ class AuthorizationRequestOptionsTest {
                         tokenRefusal(1, "non-ASCII character", "1F600")),
                 Arguments.of(List.of("openid", "non" + Character.toString(0x00A0) + "breaking"),
                         tokenRefusal(1, "whitespace character", "00A0")));
-    }
-
-    /**
-     * The scope overrides of {@link #invalidScopeOverridesWithMessage()} without their messages. Shared
-     * with {@code RefreshFlowScopeOverrideTest}, so both entry points are exercised against the same
-     * variants.
-     */
-    @SuppressWarnings("unchecked")
-    static Stream<List<String>> invalidScopeOverrides() {
-        return invalidScopeOverridesWithMessage().map(arguments -> (List<String>) arguments.get()[0]);
     }
 
     @Nested
@@ -213,21 +205,27 @@ class AuthorizationRequestOptionsTest {
         @ParameterizedTest
         @ValueSource(strings = {"fragment", "query.jwt", "jwt", "FORM_POST", "Form_Post", "QUERY", "Query",
                 " query", "query "})
-        @DisplayName("Should refuse an unsupported or case-mismatched value, naming it")
+        @DisplayName("Should refuse an unsupported or case-mismatched value with the fixed text")
         void shouldRefuseUnsupportedValue(String value) {
             var exception = assertThrows(IllegalArgumentException.class, () -> ResponseMode.of(value),
                     "response_mode refuses " + value);
 
-            assertEquals("unsupported response_mode value: " + value, exception.getMessage());
+            assertEquals("unsupported response_mode value", exception.getMessage());
         }
 
         @Test
-        @DisplayName("Should refuse a value carrying CR LF and render it escaped in the message")
-        void shouldRefuseControlCharacterValue() {
-            var exception = assertThrows(IllegalArgumentException.class, () -> ResponseMode.of("query\r\n"));
+        @DisplayName("Control: should not echo the refused value, so a CR LF it carries reaches no message")
+        void shouldNotEchoRefusedValue() {
+            String refused = "query.x" + Generators.letterStrings(6, 12).next() + "\r\n";
 
-            assertEquals("unsupported response_mode value: query\\r\\n", exception.getMessage(),
-                    "the refused value is log-sanitized, so it cannot forge a log line");
+            var exception = assertThrows(IllegalArgumentException.class, () -> ResponseMode.of(refused));
+
+            assertAll("no echo",
+                    () -> assertEquals("unsupported response_mode value", exception.getMessage()),
+                    () -> assertFalse(exception.getMessage().contains(refused.strip()),
+                            "the supplied value does not appear in the message"),
+                    () -> assertFalse(exception.getMessage().contains("\r") || exception.getMessage().contains("\n"),
+                            "no CR or LF reaches the message"));
         }
     }
 
@@ -266,21 +264,26 @@ class AuthorizationRequestOptionsTest {
         @ParameterizedTest
         @ValueSource(strings = {"create", "login consent", "NONE", "Login", "SELECT_ACCOUNT", "select-account",
                 " login", "login "})
-        @DisplayName("Should refuse an unsupported or case-mismatched value, naming it")
+        @DisplayName("Should refuse an unsupported or case-mismatched value with the fixed text")
         void shouldRefuseUnsupportedValue(String value) {
             var exception = assertThrows(IllegalArgumentException.class, () -> Prompt.of(value),
                     "prompt refuses " + value);
 
-            assertEquals("unsupported prompt value: " + value, exception.getMessage());
+            assertEquals("unsupported prompt value", exception.getMessage());
         }
 
         @Test
-        @DisplayName("Should refuse a value carrying LF and render it escaped in the message")
-        void shouldRefuseControlCharacterValue() {
-            var exception = assertThrows(IllegalArgumentException.class, () -> Prompt.of("login\n"));
+        @DisplayName("Control: should not echo the refused value, so an LF it carries reaches no message")
+        void shouldNotEchoRefusedValue() {
+            String refused = "login" + Generators.letterStrings(6, 12).next() + "\n";
 
-            assertEquals("unsupported prompt value: login\\n", exception.getMessage(),
-                    "the refused value is log-sanitized, so it cannot forge a log line");
+            var exception = assertThrows(IllegalArgumentException.class, () -> Prompt.of(refused));
+
+            assertAll("no echo",
+                    () -> assertEquals("unsupported prompt value", exception.getMessage()),
+                    () -> assertFalse(exception.getMessage().contains(refused.strip()),
+                            "the supplied value does not appear in the message"),
+                    () -> assertFalse(exception.getMessage().contains("\n"), "no LF reaches the message"));
         }
     }
 }

@@ -62,6 +62,12 @@ test.describe("Accessibility - WCAG 2.1 AA Compliance", () => {
         accessibilityHelper,
     }) => {
         await goToTokenDebugger(page);
+        // The scan must cover the rendered debugger: a scan of a component that has not
+        // rendered yet finds no form controls and passes without checking them.
+        await expect(page.getByTestId("jwt-debugger-token-input")).toBeVisible();
+        await expect(
+            page.getByTestId("jwt-debugger-validate-button"),
+        ).toBeVisible();
 
         const results = await accessibilityHelper.analyze();
         const critical = results.violations.filter(
@@ -72,6 +78,8 @@ test.describe("Accessibility - WCAG 2.1 AA Compliance", () => {
 
     test("Keyboard navigation works on Token Debugger", async ({ page }) => {
         await goToTokenDebugger(page);
+        // Tabbing before the debugger has rendered would land on Dev-UI chrome instead.
+        await expect(page.getByTestId("jwt-debugger-token-input")).toBeVisible();
 
         // Tab through interactive elements
         await page.keyboard.press("Tab");

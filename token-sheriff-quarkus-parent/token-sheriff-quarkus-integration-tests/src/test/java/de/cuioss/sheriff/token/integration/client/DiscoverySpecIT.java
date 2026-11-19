@@ -37,6 +37,7 @@ import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.InstantSource;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -50,8 +51,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>
  * A second case resolves the {@code client-engine} realm through the production engine
  * {@link DiscoveryResolver} wrapped in a {@link CachingDiscoveryResolver}, over the chain-validating
- * trust material {@link RefreshEngineSupport} assembles: two resolutions within the TTL return equal,
- * independent copies and the cache reports itself resolved.
+ * trust material {@link RefreshEngineSupport} assembles: the realm is fetched once, the resolutions
+ * within the TTL return equal, independent copies that a caller cannot use to change the cached
+ * document, and the cache reports itself resolved.
  */
 @DisplayName("OIDC discovery against real Keycloak")
 class DiscoverySpecIT extends BaseIntegrationTest {
@@ -94,23 +96,37 @@ class DiscoverySpecIT extends BaseIntegrationTest {
         // The integration-test module does not wire the Quarkus client extension, so the production
         // engine resolver is assembled exactly as RefreshEngineSupport does and wrapped in the cache.
         Instant now = Instant.now();
-        CachingDiscoveryResolver resolver = new CachingDiscoveryResolver(
-                new DiscoveryResolver(RefreshEngineSupport.clientConfiguration(
-                        CACHED_DISCOVERY_CLIENT_ID, CACHED_DISCOVERY_CLIENT_SECRET)),
+        AtomicInteger upstreamResolutions = new AtomicInteger();
+        DiscoveryResolver countingDelegate = new DiscoveryResolver(RefreshEngineSupport.clientConfiguration(
+                CACHED_DISCOVERY_CLIENT_ID, CACHED_DISCOVERY_CLIENT_SECRET)) {
+            @Override
+            public ProviderMetadata resolve() {
+                upstreamResolutions.incrementAndGet();
+                return super.resolve();
+            }
+        };
+        CachingDiscoveryResolver resolver = new CachingDiscoveryResolver(countingDelegate,
                 Duration.ofMinutes(5), Duration.ZERO, InstantSource.fixed(now));
 
         ProviderMetadata first = resolver.resolve();
         ProviderMetadata second = resolver.resolve();
+        String servedTokenEndpoint = first.tokenEndpoint;
+        first.tokenEndpoint = "https://mutated.invalid/token";
+        ProviderMetadata third = resolver.resolve();
         DiscoveryCacheStatus status = resolver.status();
 
         assertAll("cached engine-level resolution",
+                () -> assertEquals(1, upstreamResolutions.get(),
+                        "the realm is fetched once; the later resolutions within the TTL are served from the cache"),
                 () -> assertNotSame(first, second, "each resolution hands out a defensive copy"),
+                () -> assertEquals(servedTokenEndpoint, third.tokenEndpoint,
+                        "a change to a handed-out copy does not reach the cached document"),
                 () -> assertEquals(RefreshEngineSupport.ISSUER, first.issuer,
                         "the resolved issuer is the realm's advertised identity"),
                 () -> assertEquals(first.issuer, second.issuer, "issuer is content-equal"),
                 () -> assertEquals(first.authorizationEndpoint, second.authorizationEndpoint,
                         "authorization endpoint is content-equal"),
-                () -> assertEquals(first.tokenEndpoint, second.tokenEndpoint, "token endpoint is content-equal"),
+                () -> assertEquals(servedTokenEndpoint, second.tokenEndpoint, "token endpoint is content-equal"),
                 () -> assertEquals(first.jwksUri, second.jwksUri, "jwks_uri is content-equal"),
                 () -> assertEquals(first.revocationEndpoint, second.revocationEndpoint,
                         "revocation endpoint is content-equal"),

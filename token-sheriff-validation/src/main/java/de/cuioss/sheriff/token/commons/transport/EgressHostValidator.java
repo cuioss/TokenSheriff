@@ -45,7 +45,8 @@ import java.util.Optional;
  * Everything else is refused: {@code null}, blank, a port in any form ({@code name:8080},
  * {@code [::1]:8080}, any other single-colon form), whitespace, control characters, non-ASCII
  * characters, and the URL syntax characters {@code /}, {@code @}, {@code ?}, {@code #} and
- * {@code %}. A refusal is one of the fixed texts declared here; none echoes the entry.
+ * {@code %}. A refusal is the fixed text of one of the refusal classes declared here; none echoes the
+ * entry.
  * <p>
  * A zoned IPv6 literal ({@code [fe80::1%eth0]} or {@code fe80::1%eth0}) is refused by the
  * {@code %} rule. {@link URI} accepts the zone id: for {@code http://[fe80::1%eth0]/},
@@ -64,33 +65,55 @@ import java.util.Optional;
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class EgressHostValidator {
 
-    /** Refusal text for a {@code null} entry. */
-    static final String NULL_ENTRY = "egress allow-list host must not be null";
+    /**
+     * The classes of refusal, each carrying its fixed text. The text never contains the refused entry.
+     */
+    enum Refusal {
 
-    /** Refusal text for a blank entry. */
-    static final String BLANK_ENTRY = "egress allow-list host must not be blank";
+        /** A {@code null} entry. */
+        NULL_ENTRY("egress allow-list host must not be null"),
 
-    /** Refusal text for an entry carrying a control character. */
-    static final String CONTROL_CHARACTER = "egress allow-list host must not contain control characters";
+        /** A blank entry. */
+        BLANK_ENTRY("egress allow-list host must not be blank"),
 
-    /** Refusal text for an entry carrying whitespace. */
-    static final String WHITESPACE = "egress allow-list host must not contain whitespace";
+        /** An entry carrying a control character. */
+        CONTROL_CHARACTER("egress allow-list host must not contain control characters"),
 
-    /** Refusal text for an entry carrying a non-ASCII character. */
-    static final String NON_ASCII = "egress allow-list host must contain ASCII characters only";
+        /** An entry carrying whitespace. */
+        WHITESPACE("egress allow-list host must not contain whitespace"),
 
-    /** Refusal text for an entry carrying a URL syntax character. */
-    static final String URL_SYNTAX =
-            "egress allow-list host must be a bare host, not a URL (no '/', '@', '?', '#' or '%')";
+        /** An entry carrying a non-ASCII character. */
+        NON_ASCII("egress allow-list host must contain ASCII characters only"),
 
-    /** Refusal text for an entry carrying a port, or any other single-colon form. */
-    static final String PORT = "egress allow-list host must be a bare host without a port";
+        /** An entry carrying a URL syntax character. */
+        URL_SYNTAX("egress allow-list host must be a bare host, not a URL (no '/', '@', '?', '#' or '%')"),
 
-    /** Refusal text for an entry that is not a valid IPv6 literal. */
-    static final String INVALID_IPV6 = "egress allow-list host is not a valid IPv6 literal";
+        /** An entry carrying a port, or any other single-colon form. */
+        PORT("egress allow-list host must be a bare host without a port"),
 
-    /** Refusal text for an entry that is not a valid host name or IPv4 literal. */
-    static final String INVALID_HOST = "egress allow-list host is not a valid host name or IPv4 literal";
+        /** An entry that is not a valid IPv6 literal. */
+        INVALID_IPV6("egress allow-list host is not a valid IPv6 literal"),
+
+        /** An entry that is not a valid host name or IPv4 literal. */
+        INVALID_HOST("egress allow-list host is not a valid host name or IPv4 literal");
+
+        private final String text;
+
+        Refusal(String text) {
+            this.text = text;
+        }
+
+        /**
+         * @return the fixed refusal text
+         */
+        String text() {
+            return text;
+        }
+
+        private Optional<String> asResult() {
+            return Optional.of(text);
+        }
+    }
 
     private static final int MAX_HOST_NAME_LENGTH = 253;
     private static final int MAX_LABEL_LENGTH = 63;
@@ -107,10 +130,10 @@ public final class EgressHostValidator {
      */
     public static Optional<String> refusal(@Nullable String entry) {
         if (entry == null) {
-            return Optional.of(NULL_ENTRY);
+            return Refusal.NULL_ENTRY.asResult();
         }
         if (entry.isBlank()) {
-            return Optional.of(BLANK_ENTRY);
+            return Refusal.BLANK_ENTRY.asResult();
         }
         Optional<String> characterRefusal = characterRefusal(entry);
         if (characterRefusal.isPresent()) {
@@ -121,12 +144,12 @@ public final class EgressHostValidator {
         }
         long colons = entry.chars().filter(c -> c == ':').count();
         if (colons == 1) {
-            return Optional.of(PORT);
+            return Refusal.PORT.asResult();
         }
         if (colons > 1) {
-            return isIpv6Literal(entry) ? Optional.empty() : Optional.of(INVALID_IPV6);
+            return isIpv6Literal(entry) ? Optional.empty() : Refusal.INVALID_IPV6.asResult();
         }
-        return isHostNameOrIpv4(entry) ? Optional.empty() : Optional.of(INVALID_HOST);
+        return isHostNameOrIpv4(entry) ? Optional.empty() : Refusal.INVALID_HOST.asResult();
     }
 
     /**
@@ -154,16 +177,16 @@ public final class EgressHostValidator {
         for (int i = 0; i < entry.length(); i++) {
             char c = entry.charAt(i);
             if (c > 0x7E) {
-                return Optional.of(c == 0x7F ? CONTROL_CHARACTER : NON_ASCII);
+                return (c == 0x7F ? Refusal.CONTROL_CHARACTER : Refusal.NON_ASCII).asResult();
             }
             if (c < 0x20) {
-                return Optional.of(CONTROL_CHARACTER);
+                return Refusal.CONTROL_CHARACTER.asResult();
             }
             if (c == ' ') {
-                return Optional.of(WHITESPACE);
+                return Refusal.WHITESPACE.asResult();
             }
             if (URL_SYNTAX_CHARACTERS.indexOf(c) >= 0) {
-                return Optional.of(URL_SYNTAX);
+                return Refusal.URL_SYNTAX.asResult();
             }
         }
         return Optional.empty();
@@ -172,13 +195,13 @@ public final class EgressHostValidator {
     private static Optional<String> bracketedIpv6Refusal(String entry) {
         int close = entry.indexOf(']');
         if (close > 0 && close < entry.length() - 1 && entry.charAt(close + 1) == ':') {
-            return Optional.of(PORT);
+            return Refusal.PORT.asResult();
         }
         if (close != entry.length() - 1) {
-            return Optional.of(INVALID_IPV6);
+            return Refusal.INVALID_IPV6.asResult();
         }
         String literal = entry.substring(1, close);
-        return literal.indexOf(':') >= 0 && isIpv6Literal(literal) ? Optional.empty() : Optional.of(INVALID_IPV6);
+        return literal.indexOf(':') >= 0 && isIpv6Literal(literal) ? Optional.empty() : Refusal.INVALID_IPV6.asResult();
     }
 
     /**
