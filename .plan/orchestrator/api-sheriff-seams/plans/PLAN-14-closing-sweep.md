@@ -1,0 +1,149 @@
+# PLAN-14: Closing sweep
+
+epic: api-sheriff-seams
+workstream: WS-02
+
+> Staged plan spec — one shippable unit of work, ready for `/plan-marshall` hand-off.
+> Lives at `plans/PLAN-14-closing-sweep.md` and is queued as one row file, `queue/PLAN-14.json`,
+> in the epic ledger. The orchestrator EMITS the command below; it never launches the plan inline.
+> This spec is SELF-SUFFICIENT: the emitted command is a one-line pointer and carries no
+> brief, so every per-plan carry is authored here and nowhere else.
+> See `persona-plan-orchestrator/standards/orchestration-model.md` for the tier and
+> hand-off contract.
+> Origin: the operator's word of 2026-11-19 ("stage a further plan, land and emit") after the PLAN-13 landing (#931, `0cb136a7`, `landings/PLAN-13.md`). It gathers the repository-side items of the Open Defects entry "PLAN-13 landed" in `epic.md`: the layer-3 points the analysis reported and the operator did not stage, the plan's own rules PLAN-13 did not meet, the lane's advisories, the review point the operator held, and the Playwright runs that were never done.
+> Scope: five deliverables, below the guard's limit.
+> NOT in this spec (not this repository's files, or not a plan's work): the marketplace-side findings (the `no_sanction` commit refusal, seven plans; the `weakened_test` carry-forward ask, seven plans; the code-review validator and the closing-round reuse rule; the scope-creep guard, now including task widenings approved at 4-plan; `module_mapping_validator`; the `review_completeness` flag families; the review gate that does not read the lane's replies and cannot read the "moderation" section of #907; the docs-versus-executor version skew, lesson 2026-11-18-12-002; the change-ledger remap after a branch-cleanup rebase, lesson 2026-11-19-07-007), the stale `marshal.json` (`/marshall-steward` refreshes it), the lessons missing from the lessons store, API Sheriff's own deletions (its PLAN-34) and the compare-and-set watch (its PLAN-33).
+
+## Objective
+
+PLAN-13 narrowed the back-channel exchange and left what it found beyond its scope: a response-side failure that leaves `BackChannelHttp.exchange` unclassified and unwrapped through five clients that catch only `IOException` and `InterruptedException`, test fixtures that stop on a client reset and exist in three copies, a test-name and display-name set that still carries the forbidden framing, Javadoc and a mapping rule that say slightly more than the code, a review point on the package-veto lookup the operator held, and the Playwright runs nobody has done. This plan closes the ones that are this repository's, so that nothing that ships in 0.9.10 rests on a statement the code does not bear out. No public API is added beyond what a fix needs, and the default behaviour of every class named here does not change except where a decision below says so.
+
+## Deliverables
+
+1. **A response-side failure of the exchange is classified, and every client treats it the same way (PLAN-13 layer 3).** `BackChannelHttp.exchange` rethrows a `RuntimeException` cause unchanged (`:535-539`), so a response-side `IllegalArgumentException` that is not the malformed-`Content-Length` form, and a future failed with a wrapped `CancellationException` (an `ExecutionException` whose cause is the `CancellationException`, which the `catch (CancellationException)` does not see), leave the exchange as raw runtime exceptions. `TokenEndpointClient`, `ParClient`, `UserInfoClient`, `RevocationClient` and `DiscoveryResolver` catch only `IOException` and `InterruptedException` around the exchange, so the raw exception leaves each client. In `TokenEndpointClient` the body handler may already have observed a success status, so the grant is redeemed and the failure is not a `RedeemedResponseException`.
+   Settle at outline, with the operator: map a wrapped `CancellationException` to the same fixed failure as the direct one; keep a response-side `IllegalArgumentException` raw with its cause (state it where the clients' `@throws` and the documents describe it), or map it to a fixed `IOException`; and, if any raw runtime failure can still leave after a success status, whether `TokenEndpointClient` reports it as its post-redemption failure. Whether the JDK ever completes the future with either shape is not shown by reading: show it with a test that completes the future with each, or record that it is a defensive branch.
+   Verification: a test per behaviour item with a positive control, shown to fail without the change (a recorded red proof); the existing `BackChannelHttpExchangeTest`, `BackChannelHttpMalformedResponseTest`, `BackChannelHttpRequestRefusalTest`, `TokenEndpointClientTest` and the per-call-site malformed-`Content-Length` tests pass; the mapping of a valid response and of a malformed `Content-Length` is unchanged.
+   - Skills: pm-dev-java:java-core, pm-dev-java-cui:cui-http, pm-dev-java-cui:cui-logging, plan-marshall:ref-code-quality
+   - Persona: implementer
+2. **The test fixtures and test names meet the repository's rules (PLAN-13 rules not met).** `RawHttpServer` ends its loop on any `SocketException` (`:86`), so a client reset during `readRequest` stops the server, and its thread is shut down but not awaited; `TokenEndpointClientRequestRefusalTest` carries a third copy of the loopback server loop because `RawHttpServer` is package-private in `internal` and the test is in `flow`; `createAccessToken` is declared privately in three producer test classes (`BearerTokenProducerTest`, `BearerTokenProducerSchemeRuleTest`, `BearerTokenProducerRequirementsTest`); `TokenEndpointClientErrorMappingTest.shouldKeepInvalidGrantAsCredentialRejected` and other names in the client tests (`shouldKeepUrlWithoutFragmentUnchanged` in `AuthorizationRequestBuilderTest`, and any others a search finds) carry the framing the pre-1.0 rule forbids; `BearerScopeValidationCombinedIndexBuildStepTest` has a `@DisplayName` "Should still refuse ..." at `:150`.
+   Settle at outline, with the operator: one shared server fixture reachable from both packages (a public fixture class in one test package, or the fixture moved), or the third copy accepted with the reason recorded; one shared producer-test helper, or the three copies accepted; for each framed name a repository-wide search finds, rename it or record why it is not framing (a name that says "keep" for a collection order is not history framing). Each rename is its own commit with no assertion change, and the moves PLAN-13 made are not redone: the assertions and display names that changed inside them are recorded as accepted in the PR body, since the squashed history cannot be split.
+   Verification: a search of the test sources for the forbidden framing words, with every hit re-read and each either renamed or listed with its reason; `wc -l` of every changed test class at most 500; the assertion count of each renamed or moved test unchanged, shown by a before-and-after count; the fixture closes its socket and stops its thread on a reset (a test with a positive control).
+   - Skills: pm-dev-java:junit-core, pm-dev-java-cui:cui-testing, plan-marshall:ref-code-quality
+   - Persona: module-tester
+3. **The deployment package-veto lookup is shown to read what ArC reads (the review point the operator held on #931).** `TokenSheriffProcessor.inVetoedPackage` reads `{package}.package-info` from the index it is given; the review point holds that the lookup reads the combined index while ArC reads only the bean-archive index, so a `package-info` indexed only by a dependency could veto a class ArC still registers. The boot test pins agreement for a same-package case only, and no test covers a subpackage of a `@Vetoed` package (CDI applies `@Vetoed` to the package alone).
+   Settle at outline, with the operator, how it is shown: a boot test with the `package-info` in a dependency archive and a control class, or a build-step test over two indexes, or the limit stated in the Javadoc and ADR with ArC's behaviour recorded as not showable. Add the subpackage case.
+   Verification: each new test fails without the change it pins (a recorded red proof) or is a positive control; `BearerScopeValidationBuildStepTest`, `BearerScopeValidationCombinedIndexBuildStepTest`, `BearerScopeValidationVetoedPackageBootTest` and `TokenSheriffProcessorBuildStepTest` pass; the check for a valid application is unchanged.
+   - Skills: pm-dev-java:java-core, pm-dev-java:java-quarkus, pm-dev-java:junit-core, plan-marshall:ref-code-quality
+   - Persona: implementer
+4. **The statements about the exchange's wait and the mapping rule say what the code does (PLAN-13 advisories).** `ClientConfiguration.readTimeoutSeconds` Javadoc (`:173-177`) names the payload ceiling as the body bound, while discovery calls use `discoveryDocumentMaxSize` (`DiscoveryResolver.java:59`, `:112`); the rule at the end of `doc/developer/test-impl-mapping.adoc` (`:518-528`) says every class and fixture must be found in the section of its module while the document keeps guard classes under "Cross-cutting guards" (`:405`); the validation-side statements (`doc/validation/threat-model.adoc`, `doc/commons/requirements.adoc`, the transport specification) assume cui-http sets only the connect and request timeouts, which PLAN-13 did not inspect; no test pins the claim that the request timeout does not cover the body, which the documents state in at least eight places; the documents and Javadoc of deliverable 1 state its outcome.
+   Settle at outline: inspect cui-http (its source or its published jar) for the timeouts it sets and state what was read; pin the body-phase claim with a test on a loopback server that stalls after the headers, or record why a test cannot be stable (time-based tests never sleep; an injected clock is not available to the JDK client); correct the Javadoc and the rule; re-read every changed statement against the code at HEAD after deliverable 1.
+   Verification: a search of the documents and Javadoc for each corrected statement, with zero hits for the old wording; the mapping rule holds for every row of the document (a check run over the document, recorded); `-Ppre-commit` documentation checks pass.
+   - Skills: pm-documents:ref-asciidoc, pm-documents:ref-documentation, pm-dev-java:javadoc
+   - Persona: documenter
+5. **The Playwright flake and the start script are run, not only read (lessons 2026-11-15-18-003 and 2026-11-18-12-001).** `start-dev-environment.sh` builds the branch into a run-private Maven repository (PLAN-12) and has never been executed; the Token Debugger render wait is now in `goToTokenDebugger` and in `self-devui-accessible.spec.js` by reading; the ten consecutive runs of the accessibility spec were not done in PLAN-12 or PLAN-13, because they need Keycloak and Quarkus dev mode and a working directory the Windows npm accepts (not a UNC path), which the operator's machine has.
+   Settle at outline, with the operator, whether the runs are done in this plan, by whom and where, or recorded again as not done with the reason; the plan never silently skips them. If run: execute the start script, show it prints the repository it uses, run `accessibility-wcag-compliance.spec.js` and `self-devui-accessible.spec.js` ten times each against the branch build, and keep the log. If not run: the record names the missing precondition and who has it, and the flake entry stays open.
+   Verification: ten consecutive passing runs per spec with the log kept, or the record of why not; `start-dev-environment.sh` exits as documented at least once.
+   - Skills: pm-dev-frontend:javascript, plan-marshall:ref-code-quality
+   - Persona: implementer
+
+Done when: all criteria pass, the existing tests named in the Standing Constraints pass without edited assertions except where a deliverable names the decision, and the full `-Ppre-commit` plus `clean install` sequence of `AGENTS.md` is green. The Sonar open-issue read at the PR head is owed to the `sonar-roundtrip` step after the PR exists, not a criterion the functional review grades before it (lesson 2026-11-19-21-002): it is `0`, or every remaining issue is dismissed with a recorded reason (`unknown` for a failed read, never `0`). After the plan ships every repository-side item of the Open Defects entry "PLAN-13 landed" is closed or carries a recorded reason, and the epic has no repository-side item left to stage.
+
+**Operator decisions needed at outline**
+
+- **The classification of a response-side runtime failure and the wrapped `CancellationException`** (deliverable 1): map, or state raw; and the post-redemption classification in `TokenEndpointClient`.
+- **Whether the JDK shapes are shown** (deliverable 1): a test that completes the future with each, or a defensive branch recorded as such.
+- **The shared server fixture and the shared producer-test helper** (deliverable 2): share, or accept the copies with a reason.
+- **The framed names a repository-wide search finds** (deliverable 2): rename each, or list the reason.
+- **How the package-veto lookup is shown** (deliverable 3): a dependency-archive boot test, a two-index build-step test, or the limit stated.
+- **How the body-phase claim is pinned** (deliverable 4): a stalling-server test, or the reason it cannot be stable.
+- **Whether the ten Playwright runs are done in this plan** (deliverable 5): and by whom.
+
+## Standing Constraints
+
+- Pre-1.0 rules of `AGENTS.md` apply: no `@Deprecated`, no transitional comments, no history-framed wording in anything this plan writes, **including test method names, `@DisplayName` values, ADR text and the PR body's description of the code**.
+- **Default behaviour stays unchanged and is proven so**, except where a decision above states a change and a test proves it: the mapping of a valid response and of a malformed `Content-Length` (a `TransportException` with the fixed text and no chained cause), `BoundedBodyHandler`'s ceiling and `OverLimitPolicy`, the interrupt pre-check and the mid-wait cancel of `exchange`, the post-redemption classification of a body failure after a success status, the package-veto result for a valid application, and the existing tests of PLAN-12 and PLAN-13 (`BackChannelHttpExchangeTest`, `BackChannelHttpMalformedResponseTest`, `BackChannelHttpRequestRefusalTest`, `TokenEndpointClientRequestRefusalTest`, `TokenEndpointClientErrorMappingTest`, `ParClientMalformedResponseTest`, `UserInfoClientMalformedResponseTest`, `BearerScopeValidationBuildStepTest`, `BearerScopeValidationVetoedPackageBootTest`, `TokenSheriffProcessorBuildStepTest`, `JwtPropertyKeysDerivationGuardTest`).
+- **Say only what was read.** A corrected statement is checked against the code at HEAD before it is written; a statement that only a run could settle is run or left out; the JDK 27 form rests on the CI `build (27)` leg, not on a local run (the local JDK is Temurin 25). Every line number in this spec is re-read at HEAD at outline.
+- **Test-class splits are pure moves** (`AGENTS.md`): a new test goes in a new or an existing class by its own commit, never inside a move; a rename is its own commit with no assertion change.
+- **A spec criterion that removes a phrase is checked by a search for the phrase** (lesson 2026-11-15-11-001): the verification clauses above name their searches; each hit is re-read.
+- **Security.** Attacker-controlled text goes through `ErrorTextSanitizer` (validation) or `LogSanitizer` (client); no token or key material is logged; the CWE-117 rule of ADR-0022 holds for every new or changed log line; the raw header value of a malformed `Content-Length` and a JDK exception's message are never chained or echoed; refusal texts stay fixed. A new LogRecord takes the next free identifier in its range at write time and is added to `doc/LogMessages.adoc`.
+- **Native image.** The helpers stay plain classes; no reflect-config entry and no new dependency without operator approval.
+- Tests: JUnit 5, AAA, no Mockito/PowerMock/Hamcrest, parameterized for three or more similar variants, injected time (never sleeps), a negative control per regression test, new or grown test classes at or under 500 lines, a test fixture closes its sockets and stops its threads.
+- Never gate on `test-compile`/`test`; use `verify`. **Never install into the shared `~/.m2` without the operator's word.**
+- Sonar applies (`.github/project.yml` declares `sonar.project-key`): an open Sonar issue is fixed in a pushed commit, or dismissed with a stated reason recorded as `{issue-key}: {reason}` in the run's progress record and transmitted through
+  `plan-marshall:workflow-integration-sonar:sonar_rest transition --issue-key {key} --transition {falsepositive|wontfix}`. A dismissal the run cannot transmit is a blocker, never a silent pass. A read at the PR head owes itself to `sonar-roundtrip` and is `unknown` when it fails, never `0`.
+- **Review-fix discipline** (lessons 2026-11-17-16-001, 2026-11-17-16-002 and 2026-11-18-13-003): before applying a review-bot suggestion that changes a bounded structure, read the requirement row that states the bound; when an accepted fix contradicts a frozen deliverable criterion, ask in the same operator question whether to authorize the criterion change.
+- **The plan's own rules** (lessons 2026-11-19-07-001 to -009 and 2026-11-19-21-001 to -003): a framed test name, a test class over 500 lines, a second top-level class and a corrected claim not swept across its siblings are each a defect of this plan, not an advisory; a wait-bound statement names the phase it covers.
+
+## Claim Labels
+
+- OBSERVED: `BackChannelHttp.exchange` catches `InterruptedException`, `CancellationException` and `ExecutionException`; for an `ExecutionException` it unwraps `CompletionException`, maps malformed framing to the fixed failure, and rethrows an `IOException`, a `RuntimeException` or an `Error` cause unchanged (`BackChannelHttp.java:523-545`) — read at `0cb136a7`
+- OBSERVED: `TokenEndpointClient.send` (`:605-632`) and `ParClient` (`:116-131`) catch only `IOException` and `InterruptedException` around the exchange; `UserInfoClient` (`:195`, `:198`), `RevocationClient` (`:117`, `:120`) and `DiscoveryResolver` (`:188`, `:191`) show the same two catches (the try bodies of those three were not read) — read at `0cb136a7`
+- OBSERVED: `TokenEndpointClient.send` builds a `RedeemedResponseException` in its `IOException` branch when the status observed by the body handler is a success, and a `TransportException` otherwise (`:617-630`) — read at `0cb136a7`
+- OBSERVED: `RawHttpServer` is a package-private `final class` in the `internal` test package (`RawHttpServer.java:39`); its loop returns on a `SocketException` and throws `IllegalStateException` on any other `IOException` (`:82-92`) — read at `0cb136a7`
+- OBSERVED: `TokenEndpointClientRequestRefusalTest` declares its own `ExecutorService`, `AtomicInteger` and `ServerSocket` (`:58-63`) — read at `0cb136a7`
+- OBSERVED: `createAccessToken` is a `private static` helper of `BearerTokenProducerTest.java:391`, `BearerTokenProducerSchemeRuleTest.java:154` and `BearerTokenProducerRequirementsTest.java:192` — found by search at `0cb136a7`
+- OBSERVED: `TokenEndpointClientErrorMappingTest.java:157` is `shouldKeepInvalidGrantAsCredentialRejected`; `AuthorizationRequestBuilderTest.java:243` is `shouldKeepUrlWithoutFragmentUnchanged`; `BearerScopeValidationCombinedIndexBuildStepTest.java:150` has the display name "Should still refuse the own scopes of a method whose only class is @Vetoed" — found by search at `0cb136a7`
+- OBSERVED: `ClientConfiguration.java:173-177` says the request timeout "bounds the wait until the response headers arrive; the body read that follows is bounded in size by the payload ceiling", and `DiscoveryResolver` takes its content bound from `discoveryDocumentMaxSize` (`DiscoveryResolver.java:59`, `:112`; the field at `ClientConfiguration.java:197`) — read at `0cb136a7`
+- OBSERVED: the rule closing `doc/developer/test-impl-mapping.adoc` (`:518-528`) requires each class and fixture to be "found in the section of its module", and the document keeps a section "Cross-cutting guards" (`:405`) — read at `0cb136a7`
+- OBSERVED: `TokenSheriffProcessor.validateAnnotationScopes` takes a `beanArchiveIndex` and a `combinedIndex` (`:329-330`), and `inVetoedPackage` reads `{package}.package-info` from the index passed to `isBeanClassCandidate` (`:454-466`) — read at `0cb136a7`
+- HYPOTHESIS: the index `isBeanClassCandidate` receives at its call sites is the combined index, so a `package-info` indexed only by a dependency vetoes a class ArC registers — the review point the operator held (CodeRabbit, `PRRT_kwDOOA6qMM65q4mi` on #931), whose own reply says ArC's behaviour is unverified; read the call sites and the boot test to settle (verify-at-outline)
+- HYPOTHESIS: a response-side `IllegalArgumentException` other than the `Content-Length` form, or a future failed with a wrapped `CancellationException`, can occur — the PLAN-13 leaf's reading of the code; the JDK's behaviour was not read; confirm with a test that completes the future with each (verify-at-outline)
+- HYPOTHESIS: the request timeout stops at the response headers and the body read has no time bound — the lane's JDK 25 probe (PR #931 body, "Request timeout scope"), not re-run; confirm with a loopback server that stalls after the headers (verify-at-outline)
+- HYPOTHESIS: cui-http (version 3.2 per the PR body) sets only the connect and request timeouts, on the validation side as on the client side — the PR body's probe of `requestBuilder()`; the validation-side adapter was not inspected; read it (verify-at-outline)
+- HYPOTHESIS: a time-stalling loopback test of the body phase can be made stable without sleeping — not shown; the JDK client takes no injected clock (verify-at-outline)
+- HYPOTHESIS: the flake's cause is that the debugger element is attached before its module has loaded — the PLAN-12 lane's reading, never reproduced; confirm by the ten runs (verify-at-outline)
+- Verify-first clause: before scoping, settle (1) the operator decisions above, (2) every line number above against HEAD (no other plan is running; read what has merged since `0cb136a7`, in particular any change to `BackChannelHttp`, the five clients, `RawHttpServer` and the Playwright helpers), (3) that the deliverables stay at about five tasks or fewer; if the outline scopes above six, split at outline and record the split.
+
+## Expected Surface
+
+- OBSERVED: `token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/internal/BackChannelHttp.java`:523 — the exchange's catch and cause mapping
+- OBSERVED: `token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/TokenEndpointClient.java`:605 — the send and its catches
+- OBSERVED: `token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/ParClient.java`:116 — the send and its catches
+- OBSERVED: `token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/token/UserInfoClient.java`:195 — the catches
+- OBSERVED: `token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/lifecycle/RevocationClient.java`:117 — the catches
+- OBSERVED: `token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/discovery/DiscoveryResolver.java`:188 — the catches
+- OBSERVED: `token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/config/ClientConfiguration.java`:173 — the read-timeout Javadoc
+- OBSERVED: `token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/internal/BackChannelHttpExchangeTest.java`:1 — the exchange's branch tests
+- OBSERVED: `token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/internal/RawHttpServer.java`:39 — the shared fixture
+- OBSERVED: `token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/flow/TokenEndpointClientRequestRefusalTest.java`:55 — the third server loop
+- OBSERVED: `token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/flow/TokenEndpointClientErrorMappingTest.java`:157 — a framed name
+- OBSERVED: `token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/flow/AuthorizationRequestBuilderTest.java`:243 — a framed name
+- OBSERVED: `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus-deployment/src/main/java/de/cuioss/sheriff/token/quarkus/deployment/TokenSheriffProcessor.java`:454 — `inVetoedPackage`
+- OBSERVED: `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus-deployment/src/test/java/de/cuioss/sheriff/token/quarkus/deployment/BearerScopeValidationCombinedIndexBuildStepTest.java`:150 — the narrow display name
+- OBSERVED: `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus-deployment/src/test/java/de/cuioss/sheriff/token/quarkus/deployment/BearerScopeValidationVetoedPackageBootTest.java`:1 — the package-veto boot test
+- OBSERVED: `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/test/java/de/cuioss/sheriff/token/quarkus/producer/BearerTokenProducerTest.java`:391 — a `createAccessToken` copy
+- OBSERVED: `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/test/java/de/cuioss/sheriff/token/quarkus/producer/BearerTokenProducerSchemeRuleTest.java`:154 — a `createAccessToken` copy
+- OBSERVED: `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/test/java/de/cuioss/sheriff/token/quarkus/producer/BearerTokenProducerRequirementsTest.java`:192 — a `createAccessToken` copy
+- OBSERVED: `doc/developer/test-impl-mapping.adoc`:518 — the closing rule; `:405` the "Cross-cutting guards" section
+- OBSERVED: `doc/validation/threat-model.adoc`:230 — a validation-side timeout statement
+- OBSERVED: `doc/commons/requirements.adoc`:158 — COMMONS-4 and COMMONS-17 timeout statements
+- OBSERVED: `doc/commons/specification/transport.adoc`:204 — the transport timeout statements
+- OBSERVED: `doc/adr/0031-Bearer_extraction_scope_challenge_sanitiser_escape_and_bounded_body_reads_are_public_commons_helpers.adoc`:1 — the exchange and timeout statements
+- OBSERVED: `token-sheriff-quarkus-parent/e-2-e-playwright/scripts/start-dev-environment.sh`:76 — the dev-mode launch
+- OBSERVED: `token-sheriff-quarkus-parent/e-2-e-playwright/tests/accessibility-wcag-compliance.spec.js`:57 — the Token Debugger accessibility test
+- OBSERVED: `token-sheriff-quarkus-parent/e-2-e-playwright/tests/self-devui-accessible.spec.js`:47 — the render-wait use
+- OBSERVED: `token-sheriff-quarkus-parent/e-2-e-playwright/utils/devui-navigation.js`:118 — `goToTokenDebugger`
+
+## Dependencies and Sequencing
+
+- Target release: 0.9.10 (the repository is at `0.9.10-SNAPSHOT`). The plan exists so that API Sheriff's PLAN-34 adopts code, text and tests that match.
+- Depends on: PLAN-13 (shipped, #931, `0cb136a7`); the plan edits code, tests and documents it created. It depends on no unshipped plan: PLAN-01 to PLAN-13 are shipped and nothing else is running.
+- Inside the plan: deliverable 1 before 2 (the fixture and the tests it needs) and before 4 (the documents state what it settled); deliverables 3 and 5 are independent of the rest.
+- Overlaps with: none running.
+- Adjacent to: the marketplace-side findings of the same plans, which are NOT part of this spec (listed in the header). Also not part of it: API Sheriff's deletions of its own copies (its PLAN-34), the narrower RFC 6750 `error_description` grammar (OD-3 of ADR-0031, kept as the quoted string).
+- Requirement, ADR and log ids are next free at write time (ADR numbering continues from `0031`; the next free is `0032`).
+
+## Hand-Off Command
+
+```text
+/plan-marshall task="implement .plan/orchestrator/api-sheriff-seams/plans/PLAN-14-closing-sweep.md"
+```
+
+## Write-Boundary
+
+The plan implementing this spec touches only its own repository source and tests. It creates
+and edits NO file under `.plan/orchestrator/` other than its own
+`inbox/{sender}-{seq}` message — the orchestrator owns every other ledger write — and reports
+its outcome through its PR and its inbox message. The inbox exception's qualifiers and the
+sole sanctioned write mechanism are stated in
+`persona-plan-orchestrator/standards/orchestration-model.md` § Ledger Write-Boundary.
