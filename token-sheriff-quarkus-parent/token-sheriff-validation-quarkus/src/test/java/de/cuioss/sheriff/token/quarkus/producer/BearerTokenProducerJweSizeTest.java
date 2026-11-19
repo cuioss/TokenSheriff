@@ -40,8 +40,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * Pins the JWE size behaviour of {@link BearerTokenProducer} with a real, JWE-enabled
  * {@link TokenValidator}: a valid JWE above the 8 KiB JWS limit and within the 32 KiB JWE limit yields a
  * verified result, and a 5-part token above the JWE limit yields a counted {@code TOKEN_SIZE_EXCEEDED}
- * parsing error. Before the JWE size alignment the first case escaped the producer as an
- * {@link IllegalArgumentException}.
+ * parsing error. Neither case leaves the producer as an exception: both are reported through the
+ * {@link BearerTokenResult} status.
  */
 @EnableTestLogger(rootLevel = TestLogLevel.DEBUG)
 @DisplayName("JWE size with a real validator")
