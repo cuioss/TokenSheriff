@@ -142,6 +142,8 @@ class TokenEndpointClientErrorMappingTest {
         TransportException thrown = redeemExpectingFailure(uriBuilder, null);
 
         assertAll("plain non-success outcome",
+                () -> assertEquals(TransportException.class, thrown.getClass(),
+                        "the refusal must be exactly a plain TransportException, but was: " + thrown),
                 () -> assertFalse(thrown instanceof ClientAuthenticationFailedException,
                         "only the exact allow-listed shapes may be reported as a failed client authentication"),
                 () -> assertFalse(thrown instanceof CredentialRejectedException,
@@ -221,6 +223,8 @@ class TokenEndpointClientErrorMappingTest {
         TransportException thrown = redeemExpectingFailure(uriBuilder, null);
 
         assertAll("plain non-success outcome",
+                () -> assertEquals(TransportException.class, thrown.getClass(),
+                        "the refusal must be exactly a plain TransportException, but was: " + thrown),
                 () -> assertFalse(thrown instanceof InvalidScopeException,
                         "only a 4xx naming exactly invalid_scope may be reported as a scope refusal"),
                 () -> assertTrue(thrown.getMessage().contains("unexpected HTTP status " + status),
@@ -282,6 +286,8 @@ class TokenEndpointClientErrorMappingTest {
         TransportException thrown = redeemExpectingFailure(uriBuilder, null);
 
         assertAll("unknown error code",
+                () -> assertEquals(TransportException.class, thrown.getClass(),
+                        "the refusal must be exactly a plain TransportException, but was: " + thrown),
                 () -> assertFalse(thrown instanceof InvalidScopeException,
                         "a body not declared as JSON must never be read as a scope refusal"),
                 () -> assertFalse(thrown instanceof RedeemedResponseException,
