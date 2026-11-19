@@ -38,6 +38,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
@@ -113,14 +114,19 @@ import java.util.function.Supplier;
  *       wraps the body handler to observe the status line, maps the same exception in its own send. The
  *       JDK HTTP/1.1 client parses a response's {@code Content-Length} itself — after the body handler
  *       returned, or for a {@code 204} or other no-body reply before any body handler runs — and refuses
- *       a value that is not a number with an {@link IllegalArgumentException} carrying the raw header
- *       value (a {@link ProtocolException} caused by a {@link NumberFormatException} further down its
- *       cause chain since JDK 27, see {@link #isMalformedFraming(Throwable)}). Both sends wait on
- *       {@link HttpClient#sendAsync} through {@link #exchange}: a malformed-framing failure of the
+ *       a value that is not a number with the parser's {@link NumberFormatException}, which carries the
+ *       raw header value: the {@link HttpClient#sendAsync} future completes with it, {@link HttpClient#send}
+ *       wraps it in an {@link IllegalArgumentException}, and since JDK 27 it sits under a
+ *       {@link ProtocolException} in the cause chain, see {@link #isMalformedFraming(Throwable)}. Both sends
+ *       wait on {@link HttpClient#sendAsync} through {@link #exchange}: a malformed-framing failure of the
  *       exchange is mapped to a {@link TransportException} with the failure context and the fixed text
  *       {@value #MALFORMED_RESPONSE}, the JDK's exception neither chained nor echoed because its message
- *       is remote content; an {@link IllegalArgumentException} thrown synchronously, for a request the
- *       client refuses before sending, is a request-side fault and propagates unchanged.</li>
+ *       is remote content; any other failure of the exchange, an {@link IllegalArgumentException} of
+ *       another cause included, is rethrown as the client reported it, its cause intact; a cancelled wait
+ *       is an {@link IOException} with a fixed text; an {@link IllegalArgumentException} thrown
+ *       synchronously, for a request the client refuses before sending, is a request-side fault and
+ *       reaches the caller as thrown. The wait is bounded by the request timeout, see
+ *       {@link #exchange}.</li>
  * </ul>
  *
  * @since 1.0
@@ -142,35 +148,50 @@ public final class BackChannelHttp {
      */
     public static final String MALFORMED_RESPONSE = "the HTTP client refused the response as malformed";
 
+    /** Fixed text of the {@link IOException} that replaces a cancelled wait of {@link #exchange}. */
+    static final String EXCHANGE_CANCELLED = "the HTTP exchange was cancelled";
+
+    /** Fixed text of the {@link IOException} that wraps a checked, non-I/O failure of {@link #exchange}. */
+    static final String EXCHANGE_FAILED = "the HTTP exchange failed";
+
     /** Bound of the cause-chain walk of {@link #isMalformedFraming(Throwable)}. */
     private static final int MAX_CAUSE_DEPTH = 8;
 
     /**
      * Tells whether {@code failure} is the JDK HTTP client's refusal of a response whose
-     * {@code Content-Length} is not a number. Up to JDK 26 the client throws an
-     * {@link IllegalArgumentException}; since JDK 27 it throws a {@link ProtocolException} whose cause chain ends in
-     * a {@link ProtocolException} caused by the {@link NumberFormatException}. Both carry the raw header value in their message, so a caller
-     * that recognises either maps it to a fixed text and never chains or echoes it. Any other
-     * {@link ProtocolException} is a different failure and is not matched.
+     * {@code Content-Length} is not a number. The client's {@code Content-Length} parser fails with a
+     * {@link NumberFormatException}, and the exchange reports it in one of three forms:
+     * <ul>
+     *   <li>the {@link NumberFormatException} itself — the failure of the {@link HttpClient#sendAsync}
+     *       future up to JDK 26;</li>
+     *   <li>an {@link IllegalArgumentException} with a {@link NumberFormatException} in its cause chain —
+     *       the form {@link HttpClient#send} throws up to JDK 26;</li>
+     *   <li>a {@link ProtocolException} caused by the {@link NumberFormatException}, anywhere in the cause
+     *       chain — the form since JDK 27, where the client's {@link ProtocolException} wraps the parser's.</li>
+     * </ul>
+     * Each carries the raw header value in its message, so a caller that recognises it maps it to a fixed
+     * text and never chains or echoes it. An {@link IllegalArgumentException} without a
+     * {@link NumberFormatException} in its cause chain, and a {@link ProtocolException} of another cause,
+     * are different failures and are not matched. The cause-chain walk is bounded, so a cyclic chain cannot
+     * loop.
      *
      * @param failure the failure of an exchange, as {@link #exchange} passes it: the cause that completed
      *                the {@link HttpClient#sendAsync} future, unwrapped from its
      *                {@link ExecutionException} and any {@link CompletionException}; may be {@code null}
      * @return {@code true} if it is the malformed {@code Content-Length} refusal
      */
-    public static boolean isMalformedFraming(Throwable failure) {
-        if (failure instanceof IllegalArgumentException) {
+    public static boolean isMalformedFraming(@Nullable Throwable failure) {
+        if (failure instanceof NumberFormatException) {
             return true;
         }
-        // JDK 27 may wrap it: the client's ProtocolException has the ProtocolException of the
-        // Content-Length parser as its cause, and that one has the NumberFormatException. The walk
-        // is bounded, so a cyclic cause chain cannot loop.
+        boolean illegalArgument = failure instanceof IllegalArgumentException;
         Throwable current = failure;
         for (int depth = 0; current != null && depth < MAX_CAUSE_DEPTH; depth++) {
-            if (current instanceof ProtocolException && current.getCause() instanceof NumberFormatException) {
+            Throwable cause = current.getCause();
+            if (cause instanceof NumberFormatException && (illegalArgument || current instanceof ProtocolException)) {
                 return true;
             }
-            current = current.getCause();
+            current = cause;
         }
         return false;
     }
@@ -402,15 +423,19 @@ public final class BackChannelHttp {
      * <p>
      * Request-side and response-side faults are told apart by the documented {@link HttpClient#sendAsync}
      * contract, see {@link #exchange}: an {@link IllegalArgumentException} for a request the client refuses
-     * is thrown synchronously and propagates unchanged; a malformed-framing failure of the exchange is a
-     * malformed response, whether or not the body handler was invoked.
+     * is thrown synchronously and reaches the caller as thrown; a malformed-framing failure of the exchange
+     * is a malformed response, whether or not the body handler was invoked; any other failure of the
+     * exchange is rethrown as the client reported it, and a cancelled wait is an {@link IOException}. The
+     * wait for the response is bounded by the request's timeout, which {@link HttpHandler#requestBuilder()}
+     * sets to the configured read timeout.
      * </p>
      *
      * @param client         the client from {@link #sharedClient(HttpHandler)}; must not be {@code null}
      * @param request        the request to send; must not be {@code null}
      * @param failureContext a short, caller-safe prefix identifying the endpoint for exception messages
      * @return the response, its body read under the payload ceiling
-     * @throws IOException              if the exchange fails, including a body over the ceiling
+     * @throws IOException              if the exchange fails, including a body over the ceiling, a request
+     *                                  timeout and a cancelled exchange
      * @throws InterruptedException     if the calling thread is interrupted before the request is sent,
      *                                  in which case nothing is sent, or while waiting, see {@link #exchange}
      * @throws TransportException       if the HTTP client refuses the response as malformed
@@ -436,8 +461,19 @@ public final class BackChannelHttp {
      * client parses itself, for a {@code 204} or other no-body reply even before any body handler runs. It is
      * replaced by the exception {@code malformedResponse} supplies; the JDK's exception is neither chained
      * nor reused, because its message carries the raw header value (CWE-117, CWE-532). An
-     * {@link IllegalArgumentException} thrown synchronously is a request-side fault and propagates
-     * unchanged. Any other failure is rethrown as the client reported it.
+     * {@link IllegalArgumentException} thrown synchronously is a request-side fault and reaches the caller
+     * as thrown. Any other failure of the future is rethrown as the client reported it: an
+     * {@link IOException}, a {@link RuntimeException} — an {@link IllegalArgumentException} of another cause
+     * included, with its cause intact — or an {@link Error} as is, and any other checked cause wrapped in an
+     * {@link IOException} with the fixed text {@code "the HTTP exchange failed"}. A future that is cancelled
+     * while waiting raises an {@link IOException} with the fixed text {@code "the HTTP exchange was cancelled"},
+     * so a caller's {@link IOException} handling covers it.
+     * </p>
+     * <p>
+     * The wait has no bound of its own: it is bounded by the timeout of {@code request}. Every back-channel
+     * request is built through {@link HttpHandler#requestBuilder()}, which sets that timeout to the configured
+     * read timeout, and the client completes the future with an {@link java.net.http.HttpTimeoutException}
+     * when no response arrives within it.
      * </p>
      * <p>
      * A calling thread that is already interrupted when this method is entered sends nothing: the
@@ -455,7 +491,7 @@ public final class BackChannelHttp {
      *                          malformed-framing failure; must not be {@code null}
      * @param <T>               the response body type
      * @return the response
-     * @throws IOException              if the exchange fails
+     * @throws IOException              if the exchange fails, times out or is cancelled
      * @throws InterruptedException     if the calling thread is already interrupted on entry, in which case
      *                                  nothing is sent, or is interrupted while waiting, in which case the
      *                                  exchange is cancelled
@@ -469,13 +505,16 @@ public final class BackChannelHttp {
         if (Thread.interrupted()) {
             throw new InterruptedException("the calling thread was interrupted before the request was sent");
         }
-        // A request the client refuses is thrown here, synchronously, and propagates unchanged.
+        // A request the client refuses is thrown here, synchronously, and reaches the caller as thrown.
         CompletableFuture<HttpResponse<T>> pending = client.sendAsync(request, bodyHandler);
         try {
+            // Bounded by the request timeout, which HttpHandler.requestBuilder() sets to the read timeout.
             return pending.get();
         } catch (InterruptedException e) {
             pending.cancel(true);
             throw e;
+        } catch (CancellationException e) {
+            throw new IOException(EXCHANGE_CANCELLED, e);
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
             while (cause instanceof CompletionException && cause.getCause() != null) {
@@ -495,7 +534,7 @@ public final class BackChannelHttp {
             if (cause instanceof Error error) {
                 throw error;
             }
-            throw new IOException("the HTTP exchange failed", cause);
+            throw new IOException(EXCHANGE_FAILED, cause);
         }
     }
 
