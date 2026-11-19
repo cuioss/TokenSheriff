@@ -177,8 +177,8 @@ class BackChannelHttpRequestRefusalTest {
     }
 
     @Test
-    @DisplayName("positive control: a malformed Content-Length response still maps to the fixed transport failure")
-    void shouldStillMapMalformedResponseToFixedFailure() throws Exception {
+    @DisplayName("positive control: a malformed Content-Length response maps to the fixed transport failure")
+    void shouldMapMalformedResponseToFixedFailure() throws Exception {
         assertMalformedResponseMapsToFixedFailure("200 OK");
     }
 
