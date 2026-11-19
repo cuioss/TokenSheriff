@@ -189,14 +189,14 @@ Each change below alters what an existing deployment observes:
   `ByteArrayOutputStream`; they keep it in the shared handler's one doubling array, so their memory bound is
   the one COMMONS-17 states for every bounded read.
 * **Malformed `Content-Length` on the client** — a back-channel response whose `Content-Length` is not a
-  number now fails the client call with a `TransportException` carrying the endpoint's failure context and
-  the fixed text `BackChannelHttp.MALFORMED_RESPONSE` (when its body handler observed a success status, the
-  token endpoint reports it as its post-redemption `RedeemedResponseException`; for a `204` or other no-body
-  reply whose `Content-Length` the JDK refuses before any body handler runs, the status is never observed and
-  the token endpoint reports a pre-redemption failure). Before, the JDK's `IllegalArgumentException`, whose
-  message carries the raw header value, escaped the call. An `IllegalArgumentException` the JDK throws
+  number fails the client call with a `TransportException` carrying the endpoint's failure context and the
+  fixed text `BackChannelHttp.MALFORMED_RESPONSE`, never with the JDK exception whose message carries the
+  raw header value. The JDK parses that header after the body handler returned, and for a `204` or other
+  no-body reply before any body handler runs. The token endpoint reports the failure as its post-redemption
+  `RedeemedResponseException` when its body handler observed a success status, and as a pre-redemption
+  failure when it never saw the status, as for a `204`. An `IllegalArgumentException` the JDK throws
   synchronously from `HttpClient.sendAsync`, for a request it refuses before sending, is a request-side fault
-  and still propagates unchanged.
+  and reaches the caller as thrown.
 * **Logout freshness window** — `LogoutTokenValidator`'s builder refuses a freshness window longer than
   `LogoutTokenValidator.MAX_FRESHNESS_WINDOW` (100 years); ADR-0029 records that bound in its amendment
   "`iat` / `exp` reading and the freshness window are bounded".
@@ -279,7 +279,10 @@ received buffer, and its own read of an unparsable `Content-Length` threw a `Num
   that runs the method, merged with that bean class's own class-level `@BearerAuth`, as ADR-0024 merges them
   at run time: the interceptor reads the class-level annotation from the bean class, and `@BearerAuth` is
   not `@Inherited`, so an inherited method is merged with the subclass's annotation, never with the
-  declaring class's. Each set is checked by building the challenge the producer sends, through the one
+  declaring class's. Only a bean class is merged: an interface, an abstract class, a class declaring
+  `@Vetoed` and a class in a package whose `package-info` declares `@Vetoed` are no bean classes, the
+  package veto being read from the index as ArC reads it, so a class ArC registers is never skipped. Each
+  set is checked by building the challenge the producer sends, through the one
   public method `BearerTokenResponseFactory.insufficientScopeChallenge(Collection)` that the producer uses
   as well, so the rule is the builder's own and the length bound is checked with the realm and the
   `error_description` included. Three rules are enforced: every name is a `scope-token`, a set holds at
@@ -329,17 +332,26 @@ received buffer, and its own read of an unparsable `Content-Length` threw a `Num
   that is not a valid number, it cancels the subscription without requesting a byte and fails the body
   future with an `IOException` carrying a fixed message that does not echo the header value. That guarantee
   is the handler's own; whether the surrounding client reaches the handler, and whether it parses the header
-  itself first, is the client's behaviour (see COMMONS-17). The handler has no hook before the JDK client's
-  own parse, so the fixed failure is delivered by the caller of `send`: `BackChannelHttp.send`, through
-  which the client's discovery, PAR, userinfo and revocation clients send, and the token endpoint client's
-  own send map the JDK's `IllegalArgumentException` to a `TransportException` with a fixed text, without
-  chaining it. Request-side and response-side faults are told apart by the documented
-  `HttpClient.sendAsync` contract: a request the client refuses is thrown synchronously and propagates
-  unchanged, so it is never reported as a malformed response, while a response failure completes the future
-  exceptionally and is mapped — including a `204` or other no-body reply, whose `Content-Length` the JDK
-  parses before any body handler runs. For such a reply the token endpoint never observes the status, so it
-  reports the failure as a pre-redemption `TransportException`. The validation-side discovery and JWKS reads
-  hand the handler to cui-http, whose adapter performs the send, so no mapping is made for them here.
+  itself first, is the client's behaviour (see COMMONS-17). The JDK client parses `Content-Length` itself,
+  after the body handler returned and, for a `204` or other no-body reply, before any body handler runs;
+  it refuses a value that is not a number with a `NumberFormatException` that carries the raw value, which
+  `HttpClient.send` wraps in an `IllegalArgumentException` and which from JDK 27 on sits under a
+  `ProtocolException` in the cause chain. The JDK 27 form rests on the JDK 27 leg of the CI build. The
+  handler has no hook before that parse, so the fixed failure is delivered by the sending caller:
+  `BackChannelHttp.send`, through which the client's discovery, PAR, userinfo and revocation clients send,
+  and the token endpoint client's own send both wait on `HttpClient.sendAsync` through
+  `BackChannelHttp.exchange`. `exchange` maps a failure of the exchange that
+  `BackChannelHttp.isMalformedFraming` recognises in any of those forms to a `TransportException` with a
+  fixed text, without chaining it; any other failure of the exchange, an `IllegalArgumentException` of
+  another cause included, reaches the caller as the client reported it, and a cancelled wait is an
+  `IOException` with a fixed text. Request-side and response-side faults are told apart by the documented
+  `HttpClient.sendAsync` contract: a request the client refuses is thrown synchronously and reaches the
+  caller as thrown, so it is never reported as a malformed response, while a response failure completes the
+  future exceptionally. For a `204` or other no-body reply the token endpoint never observes the status, so
+  it reports the failure as a pre-redemption `TransportException`. The wait is bounded by the request
+  timeout, which `HttpHandler.requestBuilder()` sets to the configured read timeout. The validation-side
+  discovery and JWKS reads hand the handler to cui-http, whose adapter performs the send, so no mapping is
+  made for them here.
 
 === Consequences
 

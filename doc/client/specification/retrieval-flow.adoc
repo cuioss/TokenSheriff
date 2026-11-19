@@ -111,8 +111,10 @@ authorization-endpoint TLS check and the PKCE `S256` check apply as on the front
 the authorization endpoint that carries only `client_id` and the issued `request_uri`. When the AS
 advertises no `pushed_authorization_request_endpoint` the call is refused with
 `PushedAuthorizationEndpointMissingException`, a dedicated `ClientProtocolException`, before any HTTP
-request; it never falls back to a front-channel request. Because it is a `ClientProtocolException`,
-every existing catch and the HTTP-edge 4xx mapping stay as they were.
+request; it never falls back to a front-channel request. It is a `ClientProtocolException`: a caller
+that handles `ClientProtocolException` handles this refusal as well, and an HTTP edge maps it to the same
+RFC 9457 status as every other protocol refusal. Only a caller that needs to tell the missing PAR endpoint
+apart from the other protocol refusals handles the subtype.
 The plain `authorize` entry points build the authorization URL with the parameters above on the
 front channel, whether or not the AS advertises a PAR endpoint. A caller that needs PAR — FAPI 2.0
 makes it mandatory — calls the pushed path, or composes `ParClient` itself and builds the redirect

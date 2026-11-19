@@ -188,22 +188,32 @@ requesting a byte, and the body future fails with an `IOException` carrying a fi
 echo the header value.
 
 That guarantee is the handler's own. Whether the surrounding client reaches the handler, and whether it
-parses the header itself first, is the client's behaviour: the JDK HTTP/1.1 client (observed on JDK 25)
-parses `Content-Length` itself after the handler returned, so there the caller of `HttpClient.send`
-receives the JDK's own `IllegalArgumentException` (cause `NumberFormatException`) carrying the raw header
-value, and the handler's fixed message is not delivered. The handler has no hook before that parse, so the
-mapping belongs to the caller of `send`. The client's discovery, PAR, userinfo and revocation clients send
-through `BackChannelHttp.send`, and the token endpoint client through its own send; each catches that
-`IllegalArgumentException` and fails the call with a `TransportException` whose message is the endpoint's
-failure context and the fixed text `BackChannelHttp.MALFORMED_RESPONSE` (when its body handler observed a
-success status, the token endpoint reports it as its post-redemption failure), neither chaining the JDK's exception nor echoing its
-message. Request-side and response-side faults are told apart by the documented `HttpClient.sendAsync`
-contract: an `IllegalArgumentException` thrown synchronously, for a request the client refuses before
-sending, is a request-side fault and propagates unchanged; one that completes the exchange exceptionally is
-mapped, including for a `204` or other no-body reply whose `Content-Length` the JDK parses before any body
-handler runs (the token endpoint, never seeing that status, reports it as a pre-redemption failure). The
-validation-side discovery and JWKS reads hand the handler to cui-http, whose adapter performs
-the send, so this repository has no send call there to map. A caller therefore treats the message of any
+parses the header itself first, is the client's behaviour. The JDK HTTP/1.1 client parses `Content-Length`
+itself: after the handler returned, and for a `204` or other no-body reply before any body handler runs.
+It refuses a value that is not a number with the parser's `NumberFormatException`, which carries the raw
+header value, so the handler's fixed message is not delivered: the `HttpClient.sendAsync` future completes
+with that exception, `HttpClient.send` wraps it in an `IllegalArgumentException`, and from JDK 27 on it sits
+under a `ProtocolException` in the cause chain. The JDK 27 form rests on the JDK 27 leg of the CI build. The
+handler has no hook before that parse, so the mapping belongs to the caller that sends.
+
+The client's discovery, PAR, userinfo and revocation clients send through `BackChannelHttp.send`, and the
+token endpoint client through its own send; both wait on `HttpClient.sendAsync` through
+`BackChannelHttp.exchange`. `exchange` recognises the refusal in each of its forms
+(`BackChannelHttp.isMalformedFraming`: the `NumberFormatException` itself, an `IllegalArgumentException`
+with a `NumberFormatException` in its cause chain, or a `ProtocolException` caused by a
+`NumberFormatException` anywhere in the chain) and fails the call with a `TransportException` whose
+message is the endpoint's failure context and the fixed text `BackChannelHttp.MALFORMED_RESPONSE`, neither
+chaining the JDK's exception nor echoing its message. The token endpoint reports that failure as its
+post-redemption failure when its body handler observed a success status, and as a pre-redemption failure
+when it never saw the status, as for a `204`. Any other failure of the exchange, an
+`IllegalArgumentException` of another cause included, reaches the caller as the client reported it, its
+cause intact; a cancelled wait is an `IOException` with a fixed text. Request-side and response-side faults
+are told apart by the documented `HttpClient.sendAsync` contract: an `IllegalArgumentException` thrown
+synchronously, for a request the client refuses before sending, is a request-side fault and reaches the
+caller as thrown. The wait has no bound of its own: it is bounded by the request timeout, which
+`HttpHandler.requestBuilder()` sets to the configured read timeout. The validation-side discovery and JWKS
+reads hand the handler to cui-http, whose adapter performs the send, so this repository has no send call
+there to map. A caller therefore treats the message of any
 exception that comes out of an HTTP exchange as remote content and sanitises it before logging.
 
 The ceiling is accepted from 0 to `Integer.MAX_VALUE - 8` bytes; any other value is refused when the

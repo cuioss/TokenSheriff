@@ -156,7 +156,7 @@ This project uses CUI logging standards with Java Util Logging:
 - Logger: `de.cuioss.tools.logging.CuiLogger` (private static final LOGGER)
 - **Format specifier**: Always use `%s` for parameter substitution (NEVER `{}`, `%.2f`, `%d`)
 - **Structured logging**: Use `de.cuioss.tools.logging.LogRecord` for INFO/WARN/ERROR messages
-- **LogRecord ranges**: INFO (001-099), WARN (100-199), ERROR (200-299)
+- **LogRecord ranges**: INFO (1-99), WARN (100-199), ERROR (200-299)
 - **Documentation**: All log messages must be documented in `doc/LogMessages.adoc`
 - **Exception logging**: Exception parameter always comes first
 
