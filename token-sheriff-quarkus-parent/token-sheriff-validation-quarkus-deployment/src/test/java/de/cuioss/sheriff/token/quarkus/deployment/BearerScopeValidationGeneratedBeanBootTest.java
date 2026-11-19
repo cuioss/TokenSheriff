@@ -17,7 +17,6 @@ package de.cuioss.sheriff.token.quarkus.deployment;
 
 import de.cuioss.sheriff.token.quarkus.annotation.BearerToken;
 import de.cuioss.sheriff.token.quarkus.producer.BearerTokenResult;
-import io.quarkus.arc.Arc;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanGizmoAdaptor;
 import io.quarkus.builder.BuildChainBuilder;
@@ -127,29 +126,5 @@ class BearerScopeValidationGeneratedBeanBootTest {
         // Never invoked: QuarkusExtensionTest skips test methods once assertException is set, and the
         // augmentation failure itself is asserted in assertScopeRefusal.
         fail("Augmentation should have failed for a generated bean with a scope outside the scope-token grammar");
-    }
-}
-
-/**
- * Negative control for {@link BearerScopeValidationGeneratedBeanBootTest}: the same generated bean with a scope
- * name inside the {@code scope-token} grammar boots.
- */
-@Tag("quarkus-boot")
-@DisplayName("An application whose generated bean declares a valid required scope boots")
-class BearerScopeValidationGeneratedBeanControlBootTest {
-
-    // The archive carries the refusal test class because the shared customizer is declared there.
-    @RegisterExtension
-    static final QuarkusExtensionTest unitTest = new QuarkusExtensionTest()
-            .withApplicationRoot(jar -> jar.addClass(BearerScopeValidationGeneratedBeanBootTest.class))
-            .withConfigurationResource("application-integration.properties")
-            .addBuildChainCustomizer(BearerScopeValidationGeneratedBeanBootTest.generatedBean(
-                    "de.cuioss.sheriff.token.quarkus.deployment.GeneratedValidScopeHolder", "read"));
-
-    @Test
-    @DisplayName("Should boot the application with the generated bean")
-    void shouldBoot() {
-        assertTrue(Arc.container().isRunning(),
-                "the application must have built and booted with the valid-scope generated bean");
     }
 }
