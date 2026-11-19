@@ -29,11 +29,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.time.OffsetDateTime;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.WARN;
 import static de.cuioss.test.juli.LogAsserts.assertSingleLogMessagePresentContaining;

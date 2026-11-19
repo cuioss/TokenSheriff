@@ -34,7 +34,8 @@ import org.junit.jupiter.api.Test;
 import java.security.KeyPair;
 import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Pins the JWE size behaviour of {@link BearerTokenProducer} with a real, JWE-enabled
