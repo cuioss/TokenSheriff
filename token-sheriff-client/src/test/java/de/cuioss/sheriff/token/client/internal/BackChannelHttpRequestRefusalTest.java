@@ -45,10 +45,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests that {@link BackChannelHttp#send} maps an {@link IllegalArgumentException} to the malformed-response
- * failure only when it fails the exchange: a request the JDK HTTP client refuses before sending is thrown
- * synchronously by {@link HttpClient#sendAsync}, a request-side fault that reaches the caller as the
- * {@link IllegalArgumentException} the client threw.
+ * Tests that {@link BackChannelHttp#send} maps only a failure of the exchange that
+ * {@link BackChannelHttp#isMalformedFraming(Throwable)} recognises — the {@link NumberFormatException} forms of
+ * a {@code Content-Length} that is not a number — to the malformed-response failure, and that any other
+ * {@link IllegalArgumentException} is rethrown as the client reported it: a request the JDK HTTP client
+ * refuses before sending is thrown synchronously by {@link HttpClient#sendAsync}, a request-side fault that
+ * reaches the caller as the {@link IllegalArgumentException} the client threw.
  * <p>
  * The refused request is hand-built: it carries the restricted {@code Connection} header, which
  * {@link HttpRequest.Builder} refuses to set, so only a custom {@link HttpRequest} can hand it to the client.

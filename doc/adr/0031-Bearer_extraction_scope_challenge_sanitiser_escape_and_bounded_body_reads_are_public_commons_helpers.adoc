@@ -348,8 +348,11 @@ received buffer, and its own read of an unparsable `Content-Length` threw a `Num
   `HttpClient.sendAsync` contract: a request the client refuses is thrown synchronously and reaches the
   caller as thrown, so it is never reported as a malformed response, while a response failure completes the
   future exceptionally. For a `204` or other no-body reply the token endpoint never observes the status, so
-  it reports the failure as a pre-redemption `TransportException`. The wait is bounded by the request
-  timeout, which `HttpHandler.requestBuilder()` sets to the configured read timeout. The validation-side
+  it reports the failure as a pre-redemption `TransportException`. The request timeout, which
+  `HttpHandler.requestBuilder()` sets to the configured read timeout, bounds the wait until the response
+  headers arrive. It does not cover the body: the body read is bounded in size by the `BoundedBodyHandler`
+  ceiling but carries no time bound, so a server that sends the headers and then stalls or trickles the body
+  keeps the calling thread waiting. The validation-side
   discovery and JWKS reads hand the handler to cui-http, whose adapter performs the send, so no mapping is
   made for them here.
 

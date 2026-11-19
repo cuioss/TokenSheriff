@@ -125,8 +125,9 @@ import java.util.function.Supplier;
  *       another cause included, is rethrown as the client reported it, its cause intact; a cancelled wait
  *       is an {@link IOException} with a fixed text; an {@link IllegalArgumentException} thrown
  *       synchronously, for a request the client refuses before sending, is a request-side fault and
- *       reaches the caller as thrown. The wait is bounded by the request timeout, see
- *       {@link #exchange}.</li>
+ *       reaches the caller as thrown. The request timeout bounds the wait until the response headers
+ *       arrive; the body read that follows is bounded in size by the payload ceiling but carries no time
+ *       bound, see {@link #exchange}.</li>
  * </ul>
  *
  * @since 1.0
@@ -426,8 +427,9 @@ public final class BackChannelHttp {
      * is thrown synchronously and reaches the caller as thrown; a malformed-framing failure of the exchange
      * is a malformed response, whether or not the body handler was invoked; any other failure of the
      * exchange is rethrown as the client reported it, and a cancelled wait is an {@link IOException}. The
-     * wait for the response is bounded by the request's timeout, which {@link HttpHandler#requestBuilder()}
-     * sets to the configured read timeout.
+     * request's timeout, which {@link HttpHandler#requestBuilder()} sets to the configured read timeout,
+     * bounds the wait until the response headers arrive; the body read is bounded by the payload ceiling
+     * but carries no time bound, see {@link #exchange}.
      * </p>
      *
      * @param client         the client from {@link #sharedClient(HttpHandler)}; must not be {@code null}
@@ -470,10 +472,14 @@ public final class BackChannelHttp {
      * so a caller's {@link IOException} handling covers it.
      * </p>
      * <p>
-     * The wait has no bound of its own: it is bounded by the timeout of {@code request}. Every back-channel
-     * request is built through {@link HttpHandler#requestBuilder()}, which sets that timeout to the configured
-     * read timeout, and the client completes the future with an {@link java.net.http.HttpTimeoutException}
-     * when no response arrives within it.
+     * The wait has no bound of its own. The timeout of {@code request} bounds it until the response headers
+     * arrive: every back-channel request is built through {@link HttpHandler#requestBuilder()}, which sets
+     * that timeout to the configured read timeout, and the client completes the future with an
+     * {@link java.net.http.HttpTimeoutException} when no response headers arrive within it. The request
+     * timeout does not cover the body: once the headers have arrived, the body read is bounded in size by
+     * {@code bodyHandler} — the {@link BoundedBodyHandler} ceiling on the back-channel path — but carries no
+     * time bound, so a server that sends the headers and then stalls or trickles the body keeps the calling
+     * thread waiting.
      * </p>
      * <p>
      * A calling thread that is already interrupted when this method is entered sends nothing: the
@@ -508,7 +514,8 @@ public final class BackChannelHttp {
         // A request the client refuses is thrown here, synchronously, and reaches the caller as thrown.
         CompletableFuture<HttpResponse<T>> pending = client.sendAsync(request, bodyHandler);
         try {
-            // Bounded by the request timeout, which HttpHandler.requestBuilder() sets to the read timeout.
+            // The request timeout (the read timeout, set by HttpHandler.requestBuilder()) bounds this wait
+            // until the response headers arrive; the body read after them has no time bound.
             return pending.get();
         } catch (InterruptedException e) {
             pending.cancel(true);
