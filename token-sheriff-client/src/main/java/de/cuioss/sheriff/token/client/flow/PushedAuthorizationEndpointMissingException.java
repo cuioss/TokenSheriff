@@ -26,18 +26,18 @@ import java.io.Serial;
  * de.cuioss.sheriff.token.client.auth.ClientAuthentication, AuthorizationRequestOptions)} before any HTTP
  * request; there is no fallback to a front-channel request.
  * <p>
- * It extends {@link ClientProtocolException}, so every existing {@code catch (ClientProtocolException)}
- * and every documented {@code @throws ClientProtocolException} contract keeps holding unchanged — the
- * refusal still maps to the same RFC 9457 status at an HTTP edge. Only a caller that needs to tell the
- * missing PAR endpoint apart from the other protocol refusals catches this type.
+ * It is a {@link ClientProtocolException}: a {@code catch (ClientProtocolException)} catches it, a
+ * documented {@code @throws ClientProtocolException} covers it, and it maps to the same RFC 9457 status
+ * at an HTTP edge. A caller that needs to tell the missing PAR endpoint apart from the other protocol
+ * refusals catches this type.
  *
  * @since 1.0
  * @author Oliver Wolff
  */
-// java:S110 — the inheritance depth is inherited wholesale from the library's existing exception
-// taxonomy (ClientProtocolException and its ancestors); this type adds exactly one level to it.
-// The subtype relation is load-bearing for source compatibility: it is what lets the dedicated reason
-// be added without touching a single existing catch block, assertThrows or documented @throws.
+// java:S110 — the inheritance depth comes from the library's exception taxonomy
+// (ClientProtocolException and its ancestors); this type adds exactly one level to it. The subtype
+// relation is what makes this refusal a ClientProtocolException for every catch block, assertThrows
+// and documented @throws that names that type.
 @SuppressWarnings("java:S110")
 public class PushedAuthorizationEndpointMissingException extends ClientProtocolException {
 

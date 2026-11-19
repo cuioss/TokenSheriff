@@ -50,20 +50,19 @@ import java.io.Serial;
  * response body is interpolated into it, so no AS-controlled string can reach a log appender or an
  * exception message through this type (CWE-117).
  * <p>
- * It extends {@link TransportException} so every existing caller and every documented
- * {@code @throws TransportException} contract keeps holding unchanged; only a caller that needs the
- * credential-rejected distinction catches this narrower type. Callers must classify through
- * {@link RefreshFlow#classify(Throwable)} rather than by listing exception types.
+ * It is a {@link TransportException}: a {@code catch (TransportException)} catches it and a documented
+ * {@code @throws TransportException} covers it. A caller that needs the credential-rejected distinction
+ * catches this narrower type. Callers must classify through {@link RefreshFlow#classify(Throwable)}
+ * rather than by listing exception types.
  *
  * @since 1.0
  * @author Oliver Wolff
  * @see <a href="https://www.rfc-editor.org/rfc/rfc6749#section-5.2">RFC 6749 §5.2 - Error Response</a>
  */
-// java:S110 — the inheritance depth is inherited wholesale from the library's existing exception
-// taxonomy (TransportException and its ancestors); this type adds exactly one level to it, exactly as
-// RedeemedResponseException does. The subtype relation is load-bearing for source compatibility: it is
-// what lets the credential-rejected signal be added without touching a single existing catch block,
-// assertThrows or documented @throws.
+// java:S110 — the inheritance depth comes from the library's exception taxonomy (TransportException
+// and its ancestors); this type adds exactly one level to it, exactly as RedeemedResponseException does.
+// The subtype relation is what makes the credential-rejected signal a TransportException for every
+// catch block, assertThrows and documented @throws that names that type.
 @SuppressWarnings("java:S110")
 public class CredentialRejectedException extends TransportException {
 

@@ -227,7 +227,7 @@ _See Requirements xref:requirements.adoc#VALIDATION-8.1[VALIDATION-8.1: Token Si
 
 |D4
 |Resource exhaustion (parallel requests)
-|Thread-safe implementation; connection/read timeouts for HTTP operations
+|Thread-safe implementation; connection/read timeouts for HTTP operations (the read timeout bounds the wait until the response headers arrive; a body trickled after the headers is bounded in size, not in time)
 |Concurrency tests
 
 |D5

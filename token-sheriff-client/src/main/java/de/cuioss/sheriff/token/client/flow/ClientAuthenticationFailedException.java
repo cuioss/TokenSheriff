@@ -52,17 +52,17 @@ import java.io.Serial;
  * from the observed HTTP status and fixed text only; neither the parsed error code nor any part of the
  * response body is interpolated into it (CWE-117).
  * <p>
- * It extends {@link TransportException} so every existing caller and every documented
- * {@code @throws TransportException} contract keeps holding unchanged; only a caller that needs the
- * client-authentication distinction catches this narrower type.
+ * It is a {@link TransportException}: a {@code catch (TransportException)} catches it and a documented
+ * {@code @throws TransportException} covers it. A caller that needs the client-authentication
+ * distinction catches this narrower type.
  *
  * @since 1.0
  * @author Oliver Wolff
  * @see <a href="https://www.rfc-editor.org/rfc/rfc6749#section-5.2">RFC 6749 §5.2 - Error Response</a>
  */
-// java:S110 — the inheritance depth is inherited wholesale from the library's existing exception
-// taxonomy (TransportException and its ancestors); this type adds exactly one level to it, exactly as
-// CredentialRejectedException does. The subtype relation is load-bearing for source compatibility.
+// java:S110 — the inheritance depth comes from the library's exception taxonomy (TransportException
+// and its ancestors); this type adds exactly one level to it, exactly as CredentialRejectedException
+// does. The subtype relation is what makes this refusal a TransportException for every caller.
 @SuppressWarnings("java:S110")
 public class ClientAuthenticationFailedException extends TransportException {
 

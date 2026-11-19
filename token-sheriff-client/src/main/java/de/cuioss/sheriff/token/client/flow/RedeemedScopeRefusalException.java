@@ -26,20 +26,19 @@ import java.util.Objects;
  * reconciliation posture refused the grant, after the server had already redeemed the presented
  * refresh token.
  * <p>
- * It extends {@link ClientProtocolException}, so every existing {@code catch (ClientProtocolException)}
- * and every documented {@code @throws ClientProtocolException} contract keeps holding unchanged — the
- * refusal still maps to the same RFC 9457 status at an HTTP edge. Only a caller that needs the
- * pre-/post-redemption distinction reads the additional {@link #redemption()}.
+ * It is a {@link ClientProtocolException}: a {@code catch (ClientProtocolException)} catches it, a
+ * documented {@code @throws ClientProtocolException} covers it, and it maps to the same RFC 9457 status
+ * at an HTTP edge. A caller that needs the pre-/post-redemption distinction reads
+ * {@link #redemption()}.
  *
  * @since 1.0
  * @author Oliver Wolff
  */
-// java:S110 — the inheritance depth is inherited wholesale from the library's existing exception
-// taxonomy (ClientProtocolException and its ancestors); this type adds exactly one level to it.
-// The subtype relation is load-bearing for source compatibility: it is what lets the post-redemption
-// signal be added without touching a single existing catch block, assertThrows or documented
-// @throws. Flattening the hierarchy to satisfy a parent-count heuristic would break consumer catch
-// (ClientProtocolException) blocks — a public API break this design exists to avoid.
+// java:S110 — the inheritance depth comes from the library's exception taxonomy
+// (ClientProtocolException and its ancestors); this type adds exactly one level to it. The subtype
+// relation is what makes the post-redemption signal a ClientProtocolException for every catch block,
+// assertThrows and documented @throws that names that type; a flattened hierarchy would take it out of
+// every consumer catch block for ClientProtocolException.
 @SuppressWarnings("java:S110")
 public class RedeemedScopeRefusalException extends ClientProtocolException implements RedeemedRefreshFailure {
 

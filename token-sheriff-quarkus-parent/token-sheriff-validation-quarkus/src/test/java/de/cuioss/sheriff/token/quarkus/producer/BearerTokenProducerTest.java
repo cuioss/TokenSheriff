@@ -16,7 +16,6 @@
 package de.cuioss.sheriff.token.quarkus.producer;
 
 import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
-import de.cuioss.sheriff.token.commons.transport.ParserConfig;
 import de.cuioss.sheriff.token.quarkus.servlet.HttpRequestResolver;
 import de.cuioss.sheriff.token.quarkus.servlet.HttpRequestResolverMock;
 import de.cuioss.sheriff.token.validation.TokenValidator;
@@ -25,25 +24,20 @@ import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.domain.context.AccessTokenRequest;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
-import de.cuioss.sheriff.token.validation.jwe.JweDecryptionConfig;
-import de.cuioss.sheriff.token.validation.test.JweTestTokenFactory;
-import de.cuioss.sheriff.token.validation.test.TestTokenHolder;
-import de.cuioss.sheriff.token.validation.test.generator.TestTokenGenerators;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.easymock.Capture;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
-import java.security.KeyPair;
 import java.time.OffsetDateTime;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
-import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.WARN;
 import static de.cuioss.test.juli.LogAsserts.assertSingleLogMessagePresentContaining;
 import static org.easymock.EasyMock.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -53,7 +47,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * Tests the bearer token extraction and validation logic.
  *
  * Note: This test focuses on the basic flow and error handling.
- * Full integration testing with real tokens is done in QuarkusTest classes.
+ * Full integration testing with real tokens is done in QuarkusTest classes. The requirement-set checks
+ * are in {@link BearerTokenProducerRequirementsTest}, the JWE size checks with a real validator in
+ * {@link BearerTokenProducerJweSizeTest}.
  */
 @EnableTestLogger(rootLevel = TestLogLevel.DEBUG)
 class BearerTokenProducerTest {
@@ -69,76 +65,6 @@ class BearerTokenProducerTest {
         HttpRequestResolver servletResolver = servletResolverMock;
         producer = new BearerTokenProducer(tokenValidator, servletResolver,
                 () -> EmptyJsonWebToken.INSTANCE, "Authorization", "Bearer");
-    }
-
-    /**
-     * Pins the JWE size behaviour with a real, JWE-enabled {@link TokenValidator}: a valid JWE above
-     * the 8 KiB JWS limit and within the 32 KiB JWE limit yields a verified result, and a 5-part token
-     * above the JWE limit yields a counted {@code TOKEN_SIZE_EXCEEDED} parsing error. Before the JWE
-     * size alignment the first case escaped the producer as an {@link IllegalArgumentException}.
-     */
-    @Nested
-    @DisplayName("JWE size with a real validator")
-    class JweSizeWithRealValidator {
-
-        private static final int JWE_LIMIT = JweDecryptionConfig.DEFAULT_MAX_ENCRYPTED_TOKEN_SIZE;
-
-        private KeyPair encryptionKeyPair;
-        private TestTokenHolder holder;
-        private TokenValidator realValidator;
-        private BearerTokenProducer realProducer;
-
-        @BeforeEach
-        void setUpRealValidator() {
-            encryptionKeyPair = JweTestTokenFactory.generateRsaKeyPair();
-            holder = TestTokenGenerators.accessTokens().next();
-            realValidator = TokenValidator.builder()
-                    .issuerConfig(holder.getIssuerConfig())
-                    .jweDecryptionConfig(JweDecryptionConfig.builder()
-                            .defaultDecryptionKey(encryptionKeyPair.getPrivate())
-                            .build())
-                    .build();
-            realProducer = new BearerTokenProducer(realValidator, servletResolverMock,
-                    () -> EmptyJsonWebToken.INSTANCE, "Authorization", "Bearer");
-        }
-
-        @AfterEach
-        void closeRealValidator() {
-            realValidator.close();
-        }
-
-        @Test
-        @DisplayName("A valid JWE of about 10 KiB yields a verified bearer token result")
-        void shouldVerifyJweAboveJwsLimit() {
-            for (int i = 0; i < 4; i++) {
-                holder.withClaim("pad" + i, ClaimValue.forPlainString("p".repeat(1000)));
-            }
-            String jwe = JweTestTokenFactory.encryptAsJwe(holder.getRawToken(),
-                    encryptionKeyPair.getPublic(), "RSA-OAEP", "A256GCM", null);
-            assertTrue(jwe.length() > ParserConfig.DEFAULT_MAX_TOKEN_SIZE && jwe.length() <= JWE_LIMIT,
-                    "Non-vacuity: the JWE must lie between the two limits, was " + jwe.length());
-            servletResolverMock.setBearerToken(jwe);
-
-            BearerTokenResult result = realProducer.getBearerTokenResult(Set.of(), Set.of(), Set.of());
-
-            assertEquals(BearerTokenStatus.FULLY_VERIFIED, result.getStatus());
-            assertEquals("p".repeat(1000),
-                    result.getAccessTokenContent().orElseThrow().getClaims().get("pad0").getOriginalString());
-        }
-
-        @Test
-        @DisplayName("A 5-part token above the JWE limit yields a counted TOKEN_SIZE_EXCEEDED parsing error")
-        void shouldRejectJweAboveJweLimit() {
-            String tail = ".b.c.d.e";
-            servletResolverMock.setBearerToken("a".repeat(JWE_LIMIT + 1 - tail.length()) + tail);
-
-            BearerTokenResult result = realProducer.getBearerTokenResult(Set.of(), Set.of(), Set.of());
-
-            assertEquals(BearerTokenStatus.PARSING_ERROR, result.getStatus());
-            assertEquals(SecurityEventCounter.EventType.TOKEN_SIZE_EXCEEDED, result.getErrorEventType().orElseThrow());
-            assertEquals(1, realValidator.getSecurityEventCounter()
-                    .getCount(SecurityEventCounter.EventType.TOKEN_SIZE_EXCEEDED));
-        }
     }
 
     @Test
@@ -229,135 +155,6 @@ class BearerTokenProducerTest {
         assertTrue(result.getAccessTokenContent().isPresent());
         assertSingleLogMessagePresentContaining(TestLogLevel.DEBUG,
                 "Bearer token validation successful");
-
-        verify(tokenValidator);
-    }
-
-    @Test
-    @DisplayName("Should return constraint violation when missing required scopes")
-    void missingRequiredScopes() {
-        String token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature";
-        servletResolverMock.setBearerToken(token);
-
-        // Token has "write" scope but not "admin"
-        AccessTokenContent tokenContent = createAccessToken(Map.of(
-                ClaimName.SCOPE.getName(), ClaimValue.forList("write", List.of("write"))));
-        Set<String> requiredScopes = Set.of("admin", "write");
-
-        expect(tokenValidator.createAccessToken(anyObject(AccessTokenRequest.class))).andReturn(tokenContent);
-        replay(tokenValidator);
-
-        BearerTokenResult result = producer.getBearerTokenResult(requiredScopes, Set.of(), Set.of());
-
-        assertEquals(BearerTokenStatus.CONSTRAINT_VIOLATION, result.getStatus());
-        assertFalse(result.getAccessTokenContent().isPresent());
-        assertEquals(requiredScopes, result.getRequiredScopes());
-        assertEquals(Set.of("admin"), result.getMissingScopes());
-        assertSingleLogMessagePresentContaining(TestLogLevel.WARN,
-                WARN.BEARER_TOKEN_REQUIREMENTS_NOT_MET_DETAILED.resolveIdentifierString());
-
-        verify(tokenValidator);
-    }
-
-    @Test
-    @DisplayName("Should keep the result unchanged when the caller clears its requirement sets afterwards")
-    void resultUnchangedAfterCallerClearsRequirementSets() {
-        BearerTokenResult result = scopeViolationFor(new HashSet<>(Set.of("admin", "write")),
-                new HashSet<>(Set.of("reader")), new HashSet<>(Set.of("staff")), true);
-
-        assertAll("result after the caller cleared its sets",
-                () -> assertEquals(Set.of("admin", "write"), result.getRequiredScopes(), "required scopes"),
-                () -> assertEquals(Set.of("reader"), result.getRequiredRoles(), "required roles"),
-                () -> assertEquals(Set.of("staff"), result.getRequiredGroups(), "required groups"),
-                () -> assertEquals(Set.of("admin"), result.getMissingScopes(), "missing scopes"));
-    }
-
-    @Test
-    @DisplayName("negative control: the result for untouched requirement sets carries the same values")
-    void resultForUntouchedRequirementSets() {
-        BearerTokenResult result = scopeViolationFor(new HashSet<>(Set.of("admin", "write")),
-                new HashSet<>(Set.of("reader")), new HashSet<>(Set.of("staff")), false);
-
-        assertAll("result for untouched sets",
-                () -> assertEquals(Set.of("admin", "write"), result.getRequiredScopes(), "required scopes"),
-                () -> assertEquals(Set.of("reader"), result.getRequiredRoles(), "required roles"),
-                () -> assertEquals(Set.of("staff"), result.getRequiredGroups(), "required groups"),
-                () -> assertEquals(Set.of("admin"), result.getMissingScopes(), "missing scopes"));
-    }
-
-    /**
-     * Validates a token carrying only the {@code write} scope against the caller's mutable requirement
-     * sets and, when {@code clearAfterwards} is set, clears every one of those sets after the call.
-     */
-    private BearerTokenResult scopeViolationFor(Set<String> requiredScopes, Set<String> requiredRoles,
-            Set<String> requiredGroups, boolean clearAfterwards) {
-        servletResolverMock.setBearerToken("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature");
-        AccessTokenContent tokenContent = createAccessToken(Map.of(
-                ClaimName.SCOPE.getName(), ClaimValue.forList("write", List.of("write"))));
-        expect(tokenValidator.createAccessToken(anyObject(AccessTokenRequest.class))).andReturn(tokenContent);
-        replay(tokenValidator);
-
-        BearerTokenResult result = producer.getBearerTokenResult(requiredScopes, requiredRoles, requiredGroups);
-        if (clearAfterwards) {
-            requiredScopes.clear();
-            requiredRoles.clear();
-            requiredGroups.clear();
-        }
-
-        assertEquals(BearerTokenStatus.CONSTRAINT_VIOLATION, result.getStatus(),
-                "the token lacks the admin scope, so the requirements are not met");
-        verify(tokenValidator);
-        return result;
-    }
-
-    @Test
-    @DisplayName("Should return constraint violation when missing required roles")
-    void missingRequiredRoles() {
-        String token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature";
-        servletResolverMock.setBearerToken(token);
-
-        // Token has "user" role but not "admin"
-        AccessTokenContent tokenContent = createAccessToken(Map.of(
-                ClaimName.ROLES.getName(), ClaimValue.forList("user", List.of("user"))));
-        Set<String> requiredRoles = Set.of("user", "admin");
-
-        expect(tokenValidator.createAccessToken(anyObject(AccessTokenRequest.class))).andReturn(tokenContent);
-        replay(tokenValidator);
-
-        BearerTokenResult result = producer.getBearerTokenResult(Set.of(), requiredRoles, Set.of());
-
-        assertEquals(BearerTokenStatus.CONSTRAINT_VIOLATION, result.getStatus());
-        assertFalse(result.getAccessTokenContent().isPresent());
-        assertEquals(requiredRoles, result.getRequiredRoles());
-        assertEquals(Set.of("admin"), result.getMissingRoles());
-        assertSingleLogMessagePresentContaining(TestLogLevel.WARN,
-                WARN.BEARER_TOKEN_REQUIREMENTS_NOT_MET_DETAILED.resolveIdentifierString());
-
-        verify(tokenValidator);
-    }
-
-    @Test
-    @DisplayName("Should return constraint violation when missing required groups")
-    void missingRequiredGroups() {
-        String token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature";
-        servletResolverMock.setBearerToken(token);
-
-        // Token has "developers" group but not "managers"
-        AccessTokenContent tokenContent = createAccessToken(Map.of(
-                ClaimName.GROUPS.getName(), ClaimValue.forList("developers", List.of("developers"))));
-        Set<String> requiredGroups = Set.of("developers", "managers");
-
-        expect(tokenValidator.createAccessToken(anyObject(AccessTokenRequest.class))).andReturn(tokenContent);
-        replay(tokenValidator);
-
-        BearerTokenResult result = producer.getBearerTokenResult(Set.of(), Set.of(), requiredGroups);
-
-        assertEquals(BearerTokenStatus.CONSTRAINT_VIOLATION, result.getStatus());
-        assertFalse(result.getAccessTokenContent().isPresent());
-        assertEquals(requiredGroups, result.getRequiredGroups());
-        assertEquals(Set.of("managers"), result.getMissingGroups());
-        assertSingleLogMessagePresentContaining(TestLogLevel.WARN,
-                WARN.BEARER_TOKEN_REQUIREMENTS_NOT_MET_DETAILED.resolveIdentifierString());
 
         verify(tokenValidator);
     }

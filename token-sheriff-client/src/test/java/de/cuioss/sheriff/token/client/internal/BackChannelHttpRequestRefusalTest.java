@@ -25,45 +25,37 @@ import org.junit.jupiter.api.Test;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.Authenticator;
 import java.net.CookieHandler;
-import java.net.InetAddress;
 import java.net.ProxySelector;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.net.SocketException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests that {@link BackChannelHttp#send} maps an {@link IllegalArgumentException} to the malformed-response
- * failure only when it fails the exchange: a request the JDK HTTP client refuses before sending is thrown
- * synchronously by {@link HttpClient#sendAsync}, a request-side fault that reaches the caller unchanged as
- * {@link IllegalArgumentException}.
+ * Tests that {@link BackChannelHttp#send} maps only a failure of the exchange that
+ * {@link BackChannelHttp#isMalformedFraming(Throwable)} recognises — the {@link NumberFormatException} forms of
+ * a {@code Content-Length} that is not a number — to the malformed-response failure, and that any other
+ * {@link IllegalArgumentException} is rethrown as the client reported it: a request the JDK HTTP client
+ * refuses before sending is thrown synchronously by {@link HttpClient#sendAsync}, a request-side fault that
+ * reaches the caller as the {@link IllegalArgumentException} the client threw.
  * <p>
  * The refused request is hand-built: it carries the restricted {@code Connection} header, which
  * {@link HttpRequest.Builder} refuses to set, so only a custom {@link HttpRequest} can hand it to the client.
  * The client refuses it while preparing the exchange, before any byte is written. The positive control sends a
- * valid request to a loopback server whose {@code Content-Length} is not a number and still sees the fixed
+ * valid request to a loopback server whose {@code Content-Length} is not a number and sees the fixed
  * {@link BackChannelHttp#MALFORMED_RESPONSE} failure.
  * <p>
  * A calling thread that is already interrupted sends nothing: the call throws {@link InterruptedException}
@@ -76,16 +68,13 @@ class BackChannelHttpRequestRefusalTest {
     private static final String FAILURE_CONTEXT = "test endpoint request failed";
     private static final String RESTRICTED_HEADER = "Connection";
 
-    private final ExecutorService serverThread = Executors.newSingleThreadExecutor();
-    private final AtomicInteger receivedRequests = new AtomicInteger();
-    private ServerSocket serverSocket;
+    private RawHttpServer server;
 
     @AfterEach
     void tearDown() throws IOException {
-        if (serverSocket != null) {
-            serverSocket.close();
+        if (server != null) {
+            server.close();
         }
-        serverThread.shutdownNow();
     }
 
     private static ClientConfiguration config() {
@@ -108,45 +97,17 @@ class BackChannelHttpRequestRefusalTest {
     }
 
     /**
-     * Starts a loopback server that reads the request head, counts it in {@link #receivedRequests} and answers
-     * with {@code statusLine}, the {@code {}} body and the given {@code Content-Length} value, and returns its URL.
+     * Starts a loopback server that counts every request it reads and answers with {@code statusLine}, the
+     * {@code {}} body and the given {@code Content-Length} value, and returns its URL.
      */
     private String serve(String statusLine, String contentLength) throws IOException {
-        serverSocket = new ServerSocket(0, 50, InetAddress.getByAddress(new byte[]{127, 0, 0, 1}));
-        byte[] answer = ("HTTP/1.1 " + statusLine + "\r\n"
+        server = RawHttpServer.answering("HTTP/1.1 " + statusLine + "\r\n"
                 + "Content-Type: application/json\r\n"
                 + "Content-Length: " + contentLength + "\r\n"
                 + "Connection: close\r\n"
                 + "\r\n"
-                + "{}").getBytes(StandardCharsets.US_ASCII);
-        serverThread.execute(() -> {
-            while (!serverSocket.isClosed()) {
-                try (Socket socket = serverSocket.accept()) {
-                    readRequestHead(socket.getInputStream());
-                    receivedRequests.incrementAndGet();
-                    OutputStream out = socket.getOutputStream();
-                    out.write(answer);
-                    out.flush();
-                } catch (SocketException closed) {
-                    return;
-                } catch (IOException e) {
-                    throw new IllegalStateException(e);
-                }
-            }
-        });
-        return "http://127.0.0.1:" + serverSocket.getLocalPort() + "/endpoint";
-    }
-
-    /** Reads up to the blank line that ends a request head; a GET carries no body. */
-    private static void readRequestHead(InputStream in) throws IOException {
-        ByteArrayOutputStream head = new ByteArrayOutputStream();
-        int current;
-        while ((current = in.read()) != -1) {
-            head.write(current);
-            if (head.toString(StandardCharsets.US_ASCII).endsWith("\r\n\r\n")) {
-                return;
-            }
-        }
+                + "{}");
+        return server.url();
     }
 
     @Test
@@ -160,7 +121,7 @@ class BackChannelHttpRequestRefusalTest {
 
     @Test
     @DisplayName("should let a request the client refuses before sending reach the caller as IllegalArgumentException")
-    void shouldPropagateRequestRefusalUnchanged() {
+    void shouldLetRequestRefusalReachCallerAsIllegalArgumentException() {
         BackChannelHttp backChannel = new BackChannelHttp(config(), 1024, BackChannelHttp.FIXED_PARSER_CONFIG_ORIGIN);
         HttpHandler handler = backChannel.validatedHandler("http://127.0.0.1:1/endpoint", FAILURE_CONTEXT);
         HttpClient client = backChannel.sharedClient(handler);
@@ -177,8 +138,8 @@ class BackChannelHttpRequestRefusalTest {
     }
 
     @Test
-    @DisplayName("positive control: a malformed Content-Length response still maps to the fixed transport failure")
-    void shouldStillMapMalformedResponseToFixedFailure() throws Exception {
+    @DisplayName("positive control: a malformed Content-Length response maps to the fixed transport failure")
+    void shouldMapMalformedResponseToFixedFailure() throws Exception {
         assertMalformedResponseMapsToFixedFailure("200 OK");
     }
 
@@ -226,7 +187,7 @@ class BackChannelHttpRequestRefusalTest {
 
         assertAll("Already-interrupted caller",
                 () -> assertEquals(0, client.dispatched.get(), "The request is never handed to the client"),
-                () -> assertEquals(0, receivedRequests.get(), "No request reaches the server"),
+                () -> assertEquals(0, server.receivedRequests(), "No request reaches the server"),
                 () -> assertFalse(interruptStatusAfterCall,
                         "The interrupt status is cleared with the exception, as HttpClient.send does"));
     }
@@ -246,7 +207,7 @@ class BackChannelHttpRequestRefusalTest {
                 () -> assertEquals(200, response.statusCode(), "The server's status reaches the caller"),
                 () -> assertEquals("{}", response.body(), "The server's body reaches the caller"),
                 () -> assertEquals(1, client.dispatched.get(), "The request is handed to the client once"),
-                () -> assertEquals(1, receivedRequests.get(), "The request reaches the server once"));
+                () -> assertEquals(1, server.receivedRequests(), "The request reaches the server once"));
     }
 
     /**

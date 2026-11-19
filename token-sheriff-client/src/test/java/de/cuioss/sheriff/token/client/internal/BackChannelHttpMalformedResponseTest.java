@@ -27,24 +27,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.io.BufferedInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.InetAddress;
 import java.net.ProtocolException;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.net.SocketException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -64,15 +52,13 @@ class BackChannelHttpMalformedResponseTest {
     private static final String RAW_VALUE = "12raw34remote56";
     private static final String FAILURE_CONTEXT = "test endpoint request failed";
 
-    private final ExecutorService serverThread = Executors.newSingleThreadExecutor();
-    private ServerSocket serverSocket;
+    private RawHttpServer server;
 
     @AfterEach
     void tearDown() throws IOException {
-        if (serverSocket != null) {
-            serverSocket.close();
+        if (server != null) {
+            server.close();
         }
-        serverThread.shutdownNow();
     }
 
     private static ClientConfiguration config() {
@@ -99,48 +85,8 @@ class BackChannelHttpMalformedResponseTest {
      * Starts a loopback server that answers every request with {@code rawResponse} and returns its URL.
      */
     private String serve(String rawResponse) throws IOException {
-        serverSocket = new ServerSocket(0, 50, InetAddress.getByAddress(new byte[]{127, 0, 0, 1}));
-        byte[] answer = rawResponse.getBytes(StandardCharsets.US_ASCII);
-        serverThread.execute(() -> {
-            while (!serverSocket.isClosed()) {
-                try (Socket socket = serverSocket.accept()) {
-                    readRequest(socket.getInputStream());
-                    OutputStream out = socket.getOutputStream();
-                    out.write(answer);
-                    out.flush();
-                } catch (SocketException closed) {
-                    return;
-                } catch (IOException e) {
-                    throw new IllegalStateException(e);
-                }
-            }
-        });
-        return "http://127.0.0.1:" + serverSocket.getLocalPort() + "/endpoint";
-    }
-
-    /** Reads the request head and the request body its Content-Length announces. */
-    private static void readRequest(InputStream raw) throws IOException {
-        InputStream in = new BufferedInputStream(raw);
-        ByteArrayOutputStream line = new ByteArrayOutputStream();
-        int bodyLength = 0;
-        int previous = -1;
-        int current;
-        while ((current = in.read()) != -1) {
-            if (previous == '\r' && current == '\n') {
-                String header = line.toString(StandardCharsets.US_ASCII).trim();
-                if (header.isEmpty()) {
-                    break;
-                }
-                if (header.toLowerCase(Locale.ROOT).startsWith("content-length:")) {
-                    bodyLength = Integer.parseInt(header.substring("content-length:".length()).trim());
-                }
-                line.reset();
-            } else if (current != '\r') {
-                line.write(current);
-            }
-            previous = current;
-        }
-        in.readNBytes(bodyLength);
+        server = RawHttpServer.answering(rawResponse);
+        return server.url();
     }
 
     private static HttpRequest get(HttpHandler handler) {
@@ -175,13 +121,30 @@ class BackChannelHttpMalformedResponseTest {
         HttpRequest request = get(handler);
         HttpResponse.BodyHandler<String> bodyHandler = backChannel.bodyHandler();
 
-        // IllegalArgumentException up to JDK 26, ProtocolException caused by a NumberFormatException since JDK 27
+        // IllegalArgumentException caused by a NumberFormatException up to JDK 26, ProtocolException chain
+        // ending in a ProtocolException caused by a NumberFormatException since JDK 27
         Exception failure = assertThrows(Exception.class, () -> client.send(request, bodyHandler));
 
         assertTrue(BackChannelHttp.isMalformedFraming(failure), "The JDK refuses it as malformed framing");
 
         String text = failure.getMessage() + " " + (failure.getCause() == null ? "" : failure.getCause().getMessage());
         assertTrue(text.contains(RAW_VALUE), "Without the mapping the JDK exception carries the raw header value");
+
+        if (Runtime.version().feature() < 27) {
+            assertAll("The JDK's own form up to JDK 26",
+                    () -> assertEquals(IllegalArgumentException.class, failure.getClass(),
+                            "HttpClient.send throws an IllegalArgumentException"),
+                    () -> assertInstanceOf(NumberFormatException.class, failure.getCause(),
+                            "caused by the NumberFormatException of the Content-Length parser"));
+        } else {
+            assertAll("The JDK's own form since JDK 27",
+                    () -> assertInstanceOf(ProtocolException.class, failure,
+                            "HttpClient.send throws a ProtocolException"),
+                    () -> assertInstanceOf(ProtocolException.class, failure.getCause(),
+                            "which wraps the ProtocolException of the Content-Length parser"),
+                    () -> assertInstanceOf(NumberFormatException.class, failure.getCause().getCause(),
+                            "caused by the NumberFormatException"));
+        }
     }
 
     @Test
@@ -195,8 +158,13 @@ class BackChannelHttpMalformedResponseTest {
         unrelated.initCause(new IOException("connection reset"));
 
         assertAll("Malformed framing",
-                () -> assertTrue(BackChannelHttp.isMalformedFraming(new IllegalArgumentException(RAW_VALUE)),
-                        "The IllegalArgumentException of JDK 26 and earlier"),
+                () -> assertTrue(BackChannelHttp.isMalformedFraming(new NumberFormatException(RAW_VALUE)),
+                        "The NumberFormatException the sendAsync future fails with up to JDK 26"),
+                () -> assertTrue(BackChannelHttp.isMalformedFraming(
+                                new IllegalArgumentException(RAW_VALUE, new NumberFormatException(RAW_VALUE))),
+                        "The IllegalArgumentException HttpClient.send throws up to JDK 26"),
+                () -> assertFalse(BackChannelHttp.isMalformedFraming(new IllegalArgumentException(RAW_VALUE)),
+                        "An IllegalArgumentException without a NumberFormatException is a different failure"),
                 () -> assertTrue(BackChannelHttp.isMalformedFraming(parser),
                         "A ProtocolException caused by a NumberFormatException"),
                 () -> assertTrue(BackChannelHttp.isMalformedFraming(wrapped),
@@ -209,7 +177,7 @@ class BackChannelHttpMalformedResponseTest {
     }
 
     @Test
-    @DisplayName("positive control: a valid Content-Length is read unchanged")
+    @DisplayName("positive control: a response with a valid Content-Length reaches the caller with its status and body")
     void shouldReadValidResponse() throws Exception {
         String url = serve(response(200, "2"));
         BackChannelHttp backChannel = new BackChannelHttp(config(), 1024, BackChannelHttp.FIXED_PARSER_CONFIG_ORIGIN);

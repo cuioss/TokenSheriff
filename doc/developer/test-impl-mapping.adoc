@@ -216,12 +216,14 @@ Package prefix: `de.cuioss.sheriff.token.client`.
 `RefreshFailureClassificationTest`, `RefreshFlowScopeOverrideTest`, `RefreshFlowTest`,
 `RefreshRedemptionTest`, `RefreshResultVerifierAdversarialTest`, `RefreshResultVerifierTest`,
 `StepUpChallengeAttackDatabaseTest`, `StepUpChallengeParserTest`, `StepUpHandlerOptionsTest`,
-`StepUpHandlerTest`, `StepUpResultVerifierTest`, `TokenEndpointClientScopeNonceTest`,
-`TokenEndpointClientTest`, `WiredFlowHttpsTest`, `WiredFlowNegativePathIT`
+`StepUpHandlerTest`, `StepUpResultVerifierTest`, `TokenEndpointClientDpopBindingTest`,
+`TokenEndpointClientErrorMappingTest`, `TokenEndpointClientRequestRefusalTest`,
+`TokenEndpointClientScopeNonceTest`, `TokenEndpointClientTest`, `WiredFlowHttpsTest`,
+`WiredFlowNegativePathIT`
 
 |`internal`
 |`BackChannelEgressPolicyTest`, `BackChannelHostnameVerificationTest`,
-`BackChannelHttpBoundedBodyTest`, `BackChannelHttpMalformedResponseTest`,
+`BackChannelHttpBoundedBodyTest`, `BackChannelHttpExchangeTest`, `BackChannelHttpMalformedResponseTest`,
 `BackChannelHttpRequestRefusalTest`, `BackChannelHttpTlsTrustTest`,
 `BackChannelOriginMappingTest`, `BackChannelOriginRoutingTest`,
 `ClientLogMessagesIdentifierTest`, `EndpointQueryTest`, `EndpointSchemePolicyTest`, `FormEncoderTest`, `JsonEscaperTest`,
@@ -249,9 +251,9 @@ drive the retrieval path across several production packages.
 |===
 
 Fixtures that are not test classes: `NativeImageClassScanner` (root package),
-`CachingDiscoveryResolverSupport` (`discovery`), `DpopBoundAccessTokens` and
-`WiredFlowTestSupport` (`flow`), `HeaderLineBreakAttackDatabase` (`hardening`) and
-`RefreshTestSupport` (`token`).
+`CachingDiscoveryResolverSupport` (`discovery`), `DpopBoundAccessTokens`,
+`TokenEndpointStubDispatcher` and `WiredFlowTestSupport` (`flow`), `HeaderLineBreakAttackDatabase`
+(`hardening`), `RawHttpServer` (`internal`) and `RefreshTestSupport` (`token`).
 
 [#validation-quarkus]
 == token-sheriff-validation-quarkus
@@ -311,7 +313,8 @@ Package prefix: `de.cuioss.sheriff.token.quarkus`.
 `ObservedValidatorResolverTest`
 
 |`producer`
-|`AlternativeValidatorOrphanedPropertyTest`, `BearerTokenProducerSchemeRuleTest`,
+|`AlternativeValidatorOrphanedPropertyTest`, `BearerTokenProducerJweSizeTest`,
+`BearerTokenProducerRequirementsTest`, `BearerTokenProducerSchemeRuleTest`,
 `BearerTokenProducerTest`, `BearerTokenResponseFactoryTest`,
 `BearerTokenResponseFactoryUnrepresentableScopesTest`, `BearerTokenResultTest`,
 `EmptyJsonWebTokenTest`, `JsonWebTokenAdapterTest`, `NativeTokenValidatorProducerIT`,
@@ -349,11 +352,14 @@ Package prefix: `de.cuioss.sheriff.token.quarkus`.
 `BearerScopeValidationCombinedIndexBuildStepTest`,
 `BearerScopeValidationDefaultMethodBuildStepTest`, `BearerScopeValidationGeneratedBeanBootTest`,
 `BearerScopeValidationGeneratedBeanControlBootTest`, `BearerScopeValidationRefusalBootTest`,
-`TokenSheriffDevUIIntegrationTest`, `TokenSheriffIntegrationTest`,
-`TokenSheriffProcessorBuildStepTest`, `TokenSheriffProcessorTest`,
+`BearerScopeValidationVetoedPackageBootTest`, `TokenSheriffDevUIIntegrationTest`,
+`TokenSheriffIntegrationTest`, `TokenSheriffProcessorBuildStepTest`, `TokenSheriffProcessorTest`,
 `TokenValidatorEagerStartupTest`; the extension as a whole is booted by
 `TokenSheriffExtensionTest` (test package `quarkus.test`)
 |===
+
+Fixtures that are not test classes: `VetoedPackageEndpoint` (test package `quarkus.deployment.vetoed`,
+whose `package-info` declares `@Vetoed`).
 
 [#client-quarkus]
 == token-sheriff-client-quarkus
@@ -510,4 +516,10 @@ token-sheriff-validation-quarkus. Both appear in their module tables above.
 
 Update this mapping in the same pull request that adds, moves, renames or splits a test
 class. A test class that is not listed here, or a listed class that no longer exists, is a
-defect in this document.
+defect in this document. The same holds for the fixtures that are not test classes, listed after
+each module table.
+
+The mapping is kept by hand. Its check is a search of this document for every test class and
+every fixture the pull request adds, moves, renames or splits; each must be found in the section of
+its module, naming its test package where that differs from the production package. After a rename
+or a move, the search for the old name must find no entry.

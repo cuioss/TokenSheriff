@@ -166,12 +166,14 @@ class BackChannelHostnameVerificationTest {
      * this thread.
      * <p>
      * The interrupt arrives here by a route that is invisible at the call site above: {@code
-     * TokenEndpointClient} catches {@link InterruptedException} from {@code HttpClient.send(...)},
-     * restores the interrupt status, and rethrows it wrapped as a {@link TransportException} — which the
-     * pre-warm deliberately discards along with every other warm-up outcome. The restored flag outlives
-     * that discard. Because {@code HttpClient.send(...)} inspects the calling thread's interrupt status
-     * on entry and JUnit runs the assertion-bearing methods on the same thread, the flag would make the
-     * positive control's own exchange fail before any TLS decision is reached — a thread-lifecycle
+     * TokenEndpointClient} sends through {@link BackChannelHttp#exchange}, which waits on {@code
+     * HttpClient.sendAsync(...)}; it catches the {@link InterruptedException} of that wait, restores the
+     * interrupt status, and rethrows it wrapped as a {@link TransportException} — which the pre-warm
+     * deliberately discards along with every other warm-up outcome. The restored flag outlives that
+     * discard. Because {@link BackChannelHttp#exchange} checks the calling thread's interrupt status on
+     * entry, before it hands the request to {@code sendAsync}, and JUnit runs the assertion-bearing methods
+     * on the same thread, the flag would make the positive control's own exchange fail before any TLS
+     * decision is reached — a thread-lifecycle
      * artefact reported as a hostname-verification failure that never happened. The interrupt status is
      * therefore left set, for whoever owns this thread, and the test reports "no verdict" ({@link
      * Assumptions#abort(String)}) rather than "failed", mirroring the timeout discrimination in
@@ -181,7 +183,7 @@ class BackChannelHostnameVerificationTest {
     private static void abortIfInterrupted() {
         if (Thread.currentThread().isInterrupted()) {
             Assumptions.abort("the TLS pre-warm exchange was interrupted, leaving the interrupt status set on "
-                    + "this test thread; HttpClient.send(...) would throw InterruptedException on entry before "
+                    + "this test thread; BackChannelHttp.exchange would throw InterruptedException on entry before "
                     + "reaching any TLS decision. That is a thread-lifecycle artefact, not evidence about "
                     + "hostname verification.");
         }
@@ -251,8 +253,8 @@ class BackChannelHostnameVerificationTest {
     }
 
     @Test
-    @DisplayName("exchange() is still refused with verifyHostname(false) when the issuer is untrusted")
-    void shouldStillRefuseUntrustedIssuerWhenVerificationDisabled(URIBuilder uriBuilder) throws Exception {
+    @DisplayName("exchange() is refused with verifyHostname(false) when the issuer is untrusted")
+    void shouldRefuseUntrustedIssuerWhenVerificationDisabled(URIBuilder uriBuilder) throws Exception {
         // Arrange — trust an unrelated certificate, so chain validation must fail on its own merits
         installClientTrustStore(UNRELATED_CERTIFICATE.certificate());
         var config = tlsConfig(false);
@@ -285,7 +287,7 @@ class BackChannelHostnameVerificationTest {
      * Runs the back-channel exchange, but names a timeout for what it is before the failure can be read
      * as a verification outcome.
      * <p>
-     * This restores symmetry with {@link #shouldStillRefuseUntrustedIssuerWhenVerificationDisabled},
+     * This restores symmetry with {@link #shouldRefuseUntrustedIssuerWhenVerificationDisabled},
      * which already pins its refusal to chain trust. An escaping {@link TransportException} is only
      * meaningful on the positive control if it came from the TLS decision under test; a connect or read
      * timeout wraps into the same exception type, so without this discrimination a slow machine would

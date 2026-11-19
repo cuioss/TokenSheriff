@@ -64,18 +64,20 @@ import java.util.concurrent.Flow;
  * a byte and the body future completes exceptionally with an {@link IOException} reading
  * {@code Response Content-Length header is not a valid number}; the header value is not echoed. That
  * guarantee is the handler's own. Whether the surrounding client reaches the handler, and whether it
- * parses the header itself first, is the client's behaviour: the JDK HTTP/1.1 client (observed on JDK 25)
- * parses {@code Content-Length} itself after the handler returned, so there the caller of
- * {@code HttpClient.send} receives the JDK's own {@link IllegalArgumentException} (cause
- * {@link NumberFormatException}) carrying the raw header value, and the fixed message is not delivered.
- * The handler has no hook before that parse, so the mapping belongs to the caller of {@code send}: the
- * client module's endpoint clients ({@code BackChannelHttp.send}, and the token endpoint client's own
- * send) catch that {@link IllegalArgumentException} and report a {@code TransportException} with a fixed
- * text, neither
- * chaining the JDK's exception nor echoing its message. The validation-side discovery and JWKS reads
- * hand the handler to cui-http, whose adapter performs the send, so this repository has no send call
- * there to map. A caller therefore treats the message of any exception out of an HTTP exchange as remote
- * content and sanitises it before logging.
+ * parses the header itself first, is the client's behaviour. The JDK HTTP/1.1 client parses
+ * {@code Content-Length} itself: after the handler returned, and for a {@code 204} or other no-body reply
+ * before any body handler runs. It refuses a value that is not a number with the parser's
+ * {@link NumberFormatException}, which carries the raw header value, so the fixed message is not
+ * delivered: the {@code HttpClient.sendAsync} future completes with that exception,
+ * {@code HttpClient.send} wraps it in an {@link IllegalArgumentException}, and from JDK 27 on it sits under
+ * a {@code ProtocolException} in the cause chain. The handler has no hook before that parse, so the
+ * mapping belongs to the caller that sends: the client module's endpoint clients wait on
+ * {@code HttpClient.sendAsync} through {@code BackChannelHttp.exchange}, which recognises the refusal in
+ * each of these forms and reports a {@code TransportException} with a fixed text, neither chaining the
+ * JDK's exception nor echoing its message. The validation-side discovery and JWKS reads hand the handler
+ * to cui-http, whose adapter performs the send, so this repository has no send call there to map. A
+ * caller therefore treats the message of any exception out of an HTTP exchange as remote content and
+ * sanitises it before logging.
  * <p>
  * The ceiling is accepted from {@code 0} to {@link #MAX_CEILING} inclusive, the largest array the result
  * can hold; a negative or larger ceiling is refused with an {@link IllegalArgumentException} when the

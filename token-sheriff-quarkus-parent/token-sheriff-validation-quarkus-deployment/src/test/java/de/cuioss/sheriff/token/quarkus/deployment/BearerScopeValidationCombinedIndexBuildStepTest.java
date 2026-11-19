@@ -16,6 +16,7 @@
 package de.cuioss.sheriff.token.quarkus.deployment;
 
 import de.cuioss.sheriff.token.quarkus.annotation.BearerAuth;
+import de.cuioss.sheriff.token.quarkus.deployment.vetoed.VetoedPackageEndpoint;
 import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
 import io.quarkus.arc.deployment.ValidationPhaseBuildItem.ValidationErrorBuildItem;
 import io.quarkus.arc.processor.BeanArchives;
@@ -49,9 +50,11 @@ import static org.junit.jupiter.api.Assertions.*;
  * annotations; the combined index holds both classes, as it holds every indexed application archive.
  * <p>
  * Because the combined index holds classes that are no beans, the class also pins that a {@code @Vetoed} class,
- * declaring or inheriting the method, is no bean class whose class-level scopes are merged.
+ * declaring or inheriting the method, and a class in a package whose {@code package-info} declares
+ * {@code @Vetoed}, are no bean classes whose class-level scopes are merged, while the method's own scopes are
+ * still checked.
  */
-@DisplayName("Deployment-time scope check of a @BearerAuth method inherited from outside the bean-archive index")
+@DisplayName("Deployment-time scope check of inherited @BearerAuth methods and of @Vetoed classes and packages")
 class BearerScopeValidationCombinedIndexBuildStepTest {
 
     private static final String OVER_BOUND = "at most 64 scope tokens";
@@ -59,6 +62,8 @@ class BearerScopeValidationCombinedIndexBuildStepTest {
     private static final String NOT_A_SCOPE_TOKEN = "is not an RFC 6749 section 3.3 scope-token";
 
     private static final DotName BASE = DotName.createSimple(DependencyEndpointBase.class.getName());
+
+    private static final String VETOED_PACKAGE_INFO = VetoedPackageEndpoint.class.getPackageName() + ".package-info";
 
     @Test
     @DisplayName("Should refuse an inherited method from outside the bean-archive index merged over the bound")
@@ -151,6 +156,40 @@ class BearerScopeValidationCombinedIndexBuildStepTest {
         assertTrue(violations.getFirst().startsWith("@BearerAuth on method "
                 + VetoedDeclaringInvalidMethodScope.class.getName() + "#endpoint declares "), violations.getFirst());
         assertTrue(violations.getFirst().contains(NOT_A_SCOPE_TOKEN), violations.getFirst());
+    }
+
+    @Test
+    @DisplayName("positive control: should accept the valid own scopes of a method whose only class is @Vetoed")
+    void shouldAcceptValidMethodOfVetoedClassAlone() throws Exception {
+        List<String> violations = TokenSheriffProcessor
+                .findScopeViolations(Index.of(VetoedDeclaringValidMethodScope.class));
+
+        assertEquals(List.of(), violations, "valid method scopes of a @Vetoed class must not be refused");
+    }
+
+    @Test
+    @DisplayName("Should not merge a method with its class in a @Vetoed package, refusing the same shape outside it")
+    void shouldSkipClassInVetoedPackage() throws Exception {
+        List<String> vetoed = TokenSheriffProcessor.findScopeViolations(
+                Index.of(VetoedPackageEndpoint.class, Class.forName(VETOED_PACKAGE_INFO)));
+        List<String> control = TokenSheriffProcessor.findScopeViolations(Index.of(DeclaringOverBound.class));
+
+        assertEquals(List.of(), vetoed, "a class in a @Vetoed package is no bean class, so its scopes are not merged");
+        assertEquals(1, control.size(), "control: exactly the merged method outside the vetoed package: " + control);
+        assertTrue(control.getFirst().startsWith("@BearerAuth on method " + DeclaringOverBound.class.getName()
+                + "#endpoint together with the class-level @BearerAuth of bean class "), control.getFirst());
+        assertTrue(control.getFirst().contains(OVER_BOUND), control.getFirst());
+    }
+
+    @Test
+    @DisplayName("Should merge a class whose package carries no package-info in the index")
+    void shouldMergeClassWhosePackageInfoIsNotIndexed() throws Exception {
+        List<String> violations = TokenSheriffProcessor.findScopeViolations(Index.of(VetoedPackageEndpoint.class));
+
+        assertEquals(1, violations.size(), "without its package-info the class is a bean class: " + violations);
+        assertTrue(violations.getFirst().startsWith("@BearerAuth on method " + VetoedPackageEndpoint.class.getName()
+                + "#answer together with the class-level @BearerAuth of bean class "), violations.getFirst());
+        assertTrue(violations.getFirst().contains(OVER_BOUND), violations.getFirst());
     }
 
     private static IndexView computingIndex(Index beanArchive) {
@@ -256,6 +295,17 @@ class BearerScopeValidationCombinedIndexBuildStepTest {
         @BearerAuth(requiredScopes = {"read", "has space"})
         public String endpoint() {
             return "refused";
+        }
+    }
+
+    /** {@link VetoedDeclaringInvalidMethodScope} with method-level scope names inside the grammar. */
+    @Vetoed
+    @BearerAuth(requiredScopes = "c01")
+    static class VetoedDeclaringValidMethodScope {
+
+        @BearerAuth(requiredScopes = {"read", "write"})
+        public String endpoint() {
+            return "accepted";
         }
     }
 }

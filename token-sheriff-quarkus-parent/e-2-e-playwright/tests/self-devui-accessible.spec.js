@@ -5,7 +5,7 @@
 
 import { test, expect, takeStartScreenshot } from '../fixtures/test-fixtures.js';
 import { CONSTANTS } from '../utils/constants.js';
-import { isDevUIAccessible, navigateToDevUIPage } from '../utils/devui-navigation.js';
+import { goToTokenDebugger, isDevUIAccessible, navigateToDevUIPage } from '../utils/devui-navigation.js';
 
 test.describe('self-devui-accessible: Environment Validation', () => {
   test.beforeEach(async ({ page }, testInfo) => {
@@ -45,8 +45,10 @@ test.describe('self-devui-accessible: Environment Validation', () => {
   });
 
   test('Token Debugger page is navigable', async ({ page }) => {
-    await navigateToDevUIPage(page, 'Token Debugger');
-    await expect(page.locator('qwc-jwt-debugger')).toBeAttached();
+    await goToTokenDebugger(page);
+    await expect(
+      page.locator('qwc-jwt-debugger').locator(CONSTANTS.SELECTORS.JWT_DEBUGGER_CONTAINER),
+    ).toBeVisible();
   });
 
   test('JSON-RPC returns runtime data (not BUILD_TIME)', async ({ page }) => {

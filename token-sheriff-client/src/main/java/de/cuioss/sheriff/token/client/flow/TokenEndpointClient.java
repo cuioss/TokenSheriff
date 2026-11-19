@@ -141,6 +141,9 @@ public class TokenEndpointClient {
      *         it refused the requested scope, and the {@link RedeemedResponseException} subtype when the
      *         response was successful but its body could not be parsed — see
      *         {@link #requestToken(String, Map, Map, SenderConstraint)}
+     * @throws IllegalArgumentException if the HTTP client refuses the request before sending it — a
+     *         request header the JDK client does not permit, for example; nothing is sent, and the
+     *         exception is the caller's programming fault, not a transport failure
      */
     public TokenResponse requestToken(String tokenEndpoint,
             Map<String, String> formParameters,
@@ -211,6 +214,9 @@ public class TokenEndpointClient {
      *         (parameters such as {@code charset} allowed) is never parsed as JSON: after a success
      *         status it is a {@link RedeemedResponseException}, and as a non-success error body it is
      *         an unknown error code, so the failure is a plain {@link TransportException}
+     * @throws IllegalArgumentException if the HTTP client refuses the request before sending it — a
+     *         request header the JDK client does not permit, for example; nothing is sent, and the
+     *         exception is the caller's programming fault, not a transport failure
      */
     public TokenResponse requestToken(String tokenEndpoint,
             Map<String, String> formParameters,
@@ -584,9 +590,16 @@ public class TokenEndpointClient {
      * ({@link BackChannelHttp#MALFORMED_RESPONSE}):
      * a {@link RedeemedResponseException} when the body handler recorded a success status, otherwise a
      * pre-redemption {@link TransportException} — including a {@code 204} whose {@code Content-Length} the
-     * JDK refuses before any body handler runs. An {@link IllegalArgumentException} for a request the
-     * client refuses before sending is a request-side fault and propagates unchanged.
+     * JDK refuses before any body handler runs. Every other {@link IOException} of the exchange — a cancelled
+     * exchange, a body past the payload bound — is a {@link RedeemedResponseException} after a recorded
+     * success status and a pre-redemption {@link TransportException} otherwise. A request timeout ends the
+     * wait before the response headers arrive, so no status has been recorded and it is always a
+     * {@link TransportException}. An
+     * {@link IllegalArgumentException} for a request the client refuses before sending is a request-side
+     * fault: it is not caught here and reaches the caller of {@code requestToken} as thrown.
      * </p>
+     *
+     * @throws IllegalArgumentException if the HTTP client refuses the request before sending it
      */
     private HttpResponse<String> send(HttpHandler handler, HttpClient client, String body,
             Map<String, String> requestHeaders) {
@@ -635,9 +648,9 @@ public class TokenEndpointClient {
 
     // Every branch below runs only after HttpStatusFamily.isSuccess(...) held for the response, so the
     // authorization server has already accepted the request and consumed the presented grant. Each
-    // therefore raises RedeemedResponseException — a TransportException subtype, so every existing
-    // caller and every documented @throws TransportException contract is unchanged — which is what
-    // lets a caller that must fail closed tell a post-redemption failure from a pre-redemption one.
+    // therefore raises RedeemedResponseException — a TransportException subtype, caught by any catch
+    // block for TransportException and covered by a documented @throws clause for it — which is
+    // what lets a caller that must fail closed tell a post-redemption failure from a pre-redemption one.
     //
     // java:S2589 — body is non-null by every current caller/handler wiring, but the guard is kept
     // (consistent with the equivalent parse() entry guards in UserInfoClient / ParClient) as

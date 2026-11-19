@@ -126,6 +126,8 @@ public class TokenSheriffProcessor {
 
     private static final DotName VETOED = DotName.createSimple(Vetoed.class.getName());
 
+    private static final String PACKAGE_INFO = ".package-info";
+
     private static final String REQUIRED_SCOPES = "requiredScopes";
 
     /**
@@ -349,8 +351,9 @@ public class TokenSheriffProcessor {
      * class, as the union {@code BearerTokenInterceptor} enforces (ADR-0024): the interceptor reads the
      * class-level annotation from the bean class, not from the class declaring the method, and
      * {@code @BearerAuth} is not {@code @Inherited}, so an inherited method is merged with the subclass's own
-     * annotation only. An interface, an abstract class and a class declaring {@code @Vetoed} are no bean classes,
-     * so their class-level scopes are never merged. A {@code @BearerToken} on a field, a method, a method parameter or a producer parameter
+     * annotation only. An interface, an abstract class, a class declaring {@code @Vetoed} and a class in a
+     * package whose {@code package-info} declares {@code @Vetoed} are no bean classes — ArC registers no bean
+     * for them — so their class-level scopes are never merged. A {@code @BearerToken} on a field, a method, a method parameter or a producer parameter
      * is checked on its own. Each scope set is checked by building the challenge through
      * {@link BearerTokenResponseFactory#insufficientScopeChallenge}, so the rule and the length bound are
      * exactly the ones applied to the challenge that is sent.
@@ -386,8 +389,8 @@ public class TokenSheriffProcessor {
      * class's own class-level {@code @BearerAuth} as {@code BearerTokenInterceptor} merges them.
      * <p>
      * A bean class runs the method when it is the declaring class or a subclass of it that neither it nor a
-     * class between it and the declaring class overrides; interfaces, abstract classes and classes declaring
-     * {@code @Vetoed} are no bean classes. When no such bean class is in the index, the method's own scopes are
+     * class between it and the declaring class overrides; interfaces, abstract classes, classes declaring
+     * {@code @Vetoed} and classes in a {@code @Vetoed} package are no bean classes. When no such bean class is in the index, the method's own scopes are
      * checked alone. A bean class whose class-level annotation is refused on its own is already reported at
      * that class, so for it only the method's own scopes are checked: a bad class-level scope is never reported
      * as the method's.
@@ -418,22 +421,22 @@ public class TokenSheriffProcessor {
     /**
      * Lists the bean classes in the index that run the method: the declaring class and every subclass that
      * inherits the method unchanged, each only when it is a bean class candidate. An interface, an abstract
-     * class and a class declaring {@code @Vetoed} are no bean classes, whether it declares the method or
-     * inherits it.
+     * class, a class declaring {@code @Vetoed} and a class in a package whose {@code package-info} declares
+     * {@code @Vetoed} are no bean classes, whether it declares the method or inherits it.
      *
      * @return the bean classes running the method, empty when there is none in the index
      */
     private static List<ClassInfo> beanClassesRunning(IndexView index, MethodInfo method) {
         ClassInfo declaringClass = method.declaringClass();
         List<ClassInfo> beanClasses = new ArrayList<>();
-        if (isBeanClassCandidate(declaringClass)) {
+        if (isBeanClassCandidate(index, declaringClass)) {
             beanClasses.add(declaringClass);
         }
         if (declaringClass.isInterface()) {
             return beanClasses;
         }
         for (ClassInfo subclass : index.getAllKnownSubclasses(declaringClass.name())) {
-            if (isBeanClassCandidate(subclass) && inheritsUnchanged(index, subclass, method)) {
+            if (isBeanClassCandidate(index, subclass) && inheritsUnchanged(index, subclass, method)) {
                 beanClasses.add(subclass);
             }
         }
@@ -441,12 +444,25 @@ public class TokenSheriffProcessor {
     }
 
     /**
-     * A bean class candidate is a concrete class that does not declare {@code @Vetoed}: interfaces, abstract
-     * classes and {@code @Vetoed} classes are no bean classes.
+     * A bean class candidate is a concrete class that is not vetoed: interfaces, abstract classes, classes
+     * declaring {@code @Vetoed} and classes in a {@code @Vetoed} package are no bean classes.
+     * <p>
+     * The package veto is read as ArC reads it: from the {@code @Vetoed} annotation of the class
+     * {@code {package}.package-info} in the index. A package without a {@code package-info} in the index is not
+     * vetoed, so the check never skips a class ArC still registers.
      */
-    private static boolean isBeanClassCandidate(ClassInfo classInfo) {
+    private static boolean isBeanClassCandidate(IndexView index, ClassInfo classInfo) {
         return !classInfo.isInterface() && !Modifier.isAbstract(classInfo.flags())
-                && classInfo.declaredAnnotation(VETOED) == null;
+                && classInfo.declaredAnnotation(VETOED) == null && !inVetoedPackage(index, classInfo);
+    }
+
+    private static boolean inVetoedPackage(IndexView index, ClassInfo classInfo) {
+        String packageName = classInfo.name().packagePrefix();
+        if (packageName == null) {
+            return false;
+        }
+        ClassInfo packageInfo = index.getClassByName(DotName.createSimple(packageName + PACKAGE_INFO));
+        return packageInfo != null && packageInfo.declaredAnnotation(VETOED) != null;
     }
 
     private static boolean inheritsUnchanged(IndexView index, ClassInfo subclass, MethodInfo method) {

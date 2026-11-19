@@ -155,7 +155,7 @@ class JwtPropertyKeysDerivationGuardTest {
         }
 
         @Test
-        @DisplayName("positive control: the production list meets its minimum of four")
+        @DisplayName("positive control: the production list is exactly the four declared dpop sub-properties")
         void shouldDeriveProductionList() {
             assertEquals(
                     JwtPropertyKeys.ISSUERS.DPOP_SUB_PROPERTIES, List.of(

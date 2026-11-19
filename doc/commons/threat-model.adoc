@@ -83,7 +83,10 @@ were audited to the requirements below during the move into commons.
 | *DoS via large / slow metadata, JWKS or userinfo responses.* A hostile or degraded IdP
   returns a multi-gigabyte body or trickles bytes to exhaust memory / threads.
 | Connect/read timeouts, response-size limits, and bounded retry/backoff on every fetch;
-  no unbounded buffering.
+  no unbounded buffering. The read timeout bounds the wait until the response headers arrive, so a
+  host that never answers is cut off; it does not cover the body. A body trickled after the headers is
+  bounded in size by the response-size limit but not in time, and keeps the calling thread waiting —
+  an accepted limit.
 | https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4], https://www.rfc-editor.org/rfc/rfc7230[RFC 7230]
 | xref:requirements.adoc#COMMONS-4[COMMONS-4]
 

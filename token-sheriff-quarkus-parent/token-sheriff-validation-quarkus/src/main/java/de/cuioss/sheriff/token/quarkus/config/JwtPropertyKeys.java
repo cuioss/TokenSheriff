@@ -456,6 +456,12 @@ public final class JwtPropertyKeys {
          * image: on the JVM and in a native image alike. The guard never lets the orphaned-DPoP check run
          * against a short list.
          * </p>
+         * <p>
+         * The {@code 4} passed to the derivation is that fail-closed floor, not the exact count: a fifth
+         * {@code dpop.*} key declared here passes the floor and joins the list. The exact set is pinned by
+         * {@code JwtPropertyKeysDerivationGuardTest}, which asserts the derived list equals the four constants
+         * above, so a key added to or missing from the list fails that test until the test is updated with it.
+         * </p>
          */
         public static final List<String> DPOP_SUB_PROPERTIES = Collections.unmodifiableList(
                 declaredKeysUnder(ISSUERS.class, DPOP_BASE, Set.of(DPOP_ENABLED), 4));
@@ -667,8 +673,8 @@ public final class JwtPropertyKeys {
          * Template: "sheriff.token.issuers.%s.jwks.http.read-timeout-seconds"
          * <p>
          * Sets the read timeout in seconds for HTTP requests to JWKS endpoints.
-         * This timeout controls how long to wait for data to be received from the remote server
-         * after the connection has been established.
+         * It is the request timeout and bounds the wait until the response headers arrive. The body
+         * read that follows is bounded in size by the response-size limit but carries no time bound.
          * </p>
          * <p>
          * <strong>Only applicable</strong> for {@link #JWKS_URL} and {@link #WELL_KNOWN_URL}.
