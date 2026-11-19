@@ -267,7 +267,7 @@ class TokenEndpointClientDpopBindingTest {
     }
 
     @Test
-    @DisplayName("an mTLS-constrained request still accepts a Bearer token")
+    @DisplayName("an mTLS-constrained request accepts a Bearer token")
     void shouldAcceptBearerUnderMtlsConstraint(URIBuilder uriBuilder) {
         moduleDispatcher.respondWith(tokenResponse(jws(subjectOnlyPayload()), "Bearer"));
         var mtls = SenderConstraint.mtls(Generators.letterStrings(20, 40).next());
@@ -278,7 +278,7 @@ class TokenEndpointClientDpopBindingTest {
     }
 
     @Test
-    @DisplayName("an unconstrained request still accepts a Bearer JWT without cnf")
+    @DisplayName("an unconstrained request accepts a Bearer JWT without cnf")
     void shouldAcceptBearerWithoutConstraint(URIBuilder uriBuilder) {
         moduleDispatcher.respondWith(tokenResponse(jws(subjectOnlyPayload()), "Bearer"));
 

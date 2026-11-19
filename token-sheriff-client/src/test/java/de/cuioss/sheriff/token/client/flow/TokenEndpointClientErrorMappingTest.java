@@ -151,13 +151,13 @@ class TokenEndpointClientErrorMappingTest {
     }
 
     @Test
-    @DisplayName("invalid_grant on a 4xx is still the credential-rejected refusal, not a client-authentication one")
+    @DisplayName("invalid_grant on a 4xx is the credential-rejected refusal, not a client-authentication one")
     void shouldKeepInvalidGrantAsCredentialRejected(URIBuilder uriBuilder) {
         moduleDispatcher.failWith(400, "{\"error\":\"invalid_grant\"}");
 
         TransportException thrown = redeemExpectingFailure(uriBuilder, null);
 
-        assertAll("credential-rejected refusal unchanged",
+        assertAll("credential-rejected refusal",
                 () -> assertInstanceOf(CredentialRejectedException.class, thrown),
                 () -> assertFalse(thrown instanceof ClientAuthenticationFailedException,
                         "a dead grant is not a failed client authentication"));
@@ -214,7 +214,7 @@ class TokenEndpointClientErrorMappingTest {
             "400 | { not json",
             "400 | ",
             "400 | {\"error\":\"invalid_scope\",\"error\":\"invalid_scope\"}"})
-    @DisplayName("a refusal outside the invalid_scope allow-list keeps today's plain transport failure")
+    @DisplayName("a refusal outside the invalid_scope allow-list stays a plain transport failure")
     void shouldNotRaiseInvalidScopeOutsideAllowList(int status, String body, URIBuilder uriBuilder) {
         moduleDispatcher.failWith(status, body == null ? "" : body);
 
@@ -291,7 +291,7 @@ class TokenEndpointClientErrorMappingTest {
     }
 
     @Test
-    @DisplayName("an invalid_scope body served as application/json with a charset is still the typed refusal")
+    @DisplayName("an invalid_scope body served as application/json with a charset is the typed refusal")
     void shouldClassifyErrorBodyWithJsonCharset(URIBuilder uriBuilder) {
         moduleDispatcher.withContentTypes("application/json;charset=utf-8");
         moduleDispatcher.failWith(400, "{\"error\":\"invalid_scope\"}");
