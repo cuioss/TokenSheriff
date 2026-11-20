@@ -118,7 +118,7 @@ class RefreshInFlightFailureTest extends RefreshTestSupport {
     }
 
     @Test
-    @DisplayName("Should not misclassify a retry with the same still-valid token as refresh-token reuse")
+    @DisplayName("Should not misclassify a retry with the same valid token as refresh-token reuse")
     void shouldNotMisclassifyRetryAfterFailureAsReuse(URIBuilder uriBuilder) {
         ClientConfiguration config = config();
         ProviderMetadata metadata = metadata(uriBuilder);
