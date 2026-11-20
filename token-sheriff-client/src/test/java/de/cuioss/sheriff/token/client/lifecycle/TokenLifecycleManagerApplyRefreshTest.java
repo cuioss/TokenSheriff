@@ -199,7 +199,7 @@ class TokenLifecycleManagerApplyRefreshTest {
         }
 
         @Test
-        @DisplayName("Should still refuse a refresh that drops the stored sender-constraint")
+        @DisplayName("Should refuse a refresh that drops the stored sender-constraint")
         void shouldRefuseBindingDowngrade() {
             String grantA = token();
             StoredToken bound = new StoredToken(token(), grantA, null,
@@ -214,7 +214,7 @@ class TokenLifecycleManagerApplyRefreshTest {
         }
 
         @Test
-        @DisplayName("Should still refuse a refresh naming a different subject")
+        @DisplayName("Should refuse a refresh naming a different subject")
         void shouldRefuseSubjectChange() {
             String grantA = token();
             StoredToken bound = new StoredToken(token(), grantA, null, null, null, "alice");

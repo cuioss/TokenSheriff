@@ -138,8 +138,8 @@ class BackChannelOriginRoutingTest {
     }
 
     @Test
-    @DisplayName("Discovery still rejects a document whose issuer differs from the configured issuer")
-    void shouldStillRejectIssuerMismatch() {
+    @DisplayName("Discovery rejects a document whose issuer differs from the configured issuer")
+    void shouldRejectIssuerMismatch() {
         moduleDispatcher.advertiseIssuer("https://other.invalid" + REALM_PATH);
         var resolver = new DiscoveryResolver(configuration);
 
