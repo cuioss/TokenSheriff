@@ -185,7 +185,7 @@ class ClientConfigurationTransportTest {
 
         @Test
         @DisplayName("Should keep the configured issuer when a back-channel origin is set")
-        void shouldKeepIssuerUnchanged() {
+        void shouldKeepConfiguredIssuerBesideBackChannelOrigin() {
             var issuer = issuer() + "/realms/demo";
 
             var config = ClientConfiguration.builder()
