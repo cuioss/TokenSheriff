@@ -28,10 +28,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.time.OffsetDateTime;
 import java.util.*;
 
 import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.WARN;
+import static de.cuioss.sheriff.token.quarkus.producer.ProducerTestTokens.createAccessToken;
 import static de.cuioss.test.juli.LogAsserts.assertSingleLogMessagePresentContaining;
 import static org.easymock.EasyMock.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -184,22 +184,5 @@ class BearerTokenProducerRequirementsTest {
                 WARN.BEARER_TOKEN_REQUIREMENTS_NOT_MET_DETAILED.resolveIdentifierString());
 
         verify(tokenValidator);
-    }
-
-    /**
-     * Creates an {@link AccessTokenContent} with mandatory claims and optional additional claims.
-     */
-    private static AccessTokenContent createAccessToken(Map<String, ClaimValue> additionalClaims) {
-        Map<String, ClaimValue> claims = new HashMap<>();
-        claims.put(ClaimName.ISSUER.getName(), ClaimValue.forPlainString("test-issuer"));
-        claims.put(ClaimName.SUBJECT.getName(), ClaimValue.forPlainString("test-subject"));
-        var now = OffsetDateTime.now();
-        var expires = now.plusHours(1);
-        claims.put(ClaimName.EXPIRATION.getName(), ClaimValue.forDateTime(
-                String.valueOf(expires.toEpochSecond()), expires));
-        claims.put(ClaimName.ISSUED_AT.getName(), ClaimValue.forDateTime(
-                String.valueOf(now.toEpochSecond()), now));
-        claims.putAll(additionalClaims);
-        return new AccessTokenContent(claims, "raw-token");
     }
 }

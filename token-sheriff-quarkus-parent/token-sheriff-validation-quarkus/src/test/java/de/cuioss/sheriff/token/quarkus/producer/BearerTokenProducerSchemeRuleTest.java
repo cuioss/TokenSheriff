@@ -17,10 +17,7 @@ package de.cuioss.sheriff.token.quarkus.producer;
 
 import de.cuioss.sheriff.token.quarkus.servlet.HttpRequestResolverMock;
 import de.cuioss.sheriff.token.validation.TokenValidator;
-import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
-import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.domain.context.AccessTokenRequest;
-import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.test.juli.TestLogLevel;
 import de.cuioss.test.juli.junit5.EnableTestLogger;
 import org.easymock.Capture;
@@ -30,11 +27,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.time.OffsetDateTime;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Set;
 
+import static de.cuioss.sheriff.token.quarkus.producer.ProducerTestTokens.createAccessToken;
 import static de.cuioss.test.juli.LogAsserts.assertSingleLogMessagePresentContaining;
 import static org.easymock.EasyMock.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -149,18 +144,5 @@ class BearerTokenProducerSchemeRuleTest {
         assertEquals(BearerTokenStatus.FULLY_VERIFIED, result.getStatus(), "the presented token is validated");
         verify(tokenValidator);
         return capture.getValue().tokenString();
-    }
-
-    private static AccessTokenContent createAccessToken() {
-        Map<String, ClaimValue> claims = new HashMap<>();
-        claims.put(ClaimName.ISSUER.getName(), ClaimValue.forPlainString("test-issuer"));
-        claims.put(ClaimName.SUBJECT.getName(), ClaimValue.forPlainString("test-subject"));
-        var now = OffsetDateTime.now();
-        var expires = now.plusHours(1);
-        claims.put(ClaimName.EXPIRATION.getName(), ClaimValue.forDateTime(
-                String.valueOf(expires.toEpochSecond()), expires));
-        claims.put(ClaimName.ISSUED_AT.getName(), ClaimValue.forDateTime(
-                String.valueOf(now.toEpochSecond()), now));
-        return new AccessTokenContent(claims, "raw-token");
     }
 }
