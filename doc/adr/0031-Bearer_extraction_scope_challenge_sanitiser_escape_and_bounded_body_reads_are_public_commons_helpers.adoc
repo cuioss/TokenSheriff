@@ -326,7 +326,7 @@ received buffer, and its own read of an unparsable `Content-Length` threw a `Num
   buffers of the delivery in flight; this is the one memory bound of the handler, stated identically in
   COMMONS-17 and the transport specification. A capacity test pins the retained array's capacity after each
   delivery; the transient peak while a growth step copies is a property of the allocation logic.
-  The byte ceiling on the assembled body and the `OverLimitPolicy` behaviour are unchanged. The cost of the
+  The byte ceiling on the assembled body and the `OverLimitPolicy` behaviour are those stated above. The cost of the
   decision is that the worst-case streaming peak of a read of a remote response is about twice what one
   array of the ceiling costs. Under `FAIL`, when the handler observes a `Content-Length`
   that is not a valid number, it cancels the subscription without requesting a byte and fails the body
@@ -342,17 +342,25 @@ received buffer, and its own read of an unparsable `Content-Length` threw a `Num
   and the token endpoint client's own send both wait on `HttpClient.sendAsync` through
   `BackChannelHttp.exchange`. `exchange` maps a failure of the exchange that
   `BackChannelHttp.isMalformedFraming` recognises in any of those forms to a `TransportException` with a
-  fixed text, without chaining it; any other failure of the exchange, an `IllegalArgumentException` of
-  another cause included, reaches the caller as the client reported it, and a cancelled wait is an
-  `IOException` with a fixed text. Request-side and response-side faults are told apart by the documented
-  `HttpClient.sendAsync` contract: a request the client refuses is thrown synchronously and reaches the
-  caller as thrown, so it is never reported as a malformed response, while a response failure completes the
-  future exceptionally. For a `204` or other no-body reply the token endpoint never observes the status, so
-  it reports the failure as a pre-redemption `TransportException`. The request timeout, which
-  `HttpHandler.requestBuilder()` sets to the configured read timeout, bounds the wait until the response
-  headers arrive. It does not cover the body: the body read is bounded in size by the `BoundedBodyHandler`
-  ceiling but carries no time bound, so a server that sends the headers and then stalls or trickles the body
-  keeps the calling thread waiting. The validation-side
+  fixed text, without chaining it. Every other failure of the exchange reaches the caller as an
+  `IOException` or an `Error`: an `IOException` or `Error` cause as the client reported it; a cancelled
+  wait, and a future failed with a wrapped `CancellationException`, as an `IOException` with the fixed text
+  "the HTTP exchange was cancelled"; any other runtime cause, an `IllegalArgumentException` of another cause
+  included, as an `IOException` with the fixed text "the HTTP exchange failed" and no chained cause; any
+  other checked cause wrapped in an `IOException` with that text. The wrapped-cancellation and runtime-cause
+  mappings are defensive, no JDK path producing either being known from reading the client; each endpoint
+  client classifies them through its `IOException` handling, and the token endpoint reports one seen after a
+  recorded success status as its post-redemption failure. Request-side and response-side faults are told
+  apart by the documented `HttpClient.sendAsync` contract: a request the client refuses is thrown
+  synchronously and reaches the caller as thrown, so it is never reported as a malformed response, while a
+  response failure completes the future exceptionally. For a `204` or other no-body reply the token endpoint
+  never observes the status, so it reports the failure as a pre-redemption `TransportException`. The request
+  timeout, which cui-http 3.2's `HttpHandler.requestBuilder()` sets to the configured read timeout through
+  `HttpRequest.Builder.timeout`, bounds the wait until the response headers arrive; the connect timeout,
+  which `HttpHandler` sets on the `HttpClient` it builds, bounds establishing the connection, and cui-http
+  sets no other timeout. The body read therefore has no time bound and is bounded in size only, by the
+  `BoundedBodyHandler` ceiling the endpoint client was constructed with, so a server that sends the headers
+  and then stalls or trickles the body keeps the calling thread waiting. The validation-side
   discovery and JWKS reads hand the handler to cui-http, whose adapter performs the send, so no mapping is
   made for them here.
 
@@ -376,8 +384,8 @@ received buffer, and its own read of an unparsable `Content-Length` threw a `Num
   not one on the builder's input work or on the text it holds: `scope()` checks every character of the name
   it is given and `scopes()` visits every name supplied, so that work grows with the input, and the up to 65
   retained names are the caller's own strings, of any length, held until `build()` refuses them for their
-  joined length. The body handler's byte bound of COMMONS-17 is unchanged, its object count no longer grows
-  with the buffer count, and the price of the one growable array is a streaming peak below twice the ceiling
+  joined length. The body handler's byte bound is the one COMMONS-17 states, its object count grows with
+  the logarithm of the body size rather than with the buffer count, and the price of the one growable array is a streaming peak below twice the ceiling
   plus the buffers of the delivery in flight while a growth step copies it.
 * A control character in a `realm` or `error_description` past `MAX_LENGTH` characters is not reported by
   the setter; the value is refused by `build()` for its length instead.

@@ -1,0 +1,191 @@
+/*
+ * Copyright © 2025-present CUI-OpenSource-Software (info@cuioss.de)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package de.cuioss.sheriff.token.client.internal;
+
+import de.cuioss.http.client.handler.HttpHandler;
+import de.cuioss.sheriff.token.client.config.ClientAuthMethod;
+import de.cuioss.sheriff.token.client.config.ClientConfiguration;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.io.BufferedInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * Pins that the request timeout of a back-channel request bounds the wait for the response headers only, not
+ * the body read that follows them, as {@link BackChannelHttp#exchange} states.
+ * <p>
+ * A loopback server sends the status line, the headers and the first part of the body, then holds the rest
+ * until the test releases it. A call through {@link BackChannelHttp#send} is still pending after a bounded wait
+ * of twice the configured read timeout, so the request timeout did not end it; once the server is released the
+ * whole body arrives. The positive control uses the same server holding everything, the headers included: that
+ * call ends through the request timeout within the same bounded wait. {@link RawHttpServer} writes its whole
+ * answer at once and cannot hold part of it, so the stalling server is local to this class. No test sleeps: the
+ * bounded waits are the subject of the test.
+ */
+@DisplayName("BackChannelHttp body phase")
+class BackChannelHttpBodyPhaseTest {
+
+    private static final int READ_TIMEOUT_SECONDS = 1;
+    private static final long BOUNDED_WAIT_SECONDS = 2L * READ_TIMEOUT_SECONDS;
+    private static final long SIGNAL_WAIT_SECONDS = 30;
+    private static final String FIRST_PART = "first-part-of-the-body;";
+    private static final String REST = "rest-of-the-body";
+
+    private final CountDownLatch headSent = new CountDownLatch(1);
+    private final CountDownLatch release = new CountDownLatch(1);
+    private final ExecutorService serverThread = Executors.newSingleThreadExecutor();
+    private final ExecutorService callerThread = Executors.newSingleThreadExecutor();
+    private ServerSocket serverSocket;
+
+    @AfterEach
+    void tearDown() throws Exception {
+        release.countDown();
+        if (serverSocket != null) {
+            serverSocket.close();
+        }
+        serverThread.shutdownNow();
+        callerThread.shutdownNow();
+        assertAll("Teardown",
+                () -> assertTrue(serverThread.awaitTermination(SIGNAL_WAIT_SECONDS, TimeUnit.SECONDS),
+                        "The server thread stops"),
+                () -> assertTrue(callerThread.awaitTermination(SIGNAL_WAIT_SECONDS, TimeUnit.SECONDS),
+                        "The caller thread stops"));
+    }
+
+    @Test
+    @DisplayName("should keep waiting for a stalled body past the request timeout, and return it once released")
+    void shouldNotBoundBodyReadByRequestTimeout() throws Exception {
+        String endpoint = startServer(true);
+
+        Future<HttpResponse<String>> call = callerThread.submit(() -> send(endpoint));
+        assertTrue(headSent.await(SIGNAL_WAIT_SECONDS, TimeUnit.SECONDS),
+                "The server sent the status line, the headers and the first part of the body");
+
+        assertThrows(TimeoutException.class, () -> call.get(BOUNDED_WAIT_SECONDS, TimeUnit.SECONDS),
+                "The call is still pending after twice the read timeout: the request timeout does not cover the body");
+        release.countDown();
+        HttpResponse<String> response = call.get(SIGNAL_WAIT_SECONDS, TimeUnit.SECONDS);
+
+        assertAll("Released body",
+                () -> assertEquals(200, response.statusCode(), "The status line arrived"),
+                () -> assertEquals(FIRST_PART + REST, response.body(), "The whole body arrives after the release"));
+    }
+
+    @Test
+    @DisplayName("positive control: a server that holds the headers ends the call through the request timeout")
+    void shouldBoundHeadersWaitByRequestTimeout() throws Exception {
+        String endpoint = startServer(false);
+
+        Future<HttpResponse<String>> call = callerThread.submit(() -> send(endpoint));
+        ExecutionException failure = assertThrows(ExecutionException.class,
+                () -> call.get(BOUNDED_WAIT_SECONDS, TimeUnit.SECONDS),
+                "The call ends within twice the read timeout");
+
+        assertInstanceOf(HttpTimeoutException.class, failure.getCause(),
+                "The wait for the headers ends with the request timeout, not with an answer");
+    }
+
+    private static HttpResponse<String> send(String endpoint) throws IOException, InterruptedException {
+        BackChannelHttp backChannel = new BackChannelHttp(config(endpoint), 1024,
+                BackChannelHttp.FIXED_PARSER_CONFIG_ORIGIN);
+        HttpHandler handler = backChannel.validatedHandler(endpoint, "test endpoint request failed");
+        HttpClient client = backChannel.sharedClient(handler);
+        HttpRequest request = handler.requestBuilder().GET().build();
+        return backChannel.send(client, request, "test endpoint request failed");
+    }
+
+    private static ClientConfiguration config(String issuer) {
+        return ClientConfiguration.builder()
+                .issuer(issuer)
+                .clientId("test-client")
+                .clientSecret("test-secret")
+                .authMethod(ClientAuthMethod.CLIENT_SECRET_BASIC)
+                .allowInsecureHttp(true)
+                .allowLoopbackEgress(true)
+                .readTimeoutSeconds(READ_TIMEOUT_SECONDS)
+                .build();
+    }
+
+    /**
+     * Starts a loopback server that serves one connection: it reads the request head, then, when
+     * {@code sendHead} is set, writes the status line, the headers and the first part of the body and signals
+     * {@link #headSent}. Either way it then holds the connection until the test counts {@link #release} down,
+     * and when {@code sendHead} is set writes the rest of the body.
+     *
+     * @return the URL of the {@code /endpoint} path on the server
+     */
+    private String startServer(boolean sendHead) throws IOException {
+        serverSocket = new ServerSocket(0, 50, InetAddress.getByAddress(new byte[]{127, 0, 0, 1}));
+        byte[] head = ("HTTP/1.1 200 OK\r\n"
+                + "Content-Type: text/plain\r\n"
+                + "Content-Length: " + (FIRST_PART.length() + REST.length()) + "\r\n"
+                + "\r\n"
+                + FIRST_PART).getBytes(StandardCharsets.US_ASCII);
+        byte[] rest = REST.getBytes(StandardCharsets.US_ASCII);
+        serverThread.execute(() -> {
+            try (Socket socket = serverSocket.accept()) {
+                readRequestHead(socket.getInputStream());
+                OutputStream out = socket.getOutputStream();
+                if (sendHead) {
+                    out.write(head);
+                    out.flush();
+                    headSent.countDown();
+                }
+                if (release.await(SIGNAL_WAIT_SECONDS, TimeUnit.SECONDS) && sendHead) {
+                    out.write(rest);
+                    out.flush();
+                }
+            } catch (IOException connectionEnded) {
+                // The client ended the connection, or teardown closed the server socket.
+            } catch (InterruptedException stopped) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        return "http://127.0.0.1:" + serverSocket.getLocalPort() + "/endpoint";
+    }
+
+    /** Reads up to and including the blank line that ends the request head; a GET carries no body. */
+    private static void readRequestHead(InputStream raw) throws IOException {
+        InputStream in = new BufferedInputStream(raw);
+        int matched = 0;
+        int current;
+        while (matched < 4 && (current = in.read()) != -1) {
+            boolean expected = current == (matched % 2 == 0 ? '\r' : '\n');
+            matched = expected ? matched + 1 : (current == '\r' ? 1 : 0);
+        }
+    }
+}

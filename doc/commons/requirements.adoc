@@ -159,10 +159,16 @@ Every outbound fetch MUST apply a connect/read timeout, a response-size limit, a
 retry/backoff. Large metadata, JWKS or userinfo responses MUST NOT be able to exhaust memory, and a
 host that does not answer MUST NOT block a caller indefinitely before the response headers arrive.
 
-The read timeout is the request timeout `HttpHandler.requestBuilder()` sets, and it bounds the wait until
-the response headers arrive. The body read that follows is bounded in size by the response-size limit but
-carries no time bound: a host that sends the headers and then stalls or trickles the body keeps the calling
-thread waiting. This is an accepted limit.
+cui-http 3.2's `HttpHandler` sets two timeouts and no other. The connect timeout is set on the
+`HttpClient` the handler builds (`HttpClient.Builder.connectTimeout`) and bounds establishing the
+connection. The read timeout is the request timeout `HttpHandler.requestBuilder()` sets
+(`HttpRequest.Builder.timeout`), and it bounds the wait until the response headers arrive. The body read
+that follows has no time bound and is bounded in size only, by the response-size limit of the fetch:
+`ParserConfig.maxHttpResponseSize` for the validation-side discovery and JWKS reads,
+`ClientConfiguration.discoveryDocumentMaxSize` for the client's discovery, and the JWT payload ceiling
+`ParserConfig.maxPayloadSize` for the client's token, PAR, userinfo and revocation calls. A host that sends
+the headers and then stalls or trickles the body therefore keeps the calling thread waiting. This is an
+accepted limit.
 
 * Source: https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4] (availability), https://www.rfc-editor.org/rfc/rfc7230[RFC 7230] (message framing bounds).
 
@@ -210,16 +216,23 @@ with a `NumberFormatException` in its cause chain, or a `ProtocolException` caus
 message is the endpoint's failure context and the fixed text `BackChannelHttp.MALFORMED_RESPONSE`, neither
 chaining the JDK's exception nor echoing its message. The token endpoint reports that failure as its
 post-redemption failure when its body handler observed a success status, and as a pre-redemption failure
-when it never saw the status, as for a `204`. Any other failure of the exchange, an
-`IllegalArgumentException` of another cause included, reaches the caller as the client reported it, its
-cause intact; a cancelled wait is an `IOException` with a fixed text. Request-side and response-side faults
+when it never saw the status, as for a `204`. Every other failure of the exchange reaches the caller as
+an `IOException` or an `Error`: an `IOException` or `Error` cause is rethrown as the client reported it; a
+cancelled wait, and a future failed with a wrapped `CancellationException`, is an `IOException` with the
+fixed text "the HTTP exchange was cancelled"; any other runtime cause, an `IllegalArgumentException` of
+another cause included, is an `IOException` with the fixed text "the HTTP exchange failed" and no chained
+cause, because a response-side runtime message can carry remote content; any other checked cause is wrapped
+in an `IOException` with that text, the cause chained. The wrapped-cancellation and runtime-cause mappings
+are defensive: no JDK path producing either is known from reading the client. Each client classifies them
+through its `IOException` handling, and the token endpoint reports one seen after a recorded success status
+as its post-redemption failure. Request-side and response-side faults
 are told apart by the documented `HttpClient.sendAsync` contract: an `IllegalArgumentException` thrown
 synchronously, for a request the client refuses before sending, is a request-side fault and reaches the
-caller as thrown. The wait has no bound of its own. The request timeout, which
+caller as thrown. The wait has no bound of its own. The request timeout, which cui-http 3.2's
 `HttpHandler.requestBuilder()` sets to the configured read timeout, bounds it until the response headers
-arrive; the body read that follows is bounded in size by the `BoundedBodyHandler` ceiling but carries no
-time bound, so a server that sends the headers and then stalls or trickles the body keeps the calling thread
-waiting. The validation-side discovery and JWKS
+arrive; the body read that follows has no time bound and is bounded in size only, by the
+`BoundedBodyHandler` ceiling the endpoint client was constructed with, so a server that sends the headers
+and then stalls or trickles the body keeps the calling thread waiting. The validation-side discovery and JWKS
 reads hand the handler to cui-http, whose adapter performs the send, so this repository has no send call
 there to map. A caller therefore treats the message of any
 exception that comes out of an HTTP exchange as remote content and sanitises it before logging.

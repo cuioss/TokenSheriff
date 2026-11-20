@@ -204,10 +204,36 @@ case-insensitively, and a bracketed IPv6 entry matches the bracketed host of an 
 === Resilience / DoS bounds (COMMONS-4)
 
 Each fetch applies a connect/read timeout, a response-size limit, and bounded
-retry/backoff. No unbounded buffering of response bodies. The read timeout is the request timeout
-`HttpHandler.requestBuilder()` sets and bounds the wait until the response headers arrive. The body read
-that follows is bounded in size by the response-size limit but carries no time bound, so a host that sends
-the headers and then stalls or trickles the body keeps the calling thread waiting. Mitigates
+retry/backoff. No unbounded buffering of response bodies.
+
+[cols="1,2,2", options="header"]
+|===
+| Bound | What sets it (cui-http 3.2) | Phase it covers
+
+| Connect timeout
+| `HttpHandler` builds its `HttpClient` with `HttpClient.Builder.connectTimeout`
+| Establishing the connection
+
+| Read timeout
+| `HttpHandler.requestBuilder()` sets it as the request timeout, `HttpRequest.Builder.timeout`; the
+  validation side's `ETagAwareHttpAdapter` and the client's back-channel calls build every request through
+  it
+| The wait until the response headers arrive
+
+| Response-size limit
+| `BoundedBodyHandler`: `ParserConfig.maxHttpResponseSize` for the validation-side discovery and JWKS
+  reads, `ClientConfiguration.discoveryDocumentMaxSize` for the client's discovery, the JWT payload ceiling
+  `ParserConfig.maxPayloadSize` for the client's token, PAR, userinfo and revocation calls
+| The body read, in size only
+
+| Retry/backoff
+| `ResilientHttpAdapter` on the validation side, with the delays of its `RetryConfig`; it sets no
+  timeout
+| Between attempts
+|===
+
+`HttpHandler` sets no other timeout, so the body read that follows the headers has no time bound: a host
+that sends the headers and then stalls or trickles the body keeps the calling thread waiting. Mitigates
 xref:../threat-model.adoc#T-DOS[T-DOS] within that limit.
 
 === [[bounded_response_body]] Bounded response body (COMMONS-17)

@@ -11,7 +11,8 @@ as a whole, and the integration-test specifications per feature area.
 
 Use it to find where a behaviour is tested before you change it, and to see which test
 class a new test belongs in. The mapping names test classes only; it makes no statement
-about coverage figures.
+about coverage figures. The benchmark modules under `benchmarking/` are not production modules
+and are not mapped.
 
 Most test classes live in the same package as the production code they test, under
 `src/test/java`. Where a test class sits in a different test package, its row names that
@@ -167,6 +168,15 @@ tests check that infrastructure, not production code: `InMemoryKeyHandlingTest`,
 `TestTokenGeneratorsTest`, `TokenSecurityPropertiesTest` (`test.generator`) and
 `TestTokenSourceProviderTest` (`test.junit`).
 
+The infrastructure classes themselves: `InMemoryJWKSFactory`, `InMemoryKeyMaterialHandler`,
+`JweTestTokenFactory`, `JwtTokenTamperingUtil` and `TestTokenHolder` (`test`);
+`AdversarialResponses`, `EndSessionDispatcher`, `EnhancedJwksResolveDispatcher`,
+`IntrospectionDispatcher`, `JwksResolveDispatcher`, `MultiIssuerJwksDispatcher`, `ParDispatcher`,
+`RevocationDispatcher`, `TokenDispatcher`, `UserInfoDispatcher` and `WellKnownDispatcher`
+(`test.dispatcher`); `ClaimControlParameter`, `ClaimValueGenerator`, `GroupGenerator`,
+`RoleGenerator`, `ScopeGenerator` and `TestTokenGenerators` (`test.generator`); `TestTokenSource`
+and `TestTokenSourceProvider` (`test.junit`).
+
 Fixtures that are not test classes: `BoundedBodyHandlerTestSupport` (`commons.transport`),
 `DiscoveryGenerationDispatcher` and `UnknownKidJwksDispatcher` (`validation.jwks.http`),
 `DpopProofValidatorSupport` (`validation.dpop`), `JwksLoaderKeyIdsContractSupport`
@@ -223,7 +233,9 @@ Package prefix: `de.cuioss.sheriff.token.client`.
 
 |`internal`
 |`BackChannelEgressPolicyTest`, `BackChannelHostnameVerificationTest`,
-`BackChannelHttpBoundedBodyTest`, `BackChannelHttpExchangeTest`, `BackChannelHttpMalformedResponseTest`,
+`BackChannelHttpBodyPhaseTest`, `BackChannelHttpBoundedBodyTest`,
+`BackChannelHttpExchangeFailureMappingTest`, `BackChannelHttpExchangeTest`,
+`BackChannelHttpMalformedResponseTest`,
 `BackChannelHttpRequestRefusalTest`, `BackChannelHttpTlsTrustTest`,
 `BackChannelOriginMappingTest`, `BackChannelOriginRoutingTest`,
 `ClientLogMessagesIdentifierTest`, `EndpointQueryTest`, `EndpointSchemePolicyTest`, `FormEncoderTest`, `JsonEscaperTest`,
@@ -253,7 +265,8 @@ drive the retrieval path across several production packages.
 Fixtures that are not test classes: `NativeImageClassScanner` (root package),
 `CachingDiscoveryResolverSupport` (`discovery`), `DpopBoundAccessTokens`,
 `TokenEndpointStubDispatcher` and `WiredFlowTestSupport` (`flow`), `HeaderLineBreakAttackDatabase`
-(`hardening`), `RawHttpServer` (`internal`) and `RefreshTestSupport` (`token`).
+(`hardening`), `RawHttpServer` and `StubHttpClient` (`internal`) and `RefreshTestSupport` (`token`).
+`RawHttpServerTest` (`internal`) checks the `RawHttpServer` fixture, not production code.
 
 [#validation-quarkus]
 == token-sheriff-validation-quarkus
@@ -332,8 +345,8 @@ Package prefix: `de.cuioss.sheriff.token.quarkus`.
 |`TokenValidationRuleRegistryTest`
 |===
 
-Fixtures that are not test classes: `JwtTestProfile` (`config`), `MockInjectionPoint`
-(`producer`), `HttpRequestResolverMock` (`servlet`), and `TestConfig` and
+Fixtures that are not test classes: `JwtTestProfile` (`config`), `MockInjectionPoint` and
+`ProducerTestTokens` (`producer`), `HttpRequestResolverMock` (`servlet`), and `TestConfig` and
 `TestConfigurations` (`test`).
 
 [#validation-quarkus-deployment]
@@ -350,16 +363,21 @@ Package prefix: `de.cuioss.sheriff.token.quarkus`.
 |`deployment`
 |`BearerScopeValidationBootTest`, `BearerScopeValidationBuildStepTest`,
 `BearerScopeValidationCombinedIndexBuildStepTest`,
-`BearerScopeValidationDefaultMethodBuildStepTest`, `BearerScopeValidationGeneratedBeanBootTest`,
+`BearerScopeValidationDefaultMethodBuildStepTest`,
+`BearerScopeValidationDependencyVetoedPackageBootTest`, `BearerScopeValidationGeneratedBeanBootTest`,
 `BearerScopeValidationGeneratedBeanControlBootTest`, `BearerScopeValidationRefusalBootTest`,
-`BearerScopeValidationVetoedPackageBootTest`, `TokenSheriffDevUIIntegrationTest`,
+`BearerScopeValidationVetoedPackageBootTest`, `BearerScopeValidationVetoedPackageBuildStepTest`,
+`TokenSheriffDevUIIntegrationTest`,
 `TokenSheriffIntegrationTest`, `TokenSheriffProcessorBuildStepTest`, `TokenSheriffProcessorTest`,
 `TokenValidatorEagerStartupTest`; the extension as a whole is booted by
 `TokenSheriffExtensionTest` (test package `quarkus.test`)
 |===
 
 Fixtures that are not test classes: `VetoedPackageEndpoint` (test package `quarkus.deployment.vetoed`,
-whose `package-info` declares `@Vetoed`).
+whose `package-info` declares `@Vetoed`), `VetoedSubpackageEndpoint` (test package
+`quarkus.deployment.vetoed.sub`, a subpackage of it with no `package-info`) and
+`DependencyPackageEndpoint` (test package `quarkus.deployment.vetoeddep`, whose `package-info`
+declares `@Vetoed` and which the boot test adds as a dependency archive).
 
 [#client-quarkus]
 == token-sheriff-client-quarkus
@@ -520,6 +538,13 @@ defect in this document. The same holds for the fixtures that are not test class
 each module table.
 
 The mapping is kept by hand. Its check is a search of this document for every test class and
-every fixture the pull request adds, moves, renames or splits; each must be found in the section of
-its module, naming its test package where that differs from the production package. After a rename
+every fixture the pull request adds, moves, renames or splits. Each must be found in one place:
+
+* a guard class, one that checks the code base as a whole rather than one package, in the
+  xref:#cross-cutting-guards[Cross-cutting guards] section, in the row of its module;
+* an integration-test specification of `token-sheriff-quarkus-integration-tests`, or one of its
+  support classes, in the xref:#integration-tests[Integration-test specifications] section;
+* every other test class and fixture in the section of its module.
+
+Each entry names its test package where that differs from the production package. After a rename
 or a move, the search for the old name must find no entry.

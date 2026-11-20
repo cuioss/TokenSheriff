@@ -103,8 +103,8 @@ import java.util.function.Supplier;
  *       every request issued through this helper instance, instead of a fresh client per request.</li>
  *   <li><strong>Configurable timeouts (L15):</strong> connect / read timeouts are read from
  *       {@link ClientConfiguration}, not hardcoded per client.</li>
- *   <li><strong>Bounded body reads (M7):</strong> {@link #bodyHandler()} enforces the payload ceiling
- *       during the read via the commons {@link BoundedBodyHandler}: a response advertising a
+ *   <li><strong>Bounded body reads (M7):</strong> {@link #bodyHandler()} enforces the ceiling the
+ *       instance was constructed with during the read via the commons {@link BoundedBodyHandler}: a response advertising a
  *       {@code Content-Length} above the ceiling fails before any byte is read, and a body that crosses
  *       the ceiling while streaming fails at the crossing. The ceiling's provenance travels with the
  *       failure: each construction site supplies a {@code boundOrigin} descriptor naming the knob that
@@ -129,9 +129,16 @@ import java.util.function.Supplier;
  *       its {@link IOException} handling. The wrapped-cancellation and runtime-failure mappings are
  *       defensive: no JDK path producing either is known from reading the client. An
  *       {@link IllegalArgumentException} thrown synchronously, for a request the client refuses before
- *       sending, is a request-side fault and reaches the caller as thrown. The request timeout bounds the wait until the response headers
- *       arrive; the body read that follows is bounded in size by the payload ceiling but carries no time
- *       bound, see {@link #exchange}.</li>
+ *       sending, is a request-side fault and reaches the caller as thrown.</li>
+ *   <li><strong>Wait bounds:</strong> cui-http 3.2's {@link HttpHandler} sets two timeouts and no
+ *       other: the connect timeout on the {@link HttpClient} it builds
+ *       ({@code HttpClient.Builder.connectTimeout}), and the read timeout as the request timeout in
+ *       {@link HttpHandler#requestBuilder()} ({@code HttpRequest.Builder.timeout}). The request timeout
+ *       bounds the wait until the response headers arrive. The body read that follows has no time bound;
+ *       it is bounded in size only, by the ceiling this instance was constructed with — the JWT payload
+ *       ceiling for the token, PAR, userinfo and revocation clients,
+ *       {@link ClientConfiguration#getDiscoveryDocumentMaxSize()} for discovery — see
+ *       {@link #exchange}.</li>
  * </ul>
  *
  * @since 1.0
@@ -442,14 +449,14 @@ public final class BackChannelHttp {
      * {@code "the HTTP exchange failed"} and no chained cause. The wrapped-cancellation and runtime-failure
      * mappings are defensive, no JDK path producing either being known. The
      * request's timeout, which {@link HttpHandler#requestBuilder()} sets to the configured read timeout,
-     * bounds the wait until the response headers arrive; the body read is bounded by the payload ceiling
-     * but carries no time bound, see {@link #exchange}.
+     * bounds the wait until the response headers arrive; the body read has no time bound and is bounded in
+     * size only, by the ceiling this instance was constructed with, see {@link #exchange}.
      * </p>
      *
      * @param client         the client from {@link #sharedClient(HttpHandler)}; must not be {@code null}
      * @param request        the request to send; must not be {@code null}
      * @param failureContext a short, caller-safe prefix identifying the endpoint for exception messages
-     * @return the response, its body read under the payload ceiling
+     * @return the response, its body read under the ceiling this instance was constructed with
      * @throws IOException              if the exchange fails, including a body over the ceiling, a request
      *                                  timeout, a cancelled exchange and a response-side runtime failure
      *                                  mapped to the fixed text {@code "the HTTP exchange failed"}
@@ -585,7 +592,8 @@ public final class BackChannelHttp {
     }
 
     /**
-     * @return a bounded body handler that enforces the configured payload ceiling during the read (M7)
+     * @return a bounded body handler that enforces this instance's {@code maxContentSize} ceiling during
+     *         the read (M7)
      */
     public HttpResponse.BodyHandler<String> bodyHandler() {
         return BoundedBodyHandler.ofString(StandardCharsets.UTF_8, maxContentSize, boundOrigin);
