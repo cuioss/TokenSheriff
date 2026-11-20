@@ -86,7 +86,7 @@ class TokenLifecycleManagerFamilyEvictionTest {
     }
 
     @Test
-    @DisplayName("Should detect the same replay as reuse while the family is still tracked")
+    @DisplayName("Should detect the same replay as reuse while the family is tracked")
     void shouldDetectReplayWhileFamilyTracked() {
         var manager = new TokenLifecycleManager(new InMemoryTokenStore(), new RefreshScheduler(), SMALL_CAP);
         seedRotatedSession(manager, "victim");
