@@ -125,8 +125,8 @@ class BackChannelOriginMappingTest {
         }
 
         @Test
-        @DisplayName("Should leave every endpoint unchanged when no back-channel origin is configured")
-        void shouldLeaveEndpointsUnchangedWithoutOrigin() {
+        @DisplayName("Should contact every endpoint where it is advertised when no back-channel origin is configured")
+        void shouldContactAdvertisedEndpointsWithoutOrigin() {
             var backChannel = backChannel(builder());
 
             assertAll("an unconfigured origin is today's behaviour",
