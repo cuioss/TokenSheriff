@@ -97,7 +97,7 @@ class IssuerConfigResolverEgressHostTest {
     }
 
     @Test
-    @DisplayName("Should keep dropping blank CSV elements instead of refusing them")
+    @DisplayName("Should drop blank CSV elements instead of refusing them")
     void shouldDropBlankElements() {
         var resolver = resolverWithAllowList("keycloak, , ,dex,");
 
