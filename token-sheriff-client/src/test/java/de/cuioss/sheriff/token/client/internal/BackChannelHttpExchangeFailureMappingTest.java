@@ -44,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * The future is completed by the test through {@link StubHttpClient}: no JDK path that completes it with
  * either shape is known, so the mapping is defensive and the stub is what can drive it. The positive
  * controls show that the shapes the mapping must leave alone — a response, the malformed-framing forms, an
- * {@link IOException} and an {@link Error} cause, a directly cancelled future — behave as before.
+ * {@link IOException} and an {@link Error} cause, a directly cancelled future — keep their own handling.
  */
 @DisplayName("BackChannelHttp exchange failure mapping")
 class BackChannelHttpExchangeFailureMappingTest {
@@ -156,7 +156,7 @@ class BackChannelHttpExchangeFailureMappingTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("malformedFramingForms")
-    @DisplayName("positive control: a malformed-framing failure is still replaced by the supplied exception")
+    @DisplayName("positive control: a malformed-framing failure is replaced by the supplied exception")
     void shouldReplaceMalformedFramingBySuppliedException(String description, Throwable failure) {
         CompletableFuture<HttpResponse<String>> future = failedWith(failure);
 
