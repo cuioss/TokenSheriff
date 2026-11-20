@@ -148,8 +148,8 @@ class NonValidatingJwtParserJweTest {
     }
 
     @Test
-    @DisplayName("Should still parse JWS tokens normally when JWE is configured")
-    void shouldStillParseJwsNormally() {
+    @DisplayName("Should parse JWS tokens normally when JWE is configured")
+    void shouldParseJwsNormally() {
         // Create a regular JWS token
         String jws = JweTestTokenFactory.createSignedJws(
                 InMemoryKeyMaterialHandler.getDefaultPrivateKey(), "RS256", ISSUER);

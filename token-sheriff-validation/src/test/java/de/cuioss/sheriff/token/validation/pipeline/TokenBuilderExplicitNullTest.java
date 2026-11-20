@@ -92,8 +92,8 @@ class TokenBuilderExplicitNullTest {
     }
 
     @Test
-    @DisplayName("Non-vacuity: a genuinely empty body still returns an empty token")
-    void shouldStillReturnEmptyForEmptyBody() {
+    @DisplayName("Non-vacuity: a genuinely empty body returns an empty token")
+    void shouldReturnEmptyForEmptyBody() {
         var builder = new TokenBuilder(issuerConfig().build(), counter);
 
         assertTrue(builder.createAccessToken(decoded("{}")).isEmpty());
@@ -136,7 +136,7 @@ class TokenBuilderExplicitNullTest {
     }
 
     @Test
-    @DisplayName("Non-vacuity: a string sub still reaches the custom mapper")
+    @DisplayName("Non-vacuity: a string sub reaches the custom mapper")
     void shouldMapStringSubjectWithCustomMapper() {
         var builder = new TokenBuilder(issuerConfig().claimMapper("sub", new IdentityMapper()).build(), counter);
 

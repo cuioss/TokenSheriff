@@ -290,7 +290,7 @@ class KeyInjectionAttackTest {
     }
 
     @Test
-    @DisplayName("Should still accept a conformant 2048-bit RSA key on the JWKS path (M1)")
+    @DisplayName("Should accept a conformant 2048-bit RSA key on the JWKS path (M1)")
     void shouldAcceptConformantRsaKeyOnJwksPath() throws Exception {
         RSAPublicKey strongKey = generateRsaPublicKey(2048);
         JwkKey jwk = rsaJwkKey(strongKey, "strong-rsa-kid");

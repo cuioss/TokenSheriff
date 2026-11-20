@@ -201,7 +201,7 @@ class TokenValidatorJweTest {
     class JwsCoexistence {
 
         @Test
-        @DisplayName("Should still validate regular JWS when JWE config is present")
+        @DisplayName("Should validate regular JWS when JWE config is present")
         void shouldValidateJwsWithJweConfigPresent() {
             TestTokenHolder tokenHolder = TestTokenGenerators.accessTokens().next();
             issuerConfig = tokenHolder.getIssuerConfig();

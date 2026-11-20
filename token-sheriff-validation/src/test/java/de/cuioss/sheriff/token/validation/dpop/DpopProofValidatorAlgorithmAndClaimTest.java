@@ -310,7 +310,7 @@ class DpopProofValidatorAlgorithmAndClaimTest extends DpopProofValidatorSupport 
         }
 
         @Test
-        @DisplayName("L5: an htu with a genuinely different host is still rejected")
+        @DisplayName("L5: an htu with a genuinely different host is rejected")
         void shouldRejectHtuWithDifferentHost() {
             KeyPair keyPair = FIXTURE_KEY_PAIR;
             Map<String, Object> jwkMap = rsaPublicKeyToJwkMap((RSAPublicKey) keyPair.getPublic());
@@ -331,7 +331,7 @@ class DpopProofValidatorAlgorithmAndClaimTest extends DpopProofValidatorSupport 
         }
 
         @Test
-        @DisplayName("L3: in-window jtis survive flood eviction and are still detected as replays")
+        @DisplayName("L3: in-window jtis survive flood eviction and are detected as replays")
         void shouldNotEvictInWindowJtisUnderFlood() {
             try (DpopReplayProtection floodProtection = new DpopReplayProtection(300, 2)) {
                 assertTrue(floodProtection.checkAndStore("first-jti"), "A fresh jti is accepted");
