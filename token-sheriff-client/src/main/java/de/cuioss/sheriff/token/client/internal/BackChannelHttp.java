@@ -568,33 +568,54 @@ public final class BackChannelHttp {
         } catch (CancellationException e) {
             throw new IOException(EXCHANGE_CANCELLED, e);
         } catch (ExecutionException e) {
-            Throwable cause = e.getCause();
-            while (cause instanceof CompletionException && cause.getCause() != null) {
-                cause = cause.getCause();
-            }
-            if (isMalformedFraming(cause)) {
-                // Deliberately neither chained nor reused: the JDK's message carries the raw header value.
-                LOGGER.debug("The HTTP client refused the response as malformed");
-                throw malformedResponse.get();
-            }
-            if (cause instanceof IOException ioException) {
-                throw ioException;
-            }
-            if (cause instanceof CancellationException) {
-                // Defensive: no JDK path is known to fail the future with a wrapped cancellation.
-                throw new IOException(EXCHANGE_CANCELLED);
-            }
-            if (cause instanceof RuntimeException runtimeException) {
-                // Defensive: deliberately not chained, a response-side runtime message can carry remote content.
-                LOGGER.debug("The HTTP exchange failed with a runtime failure of type %s",
-                        runtimeException.getClass().getName());
-                throw new IOException(EXCHANGE_FAILED);
-            }
-            if (cause instanceof Error error) {
-                throw error;
-            }
-            throw new IOException(EXCHANGE_FAILED, cause);
+            throw exchangeFailure(e, malformedResponse);
         }
+    }
+
+    /**
+     * Maps the failure of an exchange's future to what {@link #exchange} reaches its caller with, as that
+     * method documents: the cause is unwrapped from {@code failure} and any {@link CompletionException}, a
+     * malformed-framing cause is replaced by the exception {@code malformedResponse} supplies, an
+     * {@link Error} cause is rethrown as is, and every other cause is mapped to the returned
+     * {@link IOException}.
+     *
+     * @param failure           the failure of the exchange's future
+     * @param malformedResponse supplies the caller-safe exception that replaces a malformed-framing failure
+     * @return the {@link IOException} the caller is to throw: the {@link IOException} cause itself, the
+     *         fixed text {@code "the HTTP exchange was cancelled"} for a wrapped cancellation, the fixed text
+     *         {@code "the HTTP exchange failed"} without a chained cause for a runtime cause, or with the
+     *         cause chained for any other checked cause
+     * @throws RuntimeException the exception {@code malformedResponse} supplies, for a malformed-framing cause
+     * @throws Error            an {@link Error} cause, rethrown as is
+     */
+    private static IOException exchangeFailure(ExecutionException failure,
+            Supplier<? extends RuntimeException> malformedResponse) {
+        Throwable cause = failure.getCause();
+        while (cause instanceof CompletionException && cause.getCause() != null) {
+            cause = cause.getCause();
+        }
+        if (isMalformedFraming(cause)) {
+            // Deliberately neither chained nor reused: the JDK's message carries the raw header value.
+            LOGGER.debug("The HTTP client refused the response as malformed");
+            throw malformedResponse.get();
+        }
+        if (cause instanceof IOException ioException) {
+            return ioException;
+        }
+        if (cause instanceof CancellationException) {
+            // Defensive: no JDK path is known to fail the future with a wrapped cancellation.
+            return new IOException(EXCHANGE_CANCELLED);
+        }
+        if (cause instanceof RuntimeException runtimeException) {
+            // Defensive: deliberately not chained, a response-side runtime message can carry remote content.
+            LOGGER.debug("The HTTP exchange failed with a runtime failure of type %s",
+                    runtimeException.getClass().getName());
+            return new IOException(EXCHANGE_FAILED);
+        }
+        if (cause instanceof Error error) {
+            throw error;
+        }
+        return new IOException(EXCHANGE_FAILED, cause);
     }
 
     /**
