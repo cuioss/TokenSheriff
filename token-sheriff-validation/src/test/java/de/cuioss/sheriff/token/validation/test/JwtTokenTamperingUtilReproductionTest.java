@@ -28,12 +28,12 @@ import java.util.Base64;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
- * Regression test for {@link JwtTokenTamperingUtil} ensuring that
+ * Tests for {@link JwtTokenTamperingUtil} ensuring that
  * {@link JwtTokenTamperingUtil.TamperingStrategy#MODIFY_SIGNATURE_LAST_CHAR}
  * actually changes the decoded signature bytes, not just the base64url characters.
  * <p>
- * This test was created to reproduce and verify the fix for a CI failure in
- * {@code shouldRejectAccessTokenWithInvalidSignature[44]} caused by two compounding bugs:
+ * The cases cover two causes that together can leave a tampered signature decoding to the original
+ * bytes, as seen in {@code shouldRejectAccessTokenWithInvalidSignature[44]}:
  * <ol>
  *   <li>Modifying the last base64url character may not change decoded bytes due to padding bits
  *       (e.g., 'A' and 'B' both decode to the same byte at the last position of a 256-byte
@@ -43,7 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
  * </ol>
  */
 @EnableGeneratorController
-@DisplayName("JwtTokenTamperingUtil Regression Tests")
+@DisplayName("JwtTokenTamperingUtil MODIFY_SIGNATURE_LAST_CHAR changes the decoded signature")
 class JwtTokenTamperingUtilReproductionTest {
 
     /**
@@ -70,7 +70,7 @@ class JwtTokenTamperingUtilReproductionTest {
     }
 
     /**
-     * Tests all critical combinations of last/middle chars that previously triggered the bug.
+     * Tests all critical combinations of last/middle chars that trigger either cause.
      * <p>
      * The last character values 'A', 'B', 'Q', 'g', 'w' represent the four possible
      * significant-bit patterns for the trailing base64url character of a 256-byte signature.
