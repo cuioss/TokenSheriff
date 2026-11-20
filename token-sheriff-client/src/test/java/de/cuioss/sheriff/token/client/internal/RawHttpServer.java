@@ -25,6 +25,8 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -44,11 +46,20 @@ import java.util.concurrent.atomic.AtomicInteger;
  * so a client that leaves an incomplete request open does not keep the thread blocked in its read, then
  * stops the thread and waits for it to end. A connection accepted while {@link #close()} runs is closed
  * unserved.
+ * <p>
+ * The accept loop also ends on its own, and the thread with it, after
+ * {@value #MAX_CONSECUTIVE_ACCEPT_FAILURES} consecutive failures of {@link ServerSocket#accept()} on a server
+ * socket that is still open, so a persistent accept failure does not spin the thread until {@link #close()}.
+ * A successful accept resets the count, and a connection the client resets while it is served does not
+ * count.
  */
 public final class RawHttpServer implements AutoCloseable {
 
     /** How long {@link #close()} waits for the server thread to end. */
     private static final long STOP_TIMEOUT_SECONDS = 10;
+
+    /** How many consecutive failures of {@link ServerSocket#accept()} end the accept loop. */
+    static final int MAX_CONSECUTIVE_ACCEPT_FAILURES = 5;
 
     private final ServerSocket serverSocket;
     private final ExecutorService serverThread = Executors.newSingleThreadExecutor();
@@ -71,8 +82,19 @@ public final class RawHttpServer implements AutoCloseable {
      * @throws IOException if the loopback server socket cannot be opened
      */
     public static RawHttpServer answering(String rawResponse) throws IOException {
-        RawHttpServer server = new RawHttpServer(
-                new ServerSocket(0, 50, InetAddress.getByAddress(new byte[]{127, 0, 0, 1})));
+        return serving(new ServerSocket(0, 50, InetAddress.getByAddress(new byte[]{127, 0, 0, 1})), rawResponse);
+    }
+
+    /**
+     * Starts a server on {@code serverSocket} that answers every request with {@code rawResponse}, so a test
+     * can inject a server socket whose {@code accept()} or whose accepted connections' {@code close()} fails.
+     *
+     * @param serverSocket the bound server socket to serve on; the server owns and closes it
+     * @param rawResponse  the complete raw HTTP response, status line, headers and body
+     * @return the started server; close it to stop it
+     */
+    static RawHttpServer serving(ServerSocket serverSocket, String rawResponse) {
+        RawHttpServer server = new RawHttpServer(serverSocket);
         server.start(rawResponse.getBytes(StandardCharsets.US_ASCII));
         return server;
     }
@@ -93,6 +115,19 @@ public final class RawHttpServer implements AutoCloseable {
     }
 
     /**
+     * Waits until the server thread has ended, whether through {@link #close()} or because the accept loop
+     * ended on its own.
+     *
+     * @param timeout how long to wait
+     * @param unit    the unit of {@code timeout}
+     * @return {@code true} if the server thread ended within the wait, {@code false} otherwise
+     * @throws InterruptedException if the wait is interrupted
+     */
+    boolean awaitThreadEnded(long timeout, TimeUnit unit) throws InterruptedException {
+        return serverThread.awaitTermination(timeout, unit);
+    }
+
+    /**
      * Waits until the server has accepted one more connection and registered it as the connection being
      * served, so a test can act on a connection the server is known to hold.
      *
@@ -108,23 +143,59 @@ public final class RawHttpServer implements AutoCloseable {
     /**
      * Closes the server socket and the connection being served, stops the server thread and waits for it
      * to end. Closing the connection being served is what ends a read a client left blocked on an incomplete
-     * request: {@link ExecutorService#shutdownNow()} does not interrupt a socket read. Calling this method
-     * again has no further effect.
+     * request: {@link ExecutorService#shutdownNow()} does not interrupt a socket read. Every release step
+     * runs even when an earlier one fails: the server socket and the connection being served are each
+     * closed, and the thread is stopped and awaited in a {@code finally}, so a failing close never leaves the
+     * thread running. The first failure is thrown and every later one — the {@link IllegalStateException}
+     * of the wait included — is attached to it as suppressed. Calling this method again has no further
+     * effect.
      *
      * @throws IOException           if closing the server socket or the connection being served fails
      * @throws IllegalStateException if the server thread did not end within the wait, or the wait was
-     *                               interrupted
+     *                               interrupted, and no close failed before
      */
     @Override
     public void close() throws IOException {
-        synchronized (connectionLock) {
-            closing = true;
-            serverSocket.close();
-            if (activeConnection != null) {
-                activeConnection.close();
+        List<Exception> failures = new ArrayList<>();
+        try {
+            synchronized (connectionLock) {
+                closing = true;
+                closeRecordingFailure(serverSocket, failures);
+                if (activeConnection != null) {
+                    closeRecordingFailure(activeConnection, failures);
+                }
+            }
+        } finally {
+            serverThread.shutdownNow();
+            try {
+                awaitStop();
+            } catch (IllegalStateException e) {
+                failures.add(e);
             }
         }
-        serverThread.shutdownNow();
+        if (failures.isEmpty()) {
+            return;
+        }
+        Exception first = failures.getFirst();
+        failures.subList(1, failures.size()).forEach(first::addSuppressed);
+        if (first instanceof IOException ioException) {
+            throw ioException;
+        }
+        if (first instanceof RuntimeException runtimeException) {
+            throw runtimeException;
+        }
+        throw new IllegalStateException(first);
+    }
+
+    private static void closeRecordingFailure(AutoCloseable closeable, List<Exception> failures) {
+        try {
+            closeable.close();
+        } catch (Exception e) {
+            failures.add(e);
+        }
+    }
+
+    private void awaitStop() {
         try {
             if (!serverThread.awaitTermination(STOP_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                 throw new IllegalStateException("The raw HTTP server thread did not stop within "
@@ -137,27 +208,56 @@ public final class RawHttpServer implements AutoCloseable {
     }
 
     private void start(byte[] answer) {
-        serverThread.execute(() -> {
-            while (!serverSocket.isClosed()) {
-                try (Socket socket = serverSocket.accept()) {
-                    if (!register(socket)) {
-                        return;
-                    }
-                    try {
-                        serve(socket, answer);
-                    } finally {
-                        unregister();
-                    }
-                } catch (SocketException connectionEnded) {
-                    // A closed server socket ends the loop; a reset client connection ends that connection only.
-                    if (serverSocket.isClosed()) {
-                        return;
-                    }
-                } catch (IOException e) {
-                    throw new IllegalStateException(e);
+        serverThread.execute(() -> acceptLoop(answer));
+        // The executor runs this one task only: it terminates as soon as the accept loop ends.
+        serverThread.shutdown();
+    }
+
+    private void acceptLoop(byte[] answer) {
+        int consecutiveAcceptFailures = 0;
+        while (!serverSocket.isClosed()) {
+            Socket socket;
+            try {
+                socket = serverSocket.accept();
+            } catch (SocketException acceptFailed) {
+                // A closed server socket ends the loop; a persistent accept failure ends it at the bound.
+                consecutiveAcceptFailures++;
+                if (serverSocket.isClosed() || consecutiveAcceptFailures >= MAX_CONSECUTIVE_ACCEPT_FAILURES) {
+                    return;
                 }
+                continue;
+            } catch (IOException e) {
+                throw new IllegalStateException(e);
             }
-        });
+            consecutiveAcceptFailures = 0;
+            if (!serveAccepted(socket, answer)) {
+                return;
+            }
+        }
+    }
+
+    /**
+     * Serves one accepted connection and closes it.
+     *
+     * @return {@code false} if the accept loop is to end: the server is closing
+     */
+    private boolean serveAccepted(Socket accepted, byte[] answer) {
+        try (Socket socket = accepted) {
+            if (!register(socket)) {
+                return false;
+            }
+            try {
+                serve(socket, answer);
+            } finally {
+                unregister();
+            }
+        } catch (SocketException connectionEnded) {
+            // A reset client connection ends that connection only and does not count as an accept failure.
+            return !serverSocket.isClosed();
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+        return true;
     }
 
     /**
