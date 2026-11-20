@@ -52,7 +52,9 @@ parser is `InsufficientScopeChallengeRoundTripTest` in token-sheriff-client (`cl
 `HttpWellKnownResolverTest`, `JwksHostnameVerificationTest`, `JwksHttpContentConverterTest`,
 `LoadingStatusProviderTest`, `ParserConfigTest`, `WellKnownConfigTest`,
 `WellKnownConfigurationConverterTest`, `WellKnownResultConverterTest`,
-`WellKnownResultMappingTest`
+`WellKnownResultMappingTest`; `ParserConfig` parsing a JWKS in a booted Quarkus application is
+`JwksParserConfigBootTest` in token-sheriff-validation-quarkus-deployment (`deployment` row, test package
+`quarkus.deployment`), because a Quarkus boot test needs the extension's deployment class path
 
 |`validation`
 |`ClientConfusionAttackTest`, `CustomClaimMapperTest`, `DSLJsonSecurityTest`,
@@ -367,7 +369,9 @@ Package prefix: `de.cuioss.sheriff.token.quarkus`.
 `BearerScopeValidationDependencyVetoedPackageBootTest`, `BearerScopeValidationGeneratedBeanBootTest`,
 `BearerScopeValidationGeneratedBeanControlBootTest`, `BearerScopeValidationRefusalBootTest`,
 `BearerScopeValidationVetoedPackageBootTest`, `BearerScopeValidationVetoedPackageBuildStepTest`,
-`TokenSheriffDevUIIntegrationTest`,
+`JwksParserConfigBootTest` (boots `ParserConfig` of token-sheriff-validation, `commons.transport` row:
+a Quarkus boot test must live in the deployment module while the code it boots is in
+token-sheriff-validation), `TokenSheriffDevUIIntegrationTest`,
 `TokenSheriffIntegrationTest`, `TokenSheriffProcessorBuildStepTest`, `TokenSheriffProcessorTest`,
 `TokenValidatorEagerStartupTest`; the extension as a whole is booted by
 `TokenSheriffExtensionTest` (test package `quarkus.test`)
