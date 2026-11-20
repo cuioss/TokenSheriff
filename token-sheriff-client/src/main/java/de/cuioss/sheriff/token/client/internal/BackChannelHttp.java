@@ -134,8 +134,10 @@ import java.util.function.Supplier;
  *       other: the connect timeout on the {@link HttpClient} it builds
  *       ({@code HttpClient.Builder.connectTimeout}), and the read timeout as the request timeout in
  *       {@link HttpHandler#requestBuilder()} ({@code HttpRequest.Builder.timeout}). The request timeout
- *       bounds the wait until the response headers arrive. The body read that follows has no time bound;
- *       it is bounded in size only, by the ceiling this instance was constructed with — the JWT payload
+ *       bounds the wait until the response headers arrive. Whether it also bounds the body read that
+ *       follows depends on the JDK: on JDK 21 and 25 it was observed not to, on JDK 27 it was observed to,
+ *       ending the call with the request-timeout failure. The code relies on the size bound of the body
+ *       read, not on a time bound: the ceiling this instance was constructed with — the JWT payload
  *       ceiling for the token, PAR, userinfo and revocation clients,
  *       {@link ClientConfiguration#getDiscoveryDocumentMaxSize()} for discovery — see
  *       {@link #exchange}.</li>
@@ -449,8 +451,9 @@ public final class BackChannelHttp {
      * {@code "the HTTP exchange failed"} and no chained cause. The wrapped-cancellation and runtime-failure
      * mappings are defensive, no JDK path producing either being known. The
      * request's timeout, which {@link HttpHandler#requestBuilder()} sets to the configured read timeout,
-     * bounds the wait until the response headers arrive; the body read has no time bound and is bounded in
-     * size only, by the ceiling this instance was constructed with, see {@link #exchange}.
+     * bounds the wait until the response headers arrive; whether it also bounds the body read depends on
+     * the JDK (observed: not on JDK 21 and 25, yes on JDK 27), and the body read is bounded in size by the
+     * ceiling this instance was constructed with, see {@link #exchange}.
      * </p>
      *
      * @param client         the client from {@link #sharedClient(HttpHandler)}; must not be {@code null}
@@ -511,11 +514,13 @@ public final class BackChannelHttp {
      * The wait has no bound of its own. The timeout of {@code request} bounds it until the response headers
      * arrive: every back-channel request is built through {@link HttpHandler#requestBuilder()}, which sets
      * that timeout to the configured read timeout, and the client completes the future with an
-     * {@link java.net.http.HttpTimeoutException} when no response headers arrive within it. The request
-     * timeout does not cover the body: once the headers have arrived, the body read is bounded in size by
-     * {@code bodyHandler} — the {@link BoundedBodyHandler} ceiling on the back-channel path — but carries no
-     * time bound, so a server that sends the headers and then stalls or trickles the body keeps the calling
-     * thread waiting.
+     * {@link java.net.http.HttpTimeoutException} when no response headers arrive within it. Whether the
+     * request timeout also bounds the body read depends on the JDK: on JDK 21 and 25 it was observed not
+     * to, so a server that sends the headers and then stalls or trickles the body keeps the calling thread
+     * waiting; on JDK 27 it was observed to, so such a call ends with the
+     * {@link java.net.http.HttpTimeoutException}, rethrown as an {@link IOException}. On every JDK the body
+     * read is bounded in size by {@code bodyHandler} — the {@link BoundedBodyHandler} ceiling on the
+     * back-channel path — and that size bound, not a time bound, is what this method relies on.
      * </p>
      * <p>
      * A calling thread that is already interrupted when this method is entered sends nothing: the
@@ -554,7 +559,8 @@ public final class BackChannelHttp {
         CompletableFuture<HttpResponse<T>> pending = client.sendAsync(request, bodyHandler);
         try {
             // The request timeout (the read timeout, set by HttpHandler.requestBuilder()) bounds this wait
-            // until the response headers arrive; the body read after them has no time bound.
+            // until the response headers arrive; whether it bounds the body read after them depends on the
+            // JDK (observed: not on 21 and 25, yes on 27), the body's size bound applies on every JDK.
             return pending.get();
         } catch (InterruptedException e) {
             pending.cancel(true);

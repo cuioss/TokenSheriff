@@ -594,9 +594,11 @@ public class TokenEndpointClient {
      * exchange, a body past the payload bound, and a response-side runtime failure, which the exchange maps
      * to an {@link IOException} with a fixed text and no chained cause — is a {@link RedeemedResponseException}
      * after a recorded success status and a pre-redemption {@link TransportException} otherwise, so no raw
-     * runtime exception leaves this method after the grant was redeemed. A request timeout ends the
-     * wait before the response headers arrive, so no status has been recorded and it is always a
-     * {@link TransportException}. An
+     * runtime exception leaves this method after the grant was redeemed. A request timeout that ends the
+     * wait before the response headers arrive leaves no status recorded, so it is a pre-redemption
+     * {@link TransportException}. Whether the request timeout also ends a stalled body read depends on the
+     * JDK (observed: not on JDK 21 and 25, yes on JDK 27); where it does, the timeout follows a recorded
+     * status and is classified like any other {@link IOException} of the body read. An
      * {@link IllegalArgumentException} for a request the client refuses before sending is a request-side
      * fault: it is not caught here and reaches the caller of {@code requestToken} as thrown.
      * </p>

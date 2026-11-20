@@ -195,7 +195,8 @@ target. The engine therefore *owns* an in-module egress control, applied uniform
   crossing (see the
   xref:../commons/specification/transport.adoc#bounded_response_body[transport specification]);
   connect / read timeouts come from `ClientConfiguration`. The read timeout bounds the wait until the
-  response headers arrive; the body read that follows is bounded in size, not in time.
+  response headers arrive; whether it also bounds the body read that follows depends on the JDK
+  (observed: not on JDK 21 and 25, yes on JDK 27), and on every JDK the body read is bounded in size.
 |===
 
 [IMPORTANT]

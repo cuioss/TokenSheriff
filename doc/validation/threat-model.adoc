@@ -227,7 +227,7 @@ _See Requirements xref:requirements.adoc#VALIDATION-8.1[VALIDATION-8.1: Token Si
 
 |D4
 |Resource exhaustion (parallel requests)
-|Thread-safe implementation; connect and read timeouts on every JWKS and discovery fetch. cui-http 3.2's `HttpHandler` sets two timeouts: the connect timeout on the `HttpClient` it builds (`HttpClient.Builder.connectTimeout`), which bounds establishing the connection, and the read timeout as the request timeout in `requestBuilder()` (`HttpRequest.Builder.timeout`), which bounds the wait until the response headers arrive. `ETagAwareHttpAdapter` builds every request through `requestBuilder()`; `ResilientHttpAdapter` adds retry delays and no timeout. A body trickled after the headers has no time bound and is bounded in size only, by `ParserConfig.maxHttpResponseSize`
+|Thread-safe implementation; connect and read timeouts on every JWKS and discovery fetch. cui-http 3.2's `HttpHandler` sets two timeouts: the connect timeout on the `HttpClient` it builds (`HttpClient.Builder.connectTimeout`), which bounds establishing the connection, and the read timeout as the request timeout in `requestBuilder()` (`HttpRequest.Builder.timeout`), which bounds the wait until the response headers arrive. `ETagAwareHttpAdapter` builds every request through `requestBuilder()`; `ResilientHttpAdapter` adds retry delays and no timeout. Whether the request timeout also bounds a body trickled after the headers depends on the JDK: on JDK 21 and 25 it was observed not to, on JDK 27 it was observed to, ending the fetch with the request-timeout failure. The mitigation relies on the size bound of the body read, `ParserConfig.maxHttpResponseSize`, which applies on every JDK
 |Concurrency tests
 
 |D5

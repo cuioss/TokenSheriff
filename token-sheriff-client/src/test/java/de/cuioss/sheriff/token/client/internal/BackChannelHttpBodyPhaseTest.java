@@ -21,6 +21,7 @@ import de.cuioss.sheriff.token.client.config.ClientConfiguration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestReporter;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
@@ -45,16 +46,20 @@ import java.util.concurrent.TimeoutException;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Pins that the request timeout of a back-channel request bounds the wait for the response headers only, not
- * the body read that follows them, as {@link BackChannelHttp#exchange} states.
+ * Observes whether the request timeout of a back-channel request bounds the body read on the running JDK, and
+ * pins that the wait for the response headers is bounded by it, as {@link BackChannelHttp#exchange} states.
  * <p>
  * A loopback server sends the status line, the headers and the first part of the body, then holds the rest
- * until the test releases it. A call through {@link BackChannelHttp#send} is still pending after a bounded wait
- * of twice the configured read timeout, so the request timeout did not end it; once the server is released the
- * whole body arrives. The positive control uses the same server holding everything, the headers included: that
- * call ends through the request timeout within the same bounded wait. {@link RawHttpServer} writes its whole
- * answer at once and cannot hold part of it, so the stalling server is local to this class. No test sleeps: the
- * bounded waits are the subject of the test.
+ * until the test releases it. A call through {@link BackChannelHttp#send} is then awaited for twice the
+ * configured read timeout, and two outcomes are accepted, because the JDKs differ: on JDK 21 and 25 the call is
+ * still pending after the bounded wait, so the request timeout did not end it, and once the server is released
+ * the whole body arrives; on JDK 27 the call ends within the bounded wait with an {@link HttpTimeoutException}
+ * as its cause and nothing broader. Any other outcome fails the test. The test publishes which outcome it saw,
+ * together with the feature version of the running JDK, as a report entry and in its assertion messages, so a
+ * build log names the observed behaviour. The positive control uses the same server holding everything, the
+ * headers included: that call ends through the request timeout within the same bounded wait on every JDK.
+ * {@link RawHttpServer} writes its whole answer at once and cannot hold part of it, so the stalling server is
+ * local to this class. No test sleeps: the bounded waits are the subject of the test.
  */
 @DisplayName("BackChannelHttp body phase")
 class BackChannelHttpBodyPhaseTest {
@@ -64,6 +69,7 @@ class BackChannelHttpBodyPhaseTest {
     private static final long SIGNAL_WAIT_SECONDS = 30;
     private static final String FIRST_PART = "first-part-of-the-body;";
     private static final String REST = "rest-of-the-body";
+    private static final String BODY_PHASE_ENTRY = "body-phase-outcome";
 
     private final CountDownLatch headSent = new CountDownLatch(1);
     private final CountDownLatch release = new CountDownLatch(1);
@@ -87,22 +93,38 @@ class BackChannelHttpBodyPhaseTest {
     }
 
     @Test
-    @DisplayName("should keep waiting for a stalled body past the request timeout, and return it once released")
-    void shouldNotBoundBodyReadByRequestTimeout() throws Exception {
+    @DisplayName("should observe whether the request timeout bounds a stalled body read on the running JDK")
+    void shouldObserveWhetherRequestTimeoutBoundsBodyRead(TestReporter reporter) throws Exception {
+        String jdk = "JDK " + Runtime.version().feature();
         String endpoint = startServer(true);
 
         Future<HttpResponse<String>> call = callerThread.submit(() -> send(endpoint));
         assertTrue(headSent.await(SIGNAL_WAIT_SECONDS, TimeUnit.SECONDS),
                 "The server sent the status line, the headers and the first part of the body");
 
-        assertThrows(TimeoutException.class, () -> call.get(BOUNDED_WAIT_SECONDS, TimeUnit.SECONDS),
-                "The call is still pending after twice the read timeout: the request timeout does not cover the body");
-        release.countDown();
-        HttpResponse<String> response = call.get(SIGNAL_WAIT_SECONDS, TimeUnit.SECONDS);
+        try {
+            HttpResponse<String> early = call.get(BOUNDED_WAIT_SECONDS, TimeUnit.SECONDS);
+            fail(jdk + ": the call returned status " + early.statusCode()
+                    + " before the server released the rest of the body");
+        } catch (TimeoutException stillPending) {
+            reporter.publishEntry(BODY_PHASE_ENTRY, jdk + ": the request timeout does not bound the body read");
+            release.countDown();
+            HttpResponse<String> response = call.get(SIGNAL_WAIT_SECONDS, TimeUnit.SECONDS);
 
-        assertAll("Released body",
-                () -> assertEquals(200, response.statusCode(), "The status line arrived"),
-                () -> assertEquals(FIRST_PART + REST, response.body(), "The whole body arrives after the release"));
+            assertAll("Released body on " + jdk,
+                    () -> assertEquals(200, response.statusCode(), jdk + ": the status line arrived"),
+                    () -> assertEquals(FIRST_PART + REST, response.body(),
+                            jdk + ": the call was still pending after twice the read timeout, "
+                                    + "and the whole body arrives after the release"));
+        } catch (ExecutionException ended) {
+            reporter.publishEntry(BODY_PHASE_ENTRY, jdk + ": the request timeout bounds the body read");
+            Throwable cause = ended.getCause();
+
+            assertNotNull(cause, jdk + ": the call ended within twice the read timeout with a cause");
+            assertEquals(HttpTimeoutException.class, cause.getClass(),
+                    jdk + ": the call ended within twice the read timeout, so its cause is the request timeout "
+                            + "and nothing broader, not " + cause);
+        }
     }
 
     @Test

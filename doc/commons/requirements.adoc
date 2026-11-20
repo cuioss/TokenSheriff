@@ -162,13 +162,15 @@ host that does not answer MUST NOT block a caller indefinitely before the respon
 cui-http 3.2's `HttpHandler` sets two timeouts and no other. The connect timeout is set on the
 `HttpClient` the handler builds (`HttpClient.Builder.connectTimeout`) and bounds establishing the
 connection. The read timeout is the request timeout `HttpHandler.requestBuilder()` sets
-(`HttpRequest.Builder.timeout`), and it bounds the wait until the response headers arrive. The body read
-that follows has no time bound and is bounded in size only, by the response-size limit of the fetch:
-`ParserConfig.maxHttpResponseSize` for the validation-side discovery and JWKS reads,
-`ClientConfiguration.discoveryDocumentMaxSize` for the client's discovery, and the JWT payload ceiling
-`ParserConfig.maxPayloadSize` for the client's token, PAR, userinfo and revocation calls. A host that sends
-the headers and then stalls or trickles the body therefore keeps the calling thread waiting. This is an
-accepted limit.
+(`HttpRequest.Builder.timeout`), and it bounds the wait until the response headers arrive. Whether it
+also bounds the body read that follows depends on the JDK: on JDK 21 and 25 it was observed not to, on
+JDK 27 it was observed to. The bound this requirement relies on for the body read is its size, the
+response-size limit of the fetch: `ParserConfig.maxHttpResponseSize` for the validation-side discovery and
+JWKS reads, `ClientConfiguration.discoveryDocumentMaxSize` for the client's discovery, and the JWT payload
+ceiling `ParserConfig.maxPayloadSize` for the client's token, PAR, userinfo and revocation calls. On a JDK
+that does not bound the body read, a host that sends the headers and then stalls or trickles the body keeps
+the calling thread waiting; this is an accepted limit. On a JDK that bounds it, such a call ends with the
+request-timeout failure.
 
 * Source: https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4] (availability), https://www.rfc-editor.org/rfc/rfc7230[RFC 7230] (message framing bounds).
 
@@ -230,9 +232,11 @@ are told apart by the documented `HttpClient.sendAsync` contract: an `IllegalArg
 synchronously, for a request the client refuses before sending, is a request-side fault and reaches the
 caller as thrown. The wait has no bound of its own. The request timeout, which cui-http 3.2's
 `HttpHandler.requestBuilder()` sets to the configured read timeout, bounds it until the response headers
-arrive; the body read that follows has no time bound and is bounded in size only, by the
-`BoundedBodyHandler` ceiling the endpoint client was constructed with, so a server that sends the headers
-and then stalls or trickles the body keeps the calling thread waiting. The validation-side discovery and JWKS
+arrive. Whether it also bounds the body read that follows depends on the JDK: on JDK 21 and 25 it was
+observed not to, so a server that sends the headers and then stalls or trickles the body keeps the calling
+thread waiting; on JDK 27 it was observed to, so such a call ends with the request-timeout failure. On every
+JDK the body read is bounded in size by the `BoundedBodyHandler` ceiling the endpoint client was constructed
+with. The validation-side discovery and JWKS
 reads hand the handler to cui-http, whose adapter performs the send, so this repository has no send call
 there to map. A caller therefore treats the message of any
 exception that comes out of an HTTP exchange as remote content and sanitises it before logging.

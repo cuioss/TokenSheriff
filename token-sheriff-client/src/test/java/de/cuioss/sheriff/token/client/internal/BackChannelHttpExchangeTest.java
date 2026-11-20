@@ -61,8 +61,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * — is reached without a socket. The mapping of a response-side runtime failure and of a wrapped cancellation
  * is pinned by {@link BackChannelHttpExchangeFailureMappingTest}. The request-timeout tests use a loopback server socket that accepts the
  * connection in its backlog and never sends response headers, so the wait of every endpoint client for the
- * headers ends only through the request's timeout. They cover the headers phase only: the request timeout
- * does not bound the body read that follows the headers.
+ * headers ends only through the request's timeout. They cover the headers phase only; whether the request
+ * timeout also bounds the body read that follows the headers depends on the JDK and is observed by
+ * {@link BackChannelHttpBodyPhaseTest}.
  */
 @DisplayName("BackChannelHttp exchange")
 class BackChannelHttpExchangeTest {
