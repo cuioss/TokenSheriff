@@ -23,28 +23,36 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
-import java.net.ProtocolException;
 import java.net.http.HttpResponse;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Pins how {@link BackChannelHttp#exchange} maps a response-side runtime failure of the
- * {@link java.net.http.HttpClient#sendAsync} future: a wrapped {@link CancellationException} becomes an
- * {@link IOException} with the fixed text of a cancelled exchange, and every other {@link RuntimeException}
- * cause becomes an {@link IOException} with the fixed text of a failed exchange and no chained cause, so every
- * endpoint client classifies it through its {@link IOException} handling and no runtime message — which can
- * carry remote content — reaches the caller.
- * <p>
- * The future is completed by the test through {@link StubHttpClient}: no JDK path that completes it with
- * either shape is known, so the mapping is defensive and the stub is what can drive it. The positive
- * controls show that the shapes the mapping must leave alone — a response, the malformed-framing forms, an
- * {@link IOException} and an {@link Error} cause, a directly cancelled future — keep their own handling.
+ * Pins how {@link BackChannelHttp#exchange} maps a failure of the {@link java.net.http.HttpClient#sendAsync}
+ * future that is not one of the shapes {@link BackChannelHttpExchangeTest} holds as positive controls (a
+ * response, the malformed-framing forms, an {@link IOException} and an {@link Error} cause, a directly
+ * cancelled future):
+ * <ul>
+ *   <li>a wrapped {@link CancellationException} becomes an {@link IOException} with the fixed text of a
+ *       cancelled exchange;</li>
+ *   <li>every other cause, a {@link RuntimeException} or a checked cause that is no {@link IOException},
+ *       becomes an {@link IOException} with the fixed text of a failed exchange and no chained cause, so no
+ *       failure message — which can carry remote content — reaches the caller;</li>
+ *   <li>a nested {@link ExecutionException} is unwrapped like a {@link CompletionException}, so a
+ *       cancellation, a malformed {@code Content-Length} or an {@link IOException} below it keeps its own
+ *       mapping;</li>
+ *   <li>the unwrap is bounded by {@link BackChannelHttp#MAX_CAUSE_DEPTH}: a wrapper chain deeper than the
+ *       bound ends as the fixed failed-exchange text.</li>
+ * </ul>
+ * The future is completed by the test through {@link StubHttpClient}: no JDK path that completes it with any
+ * of these shapes is known, so the mappings are defensive and the stub is what can drive them.
  */
 @DisplayName("BackChannelHttp exchange failure mapping")
 class BackChannelHttpExchangeFailureMappingTest {
@@ -52,7 +60,7 @@ class BackChannelHttpExchangeFailureMappingTest {
     private static final TransportException MALFORMED = new TransportException("malformed response");
     private static final Supplier<TransportException> MALFORMED_SUPPLIER = () -> MALFORMED;
 
-    /** Stands for remote content a runtime message could carry; it must not reach the caller. */
+    /** Stands for remote content a failure message could carry; it must not reach the caller. */
     private static final String REMOTE_CONTENT = "remote-content-from-the-response";
 
     private static HttpResponse<String> exchange(CompletableFuture<HttpResponse<String>> future)
@@ -67,7 +75,20 @@ class BackChannelHttpExchangeFailureMappingTest {
         return future;
     }
 
-    static Stream<Arguments> runtimeFailures() {
+    /**
+     * Wraps {@code innermost} in {@code depth} {@link ExecutionException}s. {@link ExecutionException} is used
+     * rather than {@link CompletionException} because {@link CompletableFuture#get()} strips one outer
+     * {@link CompletionException} itself, which would shift the depth the mapping sees by one.
+     */
+    private static Throwable wrappedIn(int depth, Throwable innermost) {
+        Throwable failure = innermost;
+        for (int level = 0; level < depth; level++) {
+            failure = new ExecutionException(failure);
+        }
+        return failure;
+    }
+
+    static Stream<Arguments> fixedFailures() {
         return Stream.of(
                 Arguments.of("an IllegalStateException", new IllegalStateException(REMOTE_CONTENT)),
                 Arguments.of("an IllegalArgumentException with a cause that is no NumberFormatException",
@@ -78,20 +99,25 @@ class BackChannelHttpExchangeFailureMappingTest {
                         new CompletionException(new IllegalStateException(REMOTE_CONTENT))),
                 Arguments.of("an IllegalArgumentException wrapped in nested CompletionExceptions",
                         new CompletionException(new CompletionException(new IllegalArgumentException(REMOTE_CONTENT)))),
-                Arguments.of("a CompletionException without a cause", new CompletionException(REMOTE_CONTENT, null)));
+                Arguments.of("a CompletionException without a cause", new CompletionException(REMOTE_CONTENT, null)),
+                Arguments.of("a checked cause that is no IOException", new TimeoutException(REMOTE_CONTENT)),
+                Arguments.of("a checked cause below a nested ExecutionException",
+                        new ExecutionException(REMOTE_CONTENT, new TimeoutException(REMOTE_CONTENT))),
+                Arguments.of("an IOException below a wrapper chain deeper than the unwrap bound",
+                        wrappedIn(BackChannelHttp.MAX_CAUSE_DEPTH + 1, new IOException(REMOTE_CONTENT))));
     }
 
     @ParameterizedTest(name = "{0}")
-    @MethodSource("runtimeFailures")
-    @DisplayName("should map a response-side runtime failure to an IOException with a fixed text and no cause")
-    void shouldMapRuntimeFailureToFixedIOException(String description, RuntimeException failure) {
+    @MethodSource("fixedFailures")
+    @DisplayName("should map a checked, runtime or over-deep failure to an IOException with a fixed text and no cause")
+    void shouldMapFailureToFixedIOException(String description, Throwable failure) {
         CompletableFuture<HttpResponse<String>> future = failedWith(failure);
 
         IOException thrown = assertThrows(IOException.class, () -> exchange(future));
 
         assertAll(description,
                 () -> assertEquals(BackChannelHttp.EXCHANGE_FAILED, thrown.getMessage(), "The text is fixed"),
-                () -> assertNull(thrown.getCause(), "The runtime failure is not chained"));
+                () -> assertNull(thrown.getCause(), "The failure is not chained"));
     }
 
     static Stream<Arguments> wrappedCancellations() {
@@ -99,13 +125,17 @@ class BackChannelHttpExchangeFailureMappingTest {
                 Arguments.of("a CancellationException wrapped in a CompletionException",
                         new CompletionException(new CancellationException(REMOTE_CONTENT))),
                 Arguments.of("a CancellationException wrapped in nested CompletionExceptions",
-                        new CompletionException(new CompletionException(new CancellationException(REMOTE_CONTENT)))));
+                        new CompletionException(new CompletionException(new CancellationException(REMOTE_CONTENT)))),
+                Arguments.of("a CancellationException below a nested ExecutionException",
+                        new ExecutionException(new CancellationException(REMOTE_CONTENT))),
+                Arguments.of("a CancellationException below CompletionException(ExecutionException(...))",
+                        new CompletionException(new ExecutionException(new CancellationException(REMOTE_CONTENT)))));
     }
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("wrappedCancellations")
     @DisplayName("should map a future failed with a wrapped cancellation to the IOException of a cancelled exchange")
-    void shouldMapWrappedCancellationToFixedIOException(String description, CompletionException failure) {
+    void shouldMapWrappedCancellationToFixedIOException(String description, Throwable failure) {
         CompletableFuture<HttpResponse<String>> future = failedWith(failure);
 
         IOException thrown = assertThrows(IOException.class, () -> exchange(future));
@@ -115,49 +145,20 @@ class BackChannelHttpExchangeFailureMappingTest {
                 () -> assertNull(thrown.getCause(), "The cancellation is not chained"));
     }
 
-    @Test
-    @DisplayName("positive control: a directly cancelled future gives the IOException of a cancelled exchange")
-    void shouldMapDirectCancellationToFixedIOException() {
-        CompletableFuture<HttpResponse<String>> future = new CompletableFuture<>();
-        future.cancel(true);
-
-        IOException thrown = assertThrows(IOException.class, () -> exchange(future));
-
-        assertAll("Direct cancellation",
-                () -> assertEquals(BackChannelHttp.EXCHANGE_CANCELLED, thrown.getMessage(), "The text is fixed"),
-                () -> assertInstanceOf(CancellationException.class, thrown.getCause(),
-                        "The direct cancellation keeps its JDK cause"));
-    }
-
-    @Test
-    @DisplayName("positive control: a completed future returns its response")
-    void shouldReturnResponseOfCompletedFuture() throws Exception {
-        HttpResponse<String> response = new StubHttpClient.StubResponse();
-
-        assertSame(response, exchange(CompletableFuture.completedFuture(response)),
-                "The response the client produced reaches the caller");
-    }
-
-    static Stream<Arguments> malformedFramingForms() {
-        ProtocolException parser = new ProtocolException("invalid Content-Length");
-        parser.initCause(new NumberFormatException(REMOTE_CONTENT));
-        ProtocolException wrapped = new ProtocolException("invalid Content-Length");
-        wrapped.initCause(parser);
+    static Stream<Arguments> nestedMalformedFraming() {
         return Stream.of(
-                Arguments.of("the NumberFormatException the future fails with",
-                        new NumberFormatException(REMOTE_CONTENT)),
-                Arguments.of("an IllegalArgumentException caused by a NumberFormatException",
-                        new IllegalArgumentException(REMOTE_CONTENT, new NumberFormatException(REMOTE_CONTENT))),
-                Arguments.of("an IllegalArgumentException caused by a NumberFormatException, wrapped",
-                        new CompletionException(new IllegalArgumentException(REMOTE_CONTENT,
+                Arguments.of("an IllegalArgumentException caused by a NumberFormatException below an ExecutionException",
+                        new ExecutionException(new IllegalArgumentException(REMOTE_CONTENT,
                                 new NumberFormatException(REMOTE_CONTENT)))),
-                Arguments.of("the ProtocolException chain of JDK 27", wrapped));
+                Arguments.of("the same form below CompletionException(ExecutionException(...))",
+                        new CompletionException(new ExecutionException(new IllegalArgumentException(REMOTE_CONTENT,
+                                new NumberFormatException(REMOTE_CONTENT))))));
     }
 
     @ParameterizedTest(name = "{0}")
-    @MethodSource("malformedFramingForms")
-    @DisplayName("positive control: a malformed-framing failure is replaced by the supplied exception")
-    void shouldReplaceMalformedFramingBySuppliedException(String description, Throwable failure) {
+    @MethodSource("nestedMalformedFraming")
+    @DisplayName("should replace a malformed-framing failure below a nested ExecutionException by the supplied exception")
+    void shouldReplaceNestedMalformedFramingBySuppliedException(String description, Throwable failure) {
         CompletableFuture<HttpResponse<String>> future = failedWith(failure);
 
         TransportException thrown = assertThrows(TransportException.class, () -> exchange(future));
@@ -167,20 +168,26 @@ class BackChannelHttpExchangeFailureMappingTest {
                 () -> assertNull(thrown.getCause(), "The JDK's exception is not chained"));
     }
 
-    static Stream<Arguments> failuresRethrownAsIs() {
-        return Stream.of(
-                Arguments.of("an IOException", new IOException("connection reset")),
-                Arguments.of("an Error", new Error("client error")));
+    @Test
+    @DisplayName("should rethrow an IOException below a nested ExecutionException as the client reported it")
+    void shouldRethrowIoExceptionBelowNestedExecutionException() {
+        IOException cause = new IOException("connection reset");
+        CompletableFuture<HttpResponse<String>> future = failedWith(new ExecutionException(cause));
+
+        IOException thrown = assertThrows(IOException.class, () -> exchange(future));
+
+        assertSame(cause, thrown, "The IOException below the wrapper reaches the caller, not a fixed text");
     }
 
-    @ParameterizedTest(name = "{0}")
-    @MethodSource("failuresRethrownAsIs")
-    @DisplayName("positive control: an IOException or Error cause is rethrown as the client reported it")
-    void shouldRethrowIoExceptionAndErrorAsIs(String description, Throwable failure) {
-        CompletableFuture<HttpResponse<String>> future = failedWith(failure);
+    @Test
+    @DisplayName("positive control: an IOException below a wrapper chain as deep as the unwrap bound is unwrapped")
+    void shouldUnwrapChainAtTheBound() {
+        IOException cause = new IOException("connection reset");
+        CompletableFuture<HttpResponse<String>> future =
+                failedWith(wrappedIn(BackChannelHttp.MAX_CAUSE_DEPTH, cause));
 
-        Throwable thrown = assertThrows(Throwable.class, () -> exchange(future));
+        IOException thrown = assertThrows(IOException.class, () -> exchange(future));
 
-        assertSame(failure, thrown, description + " reaches the caller as the client reported it");
+        assertSame(cause, thrown, "A chain within the bound reaches its innermost cause");
     }
 }

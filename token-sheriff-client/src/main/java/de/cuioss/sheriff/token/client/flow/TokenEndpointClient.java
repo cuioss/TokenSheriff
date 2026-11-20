@@ -48,6 +48,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 
 /**
  * Thin transport wrapper for the OAuth 2.0 back-channel token endpoint.
@@ -112,17 +113,33 @@ public class TokenEndpointClient {
     private final DslJson<Object> dslJson;
     private final int maxContentSize;
     private final BackChannelHttp backChannel;
+    private final Function<HttpHandler, HttpClient> clientSource;
 
     /**
      * @param configuration the client configuration carrying the TLS policy; must not be {@code null}
      */
     public TokenEndpointClient(ClientConfiguration configuration) {
+        this(configuration, null);
+    }
+
+    /**
+     * Creates a client whose token requests are sent through the {@link HttpClient} that
+     * {@code clientSource} returns for the validated endpoint handler. The public constructor passes no
+     * source, which selects the back-channel helper's shared, per-scheme client.
+     *
+     * @param configuration the client configuration carrying the TLS policy; must not be {@code null}
+     * @param clientSource  the source of the {@link HttpClient} a token request is sent through, given the
+     *                      validated endpoint handler, or {@code null} for the shared back-channel client
+     */
+    TokenEndpointClient(ClientConfiguration configuration,
+            @Nullable Function<HttpHandler, HttpClient> clientSource) {
         Objects.requireNonNull(configuration, "configuration must not be null");
         ParserConfig parserConfig = ParserConfig.builder().build();
         this.dslJson = parserConfig.getDslJson();
         this.maxContentSize = parserConfig.getMaxPayloadSize();
         this.backChannel = new BackChannelHttp(configuration, maxContentSize,
                 BackChannelHttp.FIXED_PARSER_CONFIG_ORIGIN);
+        this.clientSource = clientSource == null ? backChannel::sharedClient : clientSource;
     }
 
     /**
@@ -227,7 +244,7 @@ public class TokenEndpointClient {
         Objects.requireNonNull(requestHeaders, "requestHeaders must not be null");
 
         HttpHandler handler = backChannel.validatedHandler(tokenEndpoint, FAILURE_CONTEXT);
-        HttpClient client = backChannel.sharedClient(handler);
+        HttpClient client = clientSource.apply(handler);
         String body = FormEncoder.encode(formParameters);
         String targetUri = handler.getUri().toString();
 
@@ -591,8 +608,9 @@ public class TokenEndpointClient {
      * a {@link RedeemedResponseException} when the body handler recorded a success status, otherwise a
      * pre-redemption {@link TransportException} — including a {@code 204} whose {@code Content-Length} the
      * JDK refuses before any body handler runs. Every other {@link IOException} of the exchange — a cancelled
-     * exchange, a body past the payload bound, and a response-side runtime failure, which the exchange maps
-     * to an {@link IOException} with a fixed text and no chained cause — is a {@link RedeemedResponseException}
+     * exchange, a body past the payload bound, and a response-side runtime failure or a checked or nested
+     * cause, each of which the exchange maps to an {@link IOException} with the fixed text
+     * {@code "the HTTP exchange failed"} and no chained cause — is a {@link RedeemedResponseException}
      * after a recorded success status and a pre-redemption {@link TransportException} otherwise, so no raw
      * runtime exception leaves this method after the grant was redeemed. A request timeout that ends the
      * wait before the response headers arrive leaves no status recorded, so it is a pre-redemption

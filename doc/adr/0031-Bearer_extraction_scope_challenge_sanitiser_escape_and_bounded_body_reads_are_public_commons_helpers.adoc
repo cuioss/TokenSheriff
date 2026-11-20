@@ -340,15 +340,18 @@ received buffer, and its own read of an unparsable `Content-Length` threw a `Num
   handler has no hook before that parse, so the fixed failure is delivered by the sending caller:
   `BackChannelHttp.send`, through which the client's discovery, PAR, userinfo and revocation clients send,
   and the token endpoint client's own send both wait on `HttpClient.sendAsync` through
-  `BackChannelHttp.exchange`. `exchange` maps a failure of the exchange that
+  `BackChannelHttp.exchange`. `exchange` decides each failure of the exchange on its cause, unwrapped from
+  the `ExecutionException` of the wait and from any nested `CompletionException` or `ExecutionException`
+  below it within a bounded number of levels, and maps a failure that
   `BackChannelHttp.isMalformedFraming` recognises in any of those forms to a `TransportException` with a
   fixed text, without chaining it. Every other failure of the exchange reaches the caller as an
   `IOException` or an `Error`: an `IOException` or `Error` cause as the client reported it; a cancelled
   wait, and a future failed with a wrapped `CancellationException`, as an `IOException` with the fixed text
-  "the HTTP exchange was cancelled"; any other runtime cause, an `IllegalArgumentException` of another cause
-  included, as an `IOException` with the fixed text "the HTTP exchange failed" and no chained cause; any
-  other checked cause wrapped in an `IOException` with that text. The wrapped-cancellation and runtime-cause
-  mappings are defensive, no JDK path producing either being known from reading the client; each endpoint
+  "the HTTP exchange was cancelled"; every other cause, checked or runtime, an `IllegalArgumentException` of
+  another cause and a wrapper left over at the unwrap bound included, as an `IOException` with the fixed
+  text "the HTTP exchange failed" and no chained cause. The wrapped-cancellation, nested-wrapper,
+  checked-cause and runtime-cause mappings are defensive, no JDK path producing any of them being known from
+  reading the client; each endpoint
   client classifies them through its `IOException` handling, and the token endpoint reports one seen after a
   recorded success status as its post-redemption failure. Request-side and response-side faults are told
   apart by the documented `HttpClient.sendAsync` contract: a request the client refuses is thrown

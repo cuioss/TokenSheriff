@@ -43,6 +43,7 @@ import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
@@ -58,8 +59,11 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>
  * The branch tests drive {@code exchange} through {@link StubHttpClient}, whose {@code sendAsync} returns a
  * future the test prepared, so each outcome — a response, a failure cause, a cancellation, an incomplete future
- * — is reached without a socket. The mapping of a response-side runtime failure and of a wrapped cancellation
- * is pinned by {@link BackChannelHttpExchangeFailureMappingTest}. The request-timeout tests use a loopback server socket that accepts the
+ * — is reached without a socket. The mapping of a response-side runtime or checked failure, of a wrapped
+ * cancellation, of a cause below a nested {@link java.util.concurrent.ExecutionException} and of a wrapper
+ * chain deeper than the unwrap bound is pinned by {@link BackChannelHttpExchangeFailureMappingTest}; this
+ * class holds the positive controls for a response, the malformed-framing forms, an {@link IOException} and
+ * an {@link Error} cause and a directly cancelled future. The request-timeout tests use a loopback server socket that accepts the
  * connection in its backlog and never sends response headers, so the wait of every endpoint client for the
  * headers ends only through the request's timeout. They cover the headers phase only; whether the request
  * timeout also bounds the body read that follows the headers depends on the JDK and is observed by
@@ -135,16 +139,16 @@ class BackChannelHttpExchangeTest {
     }
 
     @Test
-    @DisplayName("should wrap a checked cause that is not an IOException in an IOException with a fixed text")
-    void shouldWrapCheckedCauseInIOException() {
+    @DisplayName("should map a checked cause that is not an IOException to an IOException with a fixed text and no cause")
+    void shouldMapCheckedCauseToFixedIOExceptionWithoutCause() {
         TimeoutException cause = new TimeoutException("checked failure");
         CompletableFuture<HttpResponse<String>> future = failedWith(cause);
 
         IOException thrown = assertThrows(IOException.class, () -> exchange(future));
 
-        assertAll("Wrapped checked cause",
+        assertAll("Checked cause",
                 () -> assertEquals(BackChannelHttp.EXCHANGE_FAILED, thrown.getMessage(), "The text is fixed"),
-                () -> assertSame(cause, thrown.getCause(), "The checked cause is chained"));
+                () -> assertNull(thrown.getCause(), "The checked cause is not chained"));
     }
 
     static Stream<Arguments> malformedFramingForms() {
@@ -156,6 +160,9 @@ class BackChannelHttpExchangeTest {
                 Arguments.of("the NumberFormatException the future fails with", new NumberFormatException("12raw34")),
                 Arguments.of("an IllegalArgumentException caused by a NumberFormatException",
                         new IllegalArgumentException("12raw34", new NumberFormatException("12raw34"))),
+                Arguments.of("an IllegalArgumentException caused by a NumberFormatException, wrapped",
+                        new CompletionException(new IllegalArgumentException("12raw34",
+                                new NumberFormatException("12raw34")))),
                 Arguments.of("the ProtocolException chain of JDK 27", wrapped));
     }
 
@@ -180,8 +187,11 @@ class BackChannelHttpExchangeTest {
 
         IOException thrown = assertThrows(IOException.class, () -> exchange(future));
 
-        assertEquals(BackChannelHttp.EXCHANGE_CANCELLED, thrown.getMessage(),
-                "A cancelled exchange is an IOException, which every endpoint client already handles");
+        assertAll("Direct cancellation",
+                () -> assertEquals(BackChannelHttp.EXCHANGE_CANCELLED, thrown.getMessage(),
+                        "A cancelled exchange is an IOException, which every endpoint client handles"),
+                () -> assertInstanceOf(CancellationException.class, thrown.getCause(),
+                        "The direct cancellation keeps its JDK cause"));
     }
 
     @Test
