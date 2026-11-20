@@ -57,7 +57,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * as its cause and nothing broader. Any other outcome fails the test. The test publishes which outcome it saw,
  * together with the feature version of the running JDK, as a report entry and in its assertion messages, so a
  * build log names the observed behaviour. The positive control uses the same server holding everything, the
- * headers included: that call ends through the request timeout within the same bounded wait on every JDK.
+ * headers included: that call ends through the request timeout within the same bounded wait on JDK 21, 25
+ * and 27.
  * {@link RawHttpServer} writes its whole answer at once and cannot hold part of it, so the stalling server is
  * local to this class. No test sleeps: the bounded waits are the subject of the test.
  */

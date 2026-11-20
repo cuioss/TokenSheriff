@@ -516,8 +516,8 @@ public final class BackChannelHttp {
      * that timeout to the configured read timeout, and the client completes the future with an
      * {@link java.net.http.HttpTimeoutException} when no response headers arrive within it. Whether the
      * request timeout also bounds the body read depends on the JDK: on JDK 21 and 25 it was observed not
-     * to, so a server that sends the headers and then stalls or trickles the body keeps the calling thread
-     * waiting; on JDK 27 it was observed to, so such a call ends with the
+     * to, so a server that sends the headers and then stalls the body keeps the calling thread waiting; on
+     * JDK 27 it was observed to, so such a call ends with the
      * {@link java.net.http.HttpTimeoutException}, rethrown as an {@link IOException}. On every JDK the body
      * read is bounded in size by {@code bodyHandler} — the {@link BoundedBodyHandler} ceiling on the
      * back-channel path — and that size bound, not a time bound, is what this method relies on.

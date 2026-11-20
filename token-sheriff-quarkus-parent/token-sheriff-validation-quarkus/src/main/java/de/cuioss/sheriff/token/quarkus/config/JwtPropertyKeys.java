@@ -674,9 +674,10 @@ public final class JwtPropertyKeys {
          * <p>
          * Sets the read timeout in seconds for HTTP requests to JWKS endpoints.
          * It is the request timeout and bounds the wait until the response headers arrive. Whether it
-         * also bounds the body read that follows depends on the JDK: on JDK 21 and 25 it was observed
-         * not to, on JDK 27 it was observed to. On every JDK the body read is bounded in size by the
-         * response-size limit.
+         * also bounds the body read that follows depends on the JDK: on the client back-channel path,
+         * with a stalled body, it was observed not to on JDK 21 and 25 and to on JDK 27. The JWKS and
+         * discovery reads use the same JDK client and the same cui-http request timeout but were not
+         * run themselves. On every JDK the body read is bounded in size by the response-size limit.
          * </p>
          * <p>
          * <strong>Only applicable</strong> for {@link #JWKS_URL} and {@link #WELL_KNOWN_URL}.

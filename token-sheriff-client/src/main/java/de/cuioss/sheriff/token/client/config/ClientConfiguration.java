@@ -178,7 +178,7 @@ public class ClientConfiguration {
      * request timeout: cui-http 3.2's {@code HttpHandler.requestBuilder()} sets it through
      * {@code HttpRequest.Builder.timeout(Duration)}, and the JDK client fails the exchange with an
      * {@code HttpTimeoutException} when the response headers have not arrived within it. It bounds the
-     * wait until the response headers arrive on every JDK; whether it also bounds the body read that
+     * wait until the response headers arrive on JDK 21, 25 and 27; whether it also bounds the body read that
      * follows depends on the JDK: on JDK 21 and 25 it was observed not to, on JDK 27 it was observed to.
      * The code therefore does not rely on a time bound for the body read; it relies on the size bound,
      * the ceiling of the endpoint called — the JWT payload ceiling
