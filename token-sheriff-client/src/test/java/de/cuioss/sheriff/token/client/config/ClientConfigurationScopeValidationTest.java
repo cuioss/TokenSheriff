@@ -132,7 +132,7 @@ class ClientConfigurationScopeValidationTest {
     }
 
     @Test
-    @DisplayName("Should keep accepting a scope list whose entries are each a single scope-token")
+    @DisplayName("Should accept a scope list whose entries are each a single scope-token")
     void shouldAcceptSingleTokenScopeEntries() {
         var config = builder().scope("openid").scope("read").scope("write").build();
 
@@ -219,7 +219,7 @@ class ClientConfigurationScopeValidationTest {
     }
 
     @Test
-    @DisplayName("Should keep accepting realistic URL, URN and punctuated scope values")
+    @DisplayName("Should accept realistic URL, URN and punctuated scope values")
     void shouldAcceptRealisticScopes() {
         List<String> realistic = List.of("openid", "https://api.example.com/read", "urn:example:scope", "a.b-c_d");
 
