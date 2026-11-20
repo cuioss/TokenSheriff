@@ -169,10 +169,11 @@ class RawHttpServerTest {
     void shouldEndThreadAndRethrowWhenConnectionCloseFails() throws Exception {
         IOException connectionFailure = new IOException("closing the served connection failed");
         RawHttpServer server = RawHttpServer.serving(new FailingServerSocket(null, connectionFailure), RESPONSE);
-        try (Socket _ = stall(server)) {
+        try (Socket stalling = stall(server)) {
             IOException thrown = assertThrows(IOException.class, server::close);
 
             assertAll("Failing connection close",
+                    () -> assertTrue(stalling.isConnected(), "The stalling client was connected to the server"),
                     () -> assertSame(connectionFailure, thrown, "The failure of the connection close is rethrown"),
                     () -> assertTrue(server.isStopped(), "The socket is closed and the server thread has ended"));
         }
@@ -185,10 +186,11 @@ class RawHttpServerTest {
         IOException connectionFailure = new IOException("closing the served connection failed");
         RawHttpServer server = RawHttpServer.serving(
                 new FailingServerSocket(serverSocketFailure, connectionFailure), RESPONSE);
-        try (Socket _ = stall(server)) {
+        try (Socket stalling = stall(server)) {
             IOException thrown = assertThrows(IOException.class, server::close);
 
             assertAll("Two failing closes",
+                    () -> assertTrue(stalling.isConnected(), "The stalling client was connected to the server"),
                     () -> assertSame(serverSocketFailure, thrown, "The first failure is rethrown"),
                     () -> assertArrayEquals(new Throwable[]{connectionFailure}, thrown.getSuppressed(),
                             "The second failure is attached as suppressed"),
