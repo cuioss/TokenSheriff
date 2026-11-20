@@ -31,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Pins the identifier form the runtime emits for the client {@code INFO} records with the identifiers
- * {@code 1} to {@code 3}, as {@code CachingDiscoveryResolverRefreshRegressionTest} does for the
+ * {@code 1} to {@code 3}, as {@code CachingDiscoveryResolverRefreshPathTest} does for the
  * recovery record {@code 4}: the identifier is written without leading zeros, so the form
  * {@code doc/LogMessages.adoc} lists is the form an operator searches the log for.
  */

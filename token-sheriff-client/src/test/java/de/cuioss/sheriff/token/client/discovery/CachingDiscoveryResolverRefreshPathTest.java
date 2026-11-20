@@ -37,15 +37,15 @@ import static de.cuioss.sheriff.token.client.discovery.CachingDiscoveryResolverS
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Regression cases for the refresh path of {@link CachingDiscoveryResolver}: a refreshed document
+ * Cases for the refresh path of {@link CachingDiscoveryResolver}: a refreshed document
  * reaches the next caller only after the refresh, callers that join a failed refresh receive the
  * documented answer, an aborted refresh releases the slot so the joined callers re-evaluate, and the
  * recovery record carries a pinned identifier. The delegate is a scripted {@link DiscoveryResolver}
  * subclass and time is driven by an injected {@link InstantSource}; no case sleeps.
  */
 @EnableTestLogger
-@DisplayName("CachingDiscoveryResolver refresh regressions")
-class CachingDiscoveryResolverRefreshRegressionTest {
+@DisplayName("CachingDiscoveryResolver refresh path")
+class CachingDiscoveryResolverRefreshPathTest {
 
     private static final Instant START = Instant.parse("2026-01-01T00:00:00Z");
     private static final Duration TTL = Duration.ofMinutes(5);
