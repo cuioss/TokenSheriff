@@ -63,7 +63,7 @@ class BearerScopeValidationVetoedPackageBuildStepTest {
                 "the package-info of the second index vetoes the class of the first, so its scopes are not merged");
         assertEquals(1, control.size(), "control: without the package-info the class is a bean class: " + control);
         assertTrue(control.getFirst().startsWith("@BearerAuth on method " + DependencyPackageEndpoint.class.getName()
-                + "#answer " + MERGED_WITH_BEAN_CLASS + DependencyPackageEndpoint.class.getName() + " "),
+                        + "#answer " + MERGED_WITH_BEAN_CLASS + DependencyPackageEndpoint.class.getName() + " "),
                 control.getFirst());
         assertTrue(control.getFirst().contains(OVER_BOUND), control.getFirst());
     }

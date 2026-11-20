@@ -28,7 +28,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.util.*;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import static de.cuioss.sheriff.token.quarkus.TokenSheriffQuarkusLogMessages.WARN;
 import static de.cuioss.sheriff.token.quarkus.producer.ProducerTestTokens.createAccessToken;
