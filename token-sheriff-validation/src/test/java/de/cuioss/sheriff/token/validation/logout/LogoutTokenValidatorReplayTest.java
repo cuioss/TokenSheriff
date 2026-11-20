@@ -205,7 +205,7 @@ class LogoutTokenValidatorReplayTest {
         }
 
         @Test
-        @DisplayName("A later validation on another thread cannot purge the entry an earlier reading is still deciding against")
+        @DisplayName("A later validation on another thread cannot purge the entry an earlier reading is deciding against")
         void shouldNotLetLaterReadingPurgeEntryOfEarlierConcurrentValidation() throws Exception {
             Instant edge = NOW.plus(WINDOW);
             Instant pastEdge = edge.plusSeconds(1);
