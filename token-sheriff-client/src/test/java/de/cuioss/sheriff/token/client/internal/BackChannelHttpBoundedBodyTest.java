@@ -136,8 +136,8 @@ class BackChannelHttpBoundedBodyTest {
     }
 
     @Test
-    @DisplayName("should return an at-limit body unchanged")
-    void shouldReturnAtLimitBodyUnchanged() {
+    @DisplayName("should return an at-limit body in full")
+    void shouldReturnAtLimitBodyInFull() {
         HttpResponse.BodySubscriber<String> subscriber = subscribe((long) MAX_CONTENT_SIZE);
         feed(subscriber, MAX_CONTENT_SIZE, 16);
         subscriber.onComplete();
