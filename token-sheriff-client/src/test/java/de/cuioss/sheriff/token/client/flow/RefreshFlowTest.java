@@ -179,7 +179,7 @@ class RefreshFlowTest {
     }
 
     @Test
-    @DisplayName("Should pass a plausible expires_in through unchanged")
+    @DisplayName("Should surface a plausible expires_in as sent")
     void shouldPassPlausibleExpiresInThrough(URIBuilder uriBuilder) {
         long plausible = Generators.integers(60, 86_400).next();
         moduleDispatcher.respondWith(TokenDispatcher.tokenResponse(holder.getRawToken(),
