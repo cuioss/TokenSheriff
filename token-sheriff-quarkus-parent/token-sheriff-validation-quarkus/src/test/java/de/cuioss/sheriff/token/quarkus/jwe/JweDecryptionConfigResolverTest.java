@@ -359,7 +359,7 @@ class JweDecryptionConfigResolverTest {
     }
 
     @Test
-    @DisplayName("Should still load a multi-key entry given in the dotted .path form")
+    @DisplayName("Should load a multi-key entry given in the dotted .path form")
     void shouldLoadDottedPathFormForSameKid() throws Exception {
         Path pemFile = createRsaPemFile("dotted-k1.pem");
         JweDecryptionConfigResolver resolver = new JweDecryptionConfigResolver(

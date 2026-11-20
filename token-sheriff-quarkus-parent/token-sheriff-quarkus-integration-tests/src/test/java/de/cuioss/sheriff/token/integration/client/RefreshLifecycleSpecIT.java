@@ -164,7 +164,7 @@ class RefreshLifecycleSpecIT extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("Should still clear the session and surface the reuse when revocation itself fails")
+    @DisplayName("Should clear the session and surface the reuse when revocation itself fails")
     void shouldFailClosedWhenRevocationEndpointFails() {
         String sessionId = newSessionId();
         StoredToken original = acquireBundle();
