@@ -192,7 +192,7 @@ class AuthorizationRequestBuilderTest {
     class EndpointFragment {
 
         @Test
-        @DisplayName("Should insert every parameter before the endpoint fragment and keep the fragment unchanged")
+        @DisplayName("Should insert every parameter before the endpoint fragment and keep the fragment at the end")
         void shouldInsertParametersBeforeFragment() {
             var context = FlowContext.create(REDIRECT_URI);
 
@@ -239,8 +239,8 @@ class AuthorizationRequestBuilderTest {
         }
 
         @Test
-        @DisplayName("Should keep the URL for an endpoint without a fragment unchanged")
-        void shouldKeepUrlWithoutFragmentUnchanged() {
+        @DisplayName("Should open the query directly after an endpoint without a fragment and add no fragment")
+        void shouldAddNoFragmentForEndpointWithoutFragment() {
             var context = FlowContext.create(REDIRECT_URI);
 
             String url = builder.build(config(), metadataWithS256(AUTH_ENDPOINT), context);
