@@ -342,12 +342,24 @@ public class TokenSheriffProcessor {
             BeanArchiveIndexBuildItem beanArchiveIndex, CombinedIndexBuildItem combinedIndex,
             BuildProducer<ValidationErrorBuildItem> validationErrors) {
         List<String> violations = findScopeViolations(
-                CompositeIndex.create(beanArchiveIndex.getIndex(), combinedIndex.getIndex()));
+                scannedIndex(beanArchiveIndex.getIndex(), combinedIndex.getIndex()));
         if (!violations.isEmpty()) {
             validationErrors.produce(new ValidationErrorBuildItem(violations.stream()
                     .map(DeploymentException::new)
                     .toArray(Throwable[]::new)));
         }
+    }
+
+    /**
+     * Builds the index {@link #validateAnnotationScopes} scans: the composite of the bean-archive index and the
+     * combined index, so a class, an annotation or a {@code package-info} from either of the two is seen.
+     *
+     * @param beanArchiveIndex the bean-archive Jandex index, generated beans included
+     * @param combinedIndex    the combined Jandex index of the indexed application archives
+     * @return the composite of the two indexes
+     */
+    static IndexView scannedIndex(IndexView beanArchiveIndex, IndexView combinedIndex) {
+        return CompositeIndex.create(beanArchiveIndex, combinedIndex);
     }
 
     /**
@@ -455,16 +467,18 @@ public class TokenSheriffProcessor {
      * declaring {@code @Vetoed} and classes in a {@code @Vetoed} package are no bean classes.
      * <p>
      * The package veto is read from the {@code @Vetoed} annotation of the class {@code {package}.package-info} in
-     * the scanned index, which in the build step is the composite of the bean-archive and the combined index, so a
-     * {@code package-info} from either of the two vetoes the class. A package without a {@code package-info} in
-     * the index is not vetoed, and neither is a subpackage of a vetoed package: CDI applies a package-level
-     * {@code @Vetoed} to that package alone.
+     * the scanned index, which in the build step is the composite {@link #scannedIndex} builds from the
+     * bean-archive and the combined index, so a {@code package-info} from either of the two vetoes the class. A
+     * package without a {@code package-info} in the index is not vetoed, and neither is a subpackage of a vetoed
+     * package: CDI applies a package-level {@code @Vetoed} to that package alone.
      * <p>
-     * ArC was shown to agree for a {@code package-info} in the application root and for one in a dependency
-     * archive that also holds the class: in both it registers no bean for the class, while it registers the class
-     * in a subpackage of the vetoed package ({@code BearerScopeValidationVetoedPackageBootTest},
-     * {@code BearerScopeValidationDependencyVetoedPackageBootTest}). A {@code package-info} indexed only in the
-     * combined index while its classes sit in a bean archive was not shown.
+     * ArC was shown to agree in three cases. For a {@code package-info} in the application root it registers no
+     * bean for the class of that package ({@code BearerScopeValidationVetoedPackageBootTest}). For a
+     * {@code package-info} in a dependency archive that also holds the class it registers no bean for the class
+     * ({@code BearerScopeValidationDependencyVetoedPackageBootTest}). For a class in a subpackage of a vetoed
+     * package it registers the class ({@code BearerScopeValidationDependencyVetoedPackageBootTest}). A
+     * {@code package-info} indexed only in the combined index while its classes sit in a bean archive was not
+     * shown.
      */
     private static boolean isBeanClassCandidate(IndexView index, ClassInfo classInfo) {
         return !classInfo.isInterface() && !Modifier.isAbstract(classInfo.flags())
