@@ -106,7 +106,7 @@ parser is `InsufficientScopeChallengeRoundTripTest` in token-sheriff-client (`cl
 `JwksLoaderKeyIdsContractTest`, `LoaderStatusTest`
 
 |`validation.jwks.http`
-|`HttpJwksLoaderAsyncInitializationTest`, `HttpJwksLoaderDefaultBehaviourUnchangedTest`,
+|`HttpJwksLoaderAsyncInitializationTest`, `HttpJwksLoaderDefaultBehaviourTest`,
 `HttpJwksLoaderEgressRefreshTest`, `HttpJwksLoaderExecutorHandOffTest`,
 `HttpJwksLoaderFailureAdvertisedJwksUriTest`, `HttpJwksLoaderFailureTest`,
 `HttpJwksLoaderGracePeriodTest`, `HttpJwksLoaderInitialRetryGuardOrderTest`,
