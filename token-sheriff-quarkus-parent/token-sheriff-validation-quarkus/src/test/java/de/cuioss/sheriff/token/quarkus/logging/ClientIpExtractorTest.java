@@ -63,8 +63,8 @@ class ClientIpExtractorTest {
     }
 
     @Test
-    @DisplayName("Should return malformed bracketed IPv6 value unchanged")
-    void shouldReturnMalformedBracketValueUnchanged() {
+    @DisplayName("Should return malformed bracketed IPv6 value verbatim")
+    void shouldReturnMalformedBracketValueVerbatim() {
         MultivaluedMap<String, String> headers = new MultivaluedHashMap<>();
         headers.putSingle("Forwarded", "for=\"[2001:db8::1\"; proto=https");
 
