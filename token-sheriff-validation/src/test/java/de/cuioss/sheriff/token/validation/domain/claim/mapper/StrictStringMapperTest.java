@@ -58,7 +58,7 @@ class StrictStringMapperTest {
     }
 
     @Test
-    @DisplayName("Should pass a JSON string through unchanged")
+    @DisplayName("Should map a JSON string to a string claim with its original value")
     void shouldPassStringThrough() {
         String value = Generators.letterStrings(1, 40).next();
 
@@ -70,7 +70,7 @@ class StrictStringMapperTest {
     }
 
     @Test
-    @DisplayName("Should pass an empty JSON string through unchanged")
+    @DisplayName("Should map an empty JSON string to an empty string claim")
     void shouldPassEmptyStringThrough() {
         ClaimValue result = underTest.map(bodyWithClaimJson("\"\""), CLAIM_NAME);
 
