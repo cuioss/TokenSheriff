@@ -84,7 +84,7 @@ class ClientConfigurationTest {
     }
 
     @Test
-    @DisplayName("Should reject a blank client secret while still permitting an absent (null) one — blank != absent")
+    @DisplayName("Should reject a blank client secret and permit an absent (null) one — blank != absent")
     void shouldRejectBlankSecretButPermitAbsentSecret() {
         var blankSecret = ClientConfiguration.builder()
                 .issuer(issuer()).clientId(Generators.nonBlankStrings().next())
