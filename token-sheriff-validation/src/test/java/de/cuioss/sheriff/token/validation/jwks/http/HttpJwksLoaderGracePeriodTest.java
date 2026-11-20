@@ -266,8 +266,8 @@ class HttpJwksLoaderGracePeriodTest {
         }
 
         @Test
-        @DisplayName("Should retain original key in grace period after multiple unchanged refreshes")
-        void shouldRetainOriginalKeyDuringGracePeriodAfterMultipleUnchangedRefreshes(URIBuilder uriBuilder) {
+        @DisplayName("Should retain original key in grace period after multiple refreshes with identical content")
+        void shouldRetainOriginalKeyDuringGracePeriodAfterMultipleIdenticalRefreshes(URIBuilder uriBuilder) {
             String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
 
             // Configure with only 1 maxRetiredKeySets to make the bug appear faster
