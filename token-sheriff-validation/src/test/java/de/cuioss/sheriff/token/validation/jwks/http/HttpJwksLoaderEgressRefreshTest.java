@@ -123,8 +123,8 @@ class HttpJwksLoaderEgressRefreshTest {
     }
 
     @Test
-    @DisplayName("Should fetch on refresh when the host still resolves to a permitted address")
-    void shouldFetchRefreshWhenHostStillPermitted(URIBuilder uriBuilder) {
+    @DisplayName("Should fetch on refresh when the host resolves to a permitted address")
+    void shouldFetchRefreshWhenHostPermitted(URIBuilder uriBuilder) {
         moduleDispatcher.returnDefault();
         String jwksEndpoint = uriBuilder.addPathSegment(JwksResolveDispatcher.LOCAL_PATH).buildAsString();
         HttpJwksLoaderConfig config = HttpJwksLoaderConfig.builder().allowInsecureHttp(true)
