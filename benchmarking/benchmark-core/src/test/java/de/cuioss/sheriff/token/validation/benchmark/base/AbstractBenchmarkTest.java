@@ -65,8 +65,8 @@ class AbstractBenchmarkTest {
     }
 
     @Test
-    @DisplayName("Should return a name without a method segment unchanged")
-    void shouldReturnUnqualifiedNameUnchanged() {
+    @DisplayName("Should return a name without a method segment as the key")
+    void shouldReturnUnqualifiedNameAsKey() {
         assertEquals("SimpleCoreValidationBenchmark", AbstractBenchmark.metricsKey("SimpleCoreValidationBenchmark"));
     }
 
