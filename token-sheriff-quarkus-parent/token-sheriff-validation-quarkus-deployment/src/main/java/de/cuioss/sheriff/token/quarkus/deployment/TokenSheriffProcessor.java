@@ -322,6 +322,13 @@ public class TokenSheriffProcessor {
      * resolves such a base class on demand when it is asked for it by name, but does not enumerate its
      * annotations. A class in both indexes yields the same message twice, which is reported once.
      * <p>
+     * The package veto that keeps a class from being merged as a bean class is read from the same composite: a
+     * {@code {package}.package-info} declaring {@code @Vetoed} in either index vetoes the classes of that package
+     * and not those of its subpackages. ArC was shown to register no bean for such a class when the
+     * {@code package-info} sits in the application root or in a dependency archive next to the class; a
+     * {@code package-info} indexed only in the combined index while its classes sit in a bean archive was not
+     * shown.
+     * <p>
      * A class in neither index is not checked, for example a base class in a dependency that is not indexed at
      * all.
      *
@@ -447,9 +454,17 @@ public class TokenSheriffProcessor {
      * A bean class candidate is a concrete class that is not vetoed: interfaces, abstract classes, classes
      * declaring {@code @Vetoed} and classes in a {@code @Vetoed} package are no bean classes.
      * <p>
-     * The package veto is read as ArC reads it: from the {@code @Vetoed} annotation of the class
-     * {@code {package}.package-info} in the index. A package without a {@code package-info} in the index is not
-     * vetoed, so the check never skips a class ArC still registers.
+     * The package veto is read from the {@code @Vetoed} annotation of the class {@code {package}.package-info} in
+     * the scanned index, which in the build step is the composite of the bean-archive and the combined index, so a
+     * {@code package-info} from either of the two vetoes the class. A package without a {@code package-info} in
+     * the index is not vetoed, and neither is a subpackage of a vetoed package: CDI applies a package-level
+     * {@code @Vetoed} to that package alone.
+     * <p>
+     * ArC was shown to agree for a {@code package-info} in the application root and for one in a dependency
+     * archive that also holds the class: in both it registers no bean for the class, while it registers the class
+     * in a subpackage of the vetoed package ({@code BearerScopeValidationVetoedPackageBootTest},
+     * {@code BearerScopeValidationDependencyVetoedPackageBootTest}). A {@code package-info} indexed only in the
+     * combined index while its classes sit in a bean archive was not shown.
      */
     private static boolean isBeanClassCandidate(IndexView index, ClassInfo classInfo) {
         return !classInfo.isInterface() && !Modifier.isAbstract(classInfo.flags())

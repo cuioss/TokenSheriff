@@ -91,7 +91,7 @@ class BackChannelHttpTlsTrustTest {
     }
 
     @Test
-    @DisplayName("Should still surface a non-TLS endpoint as TransportException with an SSL context configured (M9)")
+    @DisplayName("Should surface a non-TLS endpoint as TransportException with an SSL context configured (M9)")
     void shouldKeepTransportTypingForNonTlsEndpoint() {
         var backChannel = backChannelWith(freshSslContext());
 
@@ -101,7 +101,7 @@ class BackChannelHttpTlsTrustTest {
     }
 
     @Test
-    @DisplayName("Should still surface an unsupported scheme as TransportException with an SSL context configured (M9)")
+    @DisplayName("Should surface an unsupported scheme as TransportException with an SSL context configured (M9)")
     void shouldKeepTransportTypingForUnsupportedScheme() {
         var backChannel = backChannelWith(freshSslContext());
 

@@ -212,8 +212,8 @@ class JwksHostnameVerificationTest {
     }
 
     @Test
-    @DisplayName("Should still reject an untrusted issuer when verifyHostname(false) is set")
-    void shouldStillRejectUntrustedIssuerWhenVerificationDisabled(URIBuilder uriBuilder) throws Exception {
+    @DisplayName("Should reject an untrusted issuer when verifyHostname(false) is set")
+    void shouldRejectUntrustedIssuerWhenVerificationDisabled(URIBuilder uriBuilder) throws Exception {
         // Arrange — trust an unrelated certificate, so chain validation must fail on its own merits
         installClientTrustStore(UNRELATED_CERTIFICATE.certificate());
         HttpHandler handler = handlerFor(uriBuilder, false);

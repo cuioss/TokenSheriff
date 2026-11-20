@@ -149,9 +149,9 @@ class EgressPolicyTest {
         }
 
         @Test
-        @DisplayName("Should still block non-loopback internal ranges under loopback opt-in")
+        @DisplayName("Should block non-loopback internal ranges under loopback opt-in")
         @SuppressWarnings("java:S5778") // URI.create(ATTACKER_URL) is a fixed constant that never throws
-        void shouldStillBlockSiteLocalUnderLoopbackOptIn() {
+        void shouldBlockSiteLocalUnderLoopbackOptIn() {
             EgressPolicy policy = EgressPolicy.builder()
                     .allowLoopback(true)
                     .resolver(fixedResolver("10.0.0.1"))
@@ -162,11 +162,11 @@ class EgressPolicyTest {
                     "Loopback opt-in must not relax site-local blocking");
         }
 
-        @ParameterizedTest(name = "still rejects {0}")
+        @ParameterizedTest(name = "rejects {0}")
         @ValueSource(strings = {"100.64.0.1", "0.0.0.1", "255.255.255.255"})
-        @DisplayName("Should still block shared address space, 0/8 and limited broadcast under loopback opt-in")
+        @DisplayName("Should block shared address space, 0/8 and limited broadcast under loopback opt-in")
         @SuppressWarnings("java:S5778") // URI.create(ATTACKER_URL) is a fixed constant that never throws
-        void shouldStillBlockNewRangesUnderLoopbackOptIn(String blockedIp) {
+        void shouldBlockNewRangesUnderLoopbackOptIn(String blockedIp) {
             EgressPolicy policy = EgressPolicy.builder()
                     .allowLoopback(true)
                     .resolver(fixedResolver(blockedIp))

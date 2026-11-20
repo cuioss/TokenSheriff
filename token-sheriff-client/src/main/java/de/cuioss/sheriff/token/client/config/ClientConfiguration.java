@@ -58,7 +58,10 @@ public class ClientConfiguration {
     /** Default TCP connect timeout, in seconds, when the caller does not override it. */
     public static final int DEFAULT_CONNECT_TIMEOUT_SECONDS = 5;
 
-    /** Default response read timeout, in seconds, when the caller does not override it. */
+    /**
+     * Default read timeout, in seconds, when the caller does not override it; see
+     * {@link #readTimeoutSeconds} for the phase it bounds.
+     */
     public static final int DEFAULT_READ_TIMEOUT_SECONDS = 10;
 
     /**
@@ -171,9 +174,18 @@ public class ClientConfiguration {
     int connectTimeoutSeconds = DEFAULT_CONNECT_TIMEOUT_SECONDS;
 
     /**
-     * The response read timeout, in seconds, applied to every outbound discovery and back-channel call as
-     * the request timeout. It bounds the wait until the response headers arrive; the body read that follows
-     * is bounded in size by the payload ceiling but carries no time bound. Defaults to {@value #DEFAULT_READ_TIMEOUT_SECONDS} seconds. Configurable for the same reason as
+     * The read timeout, in seconds, applied to every outbound discovery and back-channel call as the
+     * request timeout: cui-http 3.2's {@code HttpHandler.requestBuilder()} sets it through
+     * {@code HttpRequest.Builder.timeout(Duration)}, and the JDK client fails the exchange with an
+     * {@code HttpTimeoutException} when the response headers have not arrived within it. It bounds the
+     * wait until the response headers arrive on JDK 21, 25 and 27; whether it also bounds the body read that
+     * follows depends on the JDK: on JDK 21 and 25 it was observed not to, on JDK 27 it was observed to.
+     * The code therefore does not rely on a time bound for the body read; it relies on the size bound,
+     * the ceiling of the endpoint called — the JWT payload ceiling
+     * ({@code ParserConfig.getMaxPayloadSize()}) for the token, PAR, userinfo and revocation calls,
+     * {@link #discoveryDocumentMaxSize} for discovery. On a JDK that bounds the body read, a body that
+     * stalls past the timeout ends the call with the {@code HttpTimeoutException}. Defaults to
+     * {@value #DEFAULT_READ_TIMEOUT_SECONDS} seconds. Configurable for the same reason as
      * {@link #connectTimeoutSeconds} (L15).
      */
     @Builder.Default

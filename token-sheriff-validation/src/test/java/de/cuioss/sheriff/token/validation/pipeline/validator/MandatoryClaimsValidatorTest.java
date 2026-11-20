@@ -222,8 +222,8 @@ class MandatoryClaimsValidatorTest {
     }
 
     @Test
-    @DisplayName("Should still validate other mandatory claims when claimSubOptional is true")
-    void shouldStillValidateOtherMandatoryClaimsWhenClaimSubOptionalIsTrue() {
+    @DisplayName("Should validate other mandatory claims when claimSubOptional is true")
+    void shouldValidateOtherMandatoryClaimsWhenClaimSubOptionalIsTrue() {
         // Create IssuerConfig with claimSubOptional=true
         IssuerConfig issuerConfigWithOptionalSub = IssuerConfig.builder()
                 .issuerIdentifier("https://test-issuer.example.com")

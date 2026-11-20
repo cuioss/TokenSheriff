@@ -19,8 +19,6 @@ import de.cuioss.sheriff.token.commons.events.SecurityEventCounter;
 import de.cuioss.sheriff.token.quarkus.servlet.HttpRequestResolver;
 import de.cuioss.sheriff.token.quarkus.servlet.HttpRequestResolverMock;
 import de.cuioss.sheriff.token.validation.TokenValidator;
-import de.cuioss.sheriff.token.validation.domain.claim.ClaimName;
-import de.cuioss.sheriff.token.validation.domain.claim.ClaimValue;
 import de.cuioss.sheriff.token.validation.domain.context.AccessTokenRequest;
 import de.cuioss.sheriff.token.validation.domain.token.AccessTokenContent;
 import de.cuioss.sheriff.token.validation.exception.TokenValidationException;
@@ -33,11 +31,10 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
-import java.time.OffsetDateTime;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+import static de.cuioss.sheriff.token.quarkus.producer.ProducerTestTokens.createAccessToken;
 import static de.cuioss.test.juli.LogAsserts.assertSingleLogMessagePresentContaining;
 import static org.easymock.EasyMock.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -383,22 +380,5 @@ class BearerTokenProducerTest {
         Field field = target.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
         field.set(target, value);
-    }
-
-    /**
-     * Creates an {@link AccessTokenContent} with mandatory claims and optional additional claims.
-     */
-    private static AccessTokenContent createAccessToken(Map<String, ClaimValue> additionalClaims) {
-        Map<String, ClaimValue> claims = new HashMap<>();
-        claims.put(ClaimName.ISSUER.getName(), ClaimValue.forPlainString("test-issuer"));
-        claims.put(ClaimName.SUBJECT.getName(), ClaimValue.forPlainString("test-subject"));
-        var now = OffsetDateTime.now();
-        var expires = now.plusHours(1);
-        claims.put(ClaimName.EXPIRATION.getName(), ClaimValue.forDateTime(
-                String.valueOf(expires.toEpochSecond()), expires));
-        claims.put(ClaimName.ISSUED_AT.getName(), ClaimValue.forDateTime(
-                String.valueOf(now.toEpochSecond()), now));
-        claims.putAll(additionalClaims);
-        return new AccessTokenContent(claims, "raw-token");
     }
 }

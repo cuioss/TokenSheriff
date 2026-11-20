@@ -413,8 +413,8 @@ class IssuerConfigCacheRecoveryTest {
     }
 
     @Test
-    @DisplayName("Unknown issuer still fails after recovery path")
-    void unknownIssuerStillFails() {
+    @DisplayName("Unknown issuer fails after recovery path")
+    void unknownIssuerFails() {
         StatusControlledLoader loader = new StatusControlledLoader();
         loader.setStatus(LoaderStatus.OK);
         IssuerConfig config = IssuerConfig.builder()

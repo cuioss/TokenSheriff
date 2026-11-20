@@ -199,8 +199,8 @@ class BackChannelOriginMappingTest {
         }
 
         @Test
-        @DisplayName("Should still reject a traversal path on an endpoint that would be rewritten")
-        void shouldStillRejectTraversalOnRewrittenEndpoint() {
+        @DisplayName("Should reject a traversal path on an endpoint that would be rewritten")
+        void shouldRejectTraversalOnRewrittenEndpoint() {
             var backChannel = backChannel(builder().backChannelOrigin(TLS_ORIGIN));
 
             assertThrows(TransportException.class,

@@ -32,19 +32,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLParameters;
-import javax.net.ssl.SSLSession;
 import java.io.IOException;
-import java.net.Authenticator;
-import java.net.CookieHandler;
 import java.net.InetAddress;
 import java.net.ProtocolException;
-import java.net.ProxySelector;
 import java.net.ServerSocket;
-import java.net.URI;
 import java.net.http.HttpClient;
-import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
@@ -53,7 +45,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
@@ -65,17 +56,19 @@ import static org.junit.jupiter.api.Assertions.*;
  * Tests every branch of {@link BackChannelHttp#exchange}: the wait on the {@link HttpClient#sendAsync} future
  * and the mapping of the way that future ends.
  * <p>
- * The branch tests drive {@code exchange} through a stub {@link HttpClient} whose {@code sendAsync} returns a
+ * The branch tests drive {@code exchange} through {@link StubHttpClient}, whose {@code sendAsync} returns a
  * future the test prepared, so each outcome — a response, a failure cause, a cancellation, an incomplete future
- * — is reached without a socket. The request-timeout tests use a loopback server socket that accepts the
+ * — is reached without a socket. The mapping of a response-side runtime failure and of a wrapped cancellation
+ * is pinned by {@link BackChannelHttpExchangeFailureMappingTest}. The request-timeout tests use a loopback server socket that accepts the
  * connection in its backlog and never sends response headers, so the wait of every endpoint client for the
- * headers ends only through the request's timeout. They cover the headers phase only: the request timeout
- * does not bound the body read that follows the headers.
+ * headers ends only through the request's timeout. They cover the headers phase only; whether the request
+ * timeout also bounds the body read that follows the headers depends on the JDK and is observed by
+ * {@link BackChannelHttpBodyPhaseTest}.
  */
 @DisplayName("BackChannelHttp exchange")
 class BackChannelHttpExchangeTest {
 
-    private static final HttpRequest REQUEST = HttpRequest.newBuilder(URI.create("http://127.0.0.1/endpoint")).build();
+    private static final HttpRequest REQUEST = StubHttpClient.REQUEST;
     private static final TransportException MALFORMED = new TransportException("malformed response");
     private static final Supplier<TransportException> MALFORMED_SUPPLIER = () -> MALFORMED;
     private static final int READ_TIMEOUT_SECONDS = 1;
@@ -91,7 +84,7 @@ class BackChannelHttpExchangeTest {
 
     private static HttpResponse<String> exchange(CompletableFuture<HttpResponse<String>> future)
             throws IOException, InterruptedException {
-        return BackChannelHttp.exchange(new StubClient(future), REQUEST, HttpResponse.BodyHandlers.ofString(),
+        return BackChannelHttp.exchange(new StubHttpClient(future), REQUEST, HttpResponse.BodyHandlers.ofString(),
                 MALFORMED_SUPPLIER);
     }
 
@@ -104,7 +97,7 @@ class BackChannelHttpExchangeTest {
     @Test
     @DisplayName("positive control: a completed future returns its response")
     void shouldReturnResponseOfCompletedFuture() throws Exception {
-        HttpResponse<String> response = new StubResponse();
+        HttpResponse<String> response = new StubHttpClient.StubResponse();
 
         assertSame(response, exchange(CompletableFuture.completedFuture(response)),
                 "The response the client produced reaches the caller");
@@ -113,10 +106,6 @@ class BackChannelHttpExchangeTest {
     static Stream<Arguments> failuresRethrownAsIs() {
         return Stream.of(
                 Arguments.of("an IOException", new IOException("connection reset")),
-                Arguments.of("a RuntimeException", new IllegalStateException("client state")),
-                Arguments.of("an IllegalArgumentException of another cause",
-                        new IllegalArgumentException("response refused", new IOException("not Content-Length"))),
-                Arguments.of("an IllegalArgumentException without a cause", new IllegalArgumentException("refused")),
                 Arguments.of("an Error", new Error("client error")));
     }
 
@@ -143,17 +132,6 @@ class BackChannelHttpExchangeTest {
         IOException thrown = assertThrows(IOException.class, () -> exchange(future));
 
         assertSame(cause, thrown, "The innermost cause reaches the caller, not a CompletionException");
-    }
-
-    @Test
-    @DisplayName("positive control: a CompletionException without a cause is rethrown as it is")
-    void shouldRethrowCompletionExceptionWithoutCause() {
-        CompletionException cause = new CompletionException("no cause", null);
-        CompletableFuture<HttpResponse<String>> future = failedWith(cause);
-
-        CompletionException thrown = assertThrows(CompletionException.class, () -> exchange(future));
-
-        assertSame(cause, thrown, "Nothing is left to unwrap, so the CompletionException itself is the failure");
     }
 
     @Test
@@ -252,7 +230,7 @@ class BackChannelHttpExchangeTest {
             assertTrue(waiter.isAlive(), "The waiter waits on the incomplete future");
             Thread.onSpinWait();
         }
-        HttpResponse<String> response = new StubResponse();
+        HttpResponse<String> response = new StubHttpClient.StubResponse();
 
         future.complete(response);
         Object result = outcome.get(30, TimeUnit.SECONDS);
@@ -353,121 +331,4 @@ class BackChannelHttpExchangeTest {
         return false;
     }
 
-    /** A client whose {@code sendAsync} returns the future the test prepared. */
-    private static final class StubClient extends HttpClient {
-
-        private final CompletableFuture<HttpResponse<String>> future;
-
-        private StubClient(CompletableFuture<HttpResponse<String>> future) {
-            this.future = future;
-        }
-
-        @Override
-        public Optional<CookieHandler> cookieHandler() {
-            return Optional.empty();
-        }
-
-        @Override
-        public Optional<Duration> connectTimeout() {
-            return Optional.empty();
-        }
-
-        @Override
-        public Redirect followRedirects() {
-            return Redirect.NEVER;
-        }
-
-        @Override
-        public Optional<ProxySelector> proxy() {
-            return Optional.empty();
-        }
-
-        @Override
-        public SSLContext sslContext() {
-            throw new UnsupportedOperationException("not used by exchange");
-        }
-
-        @Override
-        public SSLParameters sslParameters() {
-            return new SSLParameters();
-        }
-
-        @Override
-        public Optional<Authenticator> authenticator() {
-            return Optional.empty();
-        }
-
-        @Override
-        public Version version() {
-            return Version.HTTP_1_1;
-        }
-
-        @Override
-        public Optional<Executor> executor() {
-            return Optional.empty();
-        }
-
-        @Override
-        public <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler) {
-            throw new UnsupportedOperationException("exchange waits on sendAsync");
-        }
-
-        @Override
-        @SuppressWarnings("unchecked")
-        public <T> CompletableFuture<HttpResponse<T>> sendAsync(HttpRequest request,
-                HttpResponse.BodyHandler<T> responseBodyHandler) {
-            return (CompletableFuture<HttpResponse<T>>) (CompletableFuture<?>) future;
-        }
-
-        @Override
-        public <T> CompletableFuture<HttpResponse<T>> sendAsync(HttpRequest request,
-                HttpResponse.BodyHandler<T> responseBodyHandler,
-                HttpResponse.PushPromiseHandler<T> pushPromiseHandler) {
-            return sendAsync(request, responseBodyHandler);
-        }
-    }
-
-    /** A response with a status and an empty body. */
-    private static final class StubResponse implements HttpResponse<String> {
-
-        @Override
-        public int statusCode() {
-            return 200;
-        }
-
-        @Override
-        public HttpRequest request() {
-            return REQUEST;
-        }
-
-        @Override
-        public Optional<HttpResponse<String>> previousResponse() {
-            return Optional.empty();
-        }
-
-        @Override
-        public HttpHeaders headers() {
-            return HttpHeaders.of(Map.of(), (name, value) -> true);
-        }
-
-        @Override
-        public String body() {
-            return "";
-        }
-
-        @Override
-        public Optional<SSLSession> sslSession() {
-            return Optional.empty();
-        }
-
-        @Override
-        public URI uri() {
-            return REQUEST.uri();
-        }
-
-        @Override
-        public HttpClient.Version version() {
-            return HttpClient.Version.HTTP_1_1;
-        }
-    }
 }

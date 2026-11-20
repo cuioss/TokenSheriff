@@ -568,8 +568,8 @@ class TokenValidatorTest {
         }
 
         @Test
-        @DisplayName("A failing pipeline shutdown still releases the DPoP replay protection and the JWKS loaders")
-        void failingCloseStillReleasesRemainingResources() {
+        @DisplayName("A failing pipeline shutdown releases the DPoP replay protection and the JWKS loaders")
+        void failingCloseReleasesRemainingResources() {
             RecordingCloseableLoader loader = new RecordingCloseableLoader();
             CancelFailingExecutor cacheExecutor = new CancelFailingExecutor();
             Set<Thread> dpopThreadsBefore = dpopEvictionThreads();

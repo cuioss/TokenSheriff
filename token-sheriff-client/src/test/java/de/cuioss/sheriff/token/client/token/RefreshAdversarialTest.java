@@ -119,7 +119,7 @@ class RefreshAdversarialTest extends RefreshTestSupport {
     }
 
     @Test
-    @DisplayName("Should still fail closed and propagate reuse when the AS revocation itself throws")
+    @DisplayName("Should fail closed and propagate reuse when the AS revocation itself throws")
     void shouldFailClosedWhenRevocationThrows(URIBuilder uriBuilder) {
         ClientConfiguration config = config();
         ProviderMetadata metadata = metadata(uriBuilder);
@@ -156,7 +156,7 @@ class RefreshAdversarialTest extends RefreshTestSupport {
     }
 
     @Test
-    @DisplayName("Should still clear the store when the AS revocation throws an unchecked exception")
+    @DisplayName("Should clear the store when the AS revocation throws an unchecked exception")
     void shouldFailClosedWhenRevocationThrowsUnchecked(URIBuilder uriBuilder) {
         ClientConfiguration config = config();
         ProviderMetadata metadata = metadata(uriBuilder);

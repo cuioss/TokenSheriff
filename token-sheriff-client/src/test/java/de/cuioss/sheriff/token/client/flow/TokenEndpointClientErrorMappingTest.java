@@ -154,7 +154,7 @@ class TokenEndpointClientErrorMappingTest {
 
     @Test
     @DisplayName("invalid_grant on a 4xx is the credential-rejected refusal, not a client-authentication one")
-    void shouldKeepInvalidGrantAsCredentialRejected(URIBuilder uriBuilder) {
+    void shouldMapInvalidGrantToCredentialRejected(URIBuilder uriBuilder) {
         moduleDispatcher.failWith(400, "{\"error\":\"invalid_grant\"}");
 
         TransportException thrown = redeemExpectingFailure(uriBuilder, null);

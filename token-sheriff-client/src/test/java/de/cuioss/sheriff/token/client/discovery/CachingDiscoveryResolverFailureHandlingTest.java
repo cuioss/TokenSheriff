@@ -369,7 +369,7 @@ class CachingDiscoveryResolverFailureHandlingTest {
     }
 
     @Test
-    @DisplayName("Should still record a TransportException as FAILED when the caller is not interrupted")
+    @DisplayName("Should record a TransportException as FAILED when the caller is not interrupted")
     void shouldRecordNonInterruptedTransportException() {
         var failure = new TransportException("request failed", new InterruptedException());
         delegate.then(() -> {

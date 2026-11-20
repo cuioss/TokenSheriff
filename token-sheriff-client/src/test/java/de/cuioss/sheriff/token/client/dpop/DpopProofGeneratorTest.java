@@ -193,7 +193,7 @@ class DpopProofGeneratorTest {
     }
 
     @Test
-    @DisplayName("Should still detect jti reuse after many distinct proofs have been tracked")
+    @DisplayName("Should detect jti reuse after many distinct proofs have been tracked")
     void shouldDetectReuseWithinBoundedWindow() {
         String[] state = {"first-jti"};
         var proofGenerator = new DpopProofGenerator(keyPair, "RS256", () -> state[0]);
@@ -209,7 +209,7 @@ class DpopProofGeneratorTest {
     }
 
     @Test
-    @DisplayName("Should evict the least-recently-used jti, not the first-inserted one, still refusing a tracked one")
+    @DisplayName("Should evict the least-recently-used jti, not the first-inserted one, refusing a tracked one")
     void shouldEvictLeastRecentlyUsedJtiBeyondConfiguredWindow() {
         String[] state = {"j1"};
         var proofGenerator = new DpopProofGenerator(keyPair, "RS256", () -> state[0], 2);

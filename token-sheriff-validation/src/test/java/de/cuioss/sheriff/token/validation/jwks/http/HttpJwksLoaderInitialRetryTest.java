@@ -217,7 +217,7 @@ class HttpJwksLoaderInitialRetryTest {
 
     @Test
     @DisplayName("Unset, the server sees no request inside the refresh interval; set, it sees the first attempt")
-    void shouldKeepTodaysCadenceWhenUnset(URIBuilder uriBuilder) {
+    void shouldSkipFirstAttemptInsideIntervalWhenUnset(URIBuilder uriBuilder) {
         ScheduledExecutorService realExecutor = Executors.newSingleThreadScheduledExecutor();
         try {
             HttpJwksLoader unset = initializedLoader(directConfig(uriBuilder, realExecutor).build(),
