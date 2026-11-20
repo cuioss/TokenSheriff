@@ -2,10 +2,10 @@
   "id": "PLAN-14",
   "slug": "closing-sweep",
   "workstream": "WS-02",
-  "status": "staged",
+  "status": "shipped",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
-  "pr": "",
-  "landing": "",
+  "plan_marshall_plan_id": "implement-plan-14-closing-sweep",
+  "pr": "#938",
+  "landing": "landings/PLAN-14.md",
   "seq": 14
 }
