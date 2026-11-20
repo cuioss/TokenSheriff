@@ -310,7 +310,7 @@ class RawClaimsTest {
         }
 
         @Test
-        @DisplayName("The serialized size of a cached content is unchanged by reading its raw claims")
+        @DisplayName("The serialized size of a cached content is equal before and after reading its raw claims")
         void shouldKeepSerializedSize() {
             TokenValidator validator = validator();
             String token = token("\"obj\":{\"k\":[1,2,3]}");
