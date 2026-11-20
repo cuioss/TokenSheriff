@@ -228,12 +228,21 @@ public final class ParserConfig {
      *   <li>Security limits for string and digits buffers</li>
      *   <li>Support for our domain-specific record types (JWKS, WellKnownResult)</li>
      * </ul>
+     * <p>
+     * The generated converters are looked up through the class loader of this class, which loaded the
+     * artifact that ships them, never through the context class loader of the calling thread. The instance is
+     * created on first use, which can be a thread whose context class loader does not see this artifact: a
+     * {@code ForkJoinPool} common-pool worker that loads the JWKS carries the system class loader, and in
+     * Quarkus dev mode this artifact is loaded by a Quarkus class loader instead. Through the context class
+     * loader no converter would be found, and a JWKS parsed through the instance would fail with
+     * {@code TokenSheriff-141}.
      *
      * @return a DslJson instance configured with security settings and compile-time mapping
      */
     private DslJson<Object> createDslJson() {
         return new DslJson<>(new DslJson.Settings<>()
-                .includeServiceLoader() // Enable compile-time generated converters
+                // Compile-time generated converters, from the class loader that ships them
+                .includeServiceLoader(ParserConfig.class.getClassLoader())
                 .limitStringBuffer(maxStringLength)
                 .limitDigitsBuffer(16) // Reasonable limit for number parsing
                 .allowArrayFormat(true) // Enable proper JSON array handling
