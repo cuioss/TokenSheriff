@@ -147,7 +147,7 @@ class BearerScopeValidationCombinedIndexBuildStepTest {
     }
 
     @Test
-    @DisplayName("Should still refuse the own scopes of a method whose only class is @Vetoed")
+    @DisplayName("Should refuse the own scopes of a method whose only class is @Vetoed")
     void shouldCheckMethodOfVetoedClassAlone() throws Exception {
         List<String> violations = TokenSheriffProcessor
                 .findScopeViolations(Index.of(VetoedDeclaringInvalidMethodScope.class));
