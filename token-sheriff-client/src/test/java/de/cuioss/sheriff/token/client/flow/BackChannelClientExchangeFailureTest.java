@@ -195,7 +195,7 @@ class BackChannelClientExchangeFailureTest {
         @MethodSource("clients")
         @DisplayName("should report an IOException after HTTP 200 as a transport failure with its context and cause")
         void shouldReportIoExceptionAfterStatusAsTransportFailure(String clientName, String failureContext,
-                String completeBody, CallSite callSite) throws IOException {
+                String completeBody, CallSite callSite) throws Exception {
             // The body announced is longer than the body sent before the server closes the connection.
             ClientConfiguration configuration = serving(answer("{", completeBody.length() + 64));
 
@@ -212,7 +212,7 @@ class BackChannelClientExchangeFailureTest {
         @MethodSource("clients")
         @DisplayName("positive control: the same server answering a complete body gives the client's normal result")
         void shouldReturnNormalResultForCompleteBody(String clientName, String failureContext, String completeBody,
-                CallSite callSite) throws IOException {
+                CallSite callSite) throws Exception {
             ClientConfiguration configuration = serving(answer(completeBody, completeBody.length()));
 
             Object result = assertDoesNotThrow(() -> callSite.call(configuration), clientName);

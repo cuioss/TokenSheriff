@@ -190,7 +190,9 @@ public final class RawHttpServer implements AutoCloseable {
     private static void closeRecordingFailure(AutoCloseable closeable, List<Exception> failures) {
         try {
             closeable.close();
-        } catch (Exception e) {
+        }
+        /*TODO: Catch specific not Exception. Suppress: // cui-rewrite:disable InvalidExceptionUsageRecipe*/
+        catch (Exception e) {
             failures.add(e);
         }
     }

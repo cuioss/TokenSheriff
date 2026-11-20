@@ -169,15 +169,12 @@ class RawHttpServerTest {
     void shouldEndThreadAndRethrowWhenConnectionCloseFails() throws Exception {
         IOException connectionFailure = new IOException("closing the served connection failed");
         RawHttpServer server = RawHttpServer.serving(new FailingServerSocket(null, connectionFailure), RESPONSE);
-        Socket stalling = stall(server);
-        try {
+        try (Socket _ = stall(server)) {
             IOException thrown = assertThrows(IOException.class, server::close);
 
             assertAll("Failing connection close",
                     () -> assertSame(connectionFailure, thrown, "The failure of the connection close is rethrown"),
                     () -> assertTrue(server.isStopped(), "The socket is closed and the server thread has ended"));
-        } finally {
-            stalling.close();
         }
     }
 
@@ -188,8 +185,7 @@ class RawHttpServerTest {
         IOException connectionFailure = new IOException("closing the served connection failed");
         RawHttpServer server = RawHttpServer.serving(
                 new FailingServerSocket(serverSocketFailure, connectionFailure), RESPONSE);
-        Socket stalling = stall(server);
-        try {
+        try (Socket _ = stall(server)) {
             IOException thrown = assertThrows(IOException.class, server::close);
 
             assertAll("Two failing closes",
@@ -197,8 +193,6 @@ class RawHttpServerTest {
                     () -> assertArrayEquals(new Throwable[]{connectionFailure}, thrown.getSuppressed(),
                             "The second failure is attached as suppressed"),
                     () -> assertTrue(server.isStopped(), "The socket is closed and the server thread has ended"));
-        } finally {
-            stalling.close();
         }
     }
 
@@ -206,16 +200,13 @@ class RawHttpServerTest {
     @DisplayName("should end its thread without close after a bounded number of consecutive accept failures")
     void shouldEndThreadAfterPersistentAcceptFailure() throws Exception {
         AcceptFailingServerSocket serverSocket = new AcceptFailingServerSocket();
-        RawHttpServer server = RawHttpServer.serving(serverSocket, RESPONSE);
-        try {
+        try (RawHttpServer server = RawHttpServer.serving(serverSocket, RESPONSE)) {
             assertAll("Persistent accept failure",
                     () -> assertTrue(server.awaitThreadEnded(READ_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS),
                             "The server thread ends without close()"),
                     () -> assertEquals(RawHttpServer.MAX_CONSECUTIVE_ACCEPT_FAILURES, serverSocket.attempts.get(),
                             "The loop ends after the bound of consecutive accept failures"),
                     () -> assertFalse(serverSocket.isClosed(), "The loop ended with the server socket still open"));
-        } finally {
-            server.close();
         }
     }
 
