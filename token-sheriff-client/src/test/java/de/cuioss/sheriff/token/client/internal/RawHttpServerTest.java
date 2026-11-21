@@ -30,6 +30,7 @@ import java.net.SocketException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -38,7 +39,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * Tests the loopback fixture {@link RawHttpServer}: it keeps serving after a client resets its connection
  * before the request is complete, answers and counts a complete request, and on {@link RawHttpServer#close()}
  * closes its socket and ends its thread, also while a client leaves an incomplete request open. A close that
- * fails still ends the thread and rethrows the first failure with any later one suppressed, and a persistent
+ * fails, with an {@link IOException} or unchecked, still ends the thread and rethrows the first failure with
+ * any later one suppressed, and a persistent
  * accept failure ends the thread without {@code close()} after a bounded number of attempts; those cases run
  * on injected server sockets whose {@code close()} or {@code accept()} fails.
  * <p>
@@ -199,6 +201,24 @@ class RawHttpServerTest {
     }
 
     @Test
+    @DisplayName("should still close the served connection and rethrow when closing the server socket fails unchecked")
+    void shouldCloseConnectionAndRethrowWhenServerSocketCloseFailsUnchecked() throws Exception {
+        IllegalStateException serverSocketFailure = new IllegalStateException("closing the server socket failed");
+        UncheckedClosingServerSocket serverSocket = new UncheckedClosingServerSocket(serverSocketFailure);
+        RawHttpServer server = RawHttpServer.serving(serverSocket, RESPONSE);
+        try (Socket stalling = stall(server)) {
+            IllegalStateException thrown = assertThrows(IllegalStateException.class, server::close);
+
+            assertAll("Unchecked server socket close failure",
+                    () -> assertTrue(stalling.isConnected(), "The stalling client was connected to the server"),
+                    () -> assertSame(serverSocketFailure, thrown, "The unchecked failure is rethrown as it is"),
+                    () -> assertTrue(serverSocket.connectionClosed.get(),
+                            "The served connection is closed although closing the server socket failed"),
+                    () -> assertTrue(server.isStopped(), "The socket is closed and the server thread has ended"));
+        }
+    }
+
+    @Test
     @DisplayName("should end its thread without close after a bounded number of consecutive accept failures")
     void shouldEndThreadAfterPersistentAcceptFailure() throws Exception {
         AcceptFailingServerSocket serverSocket = new AcceptFailingServerSocket();
@@ -247,6 +267,40 @@ class RawHttpServerTest {
             if (serverSocketFailure != null) {
                 throw serverSocketFailure;
             }
+        }
+    }
+
+    /**
+     * A loopback server socket whose own {@code close()} closes for real and then throws the given unchecked
+     * failure, and which records whether a connection it accepted was closed.
+     */
+    private static final class UncheckedClosingServerSocket extends ServerSocket {
+
+        private final RuntimeException closeFailure;
+        private final AtomicBoolean connectionClosed = new AtomicBoolean();
+
+        UncheckedClosingServerSocket(RuntimeException closeFailure) throws IOException {
+            super(0, 50, InetAddress.getByAddress(new byte[]{127, 0, 0, 1}));
+            this.closeFailure = closeFailure;
+        }
+
+        @Override
+        public Socket accept() throws IOException {
+            Socket accepted = new Socket() {
+                @Override
+                public synchronized void close() throws IOException {
+                    super.close();
+                    connectionClosed.set(true);
+                }
+            };
+            implAccept(accepted);
+            return accepted;
+        }
+
+        @Override
+        public void close() throws IOException {
+            super.close();
+            throw closeFailure;
         }
     }
 

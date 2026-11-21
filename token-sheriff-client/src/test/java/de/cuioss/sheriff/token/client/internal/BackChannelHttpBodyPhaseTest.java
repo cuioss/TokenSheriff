@@ -175,8 +175,10 @@ class BackChannelHttpBodyPhaseTest {
     /**
      * Starts a loopback server that serves one connection: it reads the request head, then, when
      * {@code sendHead} is set, writes the status line, the headers and the first part of the body and signals
-     * {@link #headSent}. Either way it then holds the connection until the test counts {@link #release} down,
-     * and when {@code sendHead} is set writes the rest of the body.
+     * {@link #headSent}. Either way it then holds the connection until the test counts {@link #release} down
+     * or {@link #tearDown()} stops the thread, and never closes it on its own, so a failure the client sees
+     * cannot come from the fixture. When {@code sendHead} is set it writes the rest of the body after the
+     * release.
      *
      * @return the URL of the {@code /endpoint} path on the server
      */
@@ -197,7 +199,10 @@ class BackChannelHttpBodyPhaseTest {
                     out.flush();
                     headSent.countDown();
                 }
-                if (release.await(SIGNAL_WAIT_SECONDS, TimeUnit.SECONDS) && sendHead) {
+                // No bound on this wait: a connection the fixture closed on its own would end the client's
+                // body read with the same premature-EOF IOException the probe accepts as the JDK's cut-short body.
+                release.await();
+                if (sendHead) {
                     out.write(rest);
                     out.flush();
                 }

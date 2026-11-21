@@ -145,11 +145,13 @@ public final class RawHttpServer implements AutoCloseable {
      * Closes the server socket and the connection being served, stops the server thread and waits for it
      * to end. Closing the connection being served is what ends a read a client left blocked on an incomplete
      * request: {@link ExecutorService#shutdownNow()} does not interrupt a socket read. Every release step
-     * runs even when an earlier one fails: the server socket and the connection being served are each
-     * closed, and the thread is stopped and awaited in a {@code finally}. A close that throws after it has
+     * runs even when an earlier one fails, whether it fails with an {@link IOException} or an unchecked
+     * exception: the server socket and the connection being served are each closed, and the thread is
+     * stopped and awaited in a {@code finally}. A close that throws after it has
      * released its resource therefore still ends the thread; one that throws before releasing it can leave a
-     * blocked {@code accept()} running until the wait times out. The first failure is thrown and every later
-     * one — the {@link IllegalStateException} of the wait included — is attached to it as suppressed. Calling
+     * blocked {@code accept()} running until the wait times out. The first failure is thrown, an unchecked
+     * one as it is, and every later one — the {@link IllegalStateException} of the wait included — is
+     * attached to it as suppressed. Calling
      * this method again repeats the release steps: it has no further effect once the resources are released
      * and the thread has ended, but a close that throws on every call throws again.
      *
@@ -193,7 +195,7 @@ public final class RawHttpServer implements AutoCloseable {
     private static void closeRecordingFailure(Closeable closeable, List<Exception> failures) {
         try {
             closeable.close();
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
             failures.add(e);
         }
     }
