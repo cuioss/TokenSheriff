@@ -53,8 +53,11 @@ import static org.junit.jupiter.api.Assertions.*;
  * until the test releases it. A call through {@link BackChannelHttp#send} is then awaited for twice the
  * configured read timeout, and two outcomes are accepted, because the JDKs differ: on JDK 21 and 25 the call is
  * still pending after the bounded wait, so the request timeout did not end it, and once the server is released
- * the whole body arrives; on JDK 27 the call ends within the bounded wait with an {@link HttpTimeoutException}
- * as its cause and nothing broader. Any other outcome fails the test. The test publishes which outcome it saw,
+ * the whole body arrives; on JDK 27 the call ends within the bounded wait with an {@link IOException} as its
+ * cause and nothing broader: an {@link HttpTimeoutException} when the request timeout wins, or the plain
+ * {@link IOException} the JDK reports for the body it cut short when it closes the connection at the timeout,
+ * and which of the two it is varies from run to run. Any other outcome fails the test. The test publishes which
+ * outcome it saw,
  * together with the feature version of the running JDK, as a report entry and in its assertion messages, so a
  * build log names the observed behaviour. The positive control uses the same server holding everything, the
  * headers included: that call ends through the request timeout within the same bounded wait on JDK 21, 25
@@ -122,9 +125,9 @@ class BackChannelHttpBodyPhaseTest {
             Throwable cause = ended.getCause();
 
             assertNotNull(cause, jdk + ": the call ended within twice the read timeout with a cause");
-            assertEquals(HttpTimeoutException.class, cause.getClass(),
+            assertInstanceOf(IOException.class, cause,
                     jdk + ": the call ended within twice the read timeout, so its cause is the request timeout "
-                            + "and nothing broader, not " + cause);
+                            + "or the body the JDK cut short at it, and nothing broader, not " + cause);
         }
     }
 
