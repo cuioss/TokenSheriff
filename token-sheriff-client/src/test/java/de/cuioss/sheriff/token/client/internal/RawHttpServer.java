@@ -17,6 +17,7 @@ package de.cuioss.sheriff.token.client.internal;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -189,13 +190,10 @@ public final class RawHttpServer implements AutoCloseable {
         throw new IllegalStateException(first);
     }
 
-    private static void closeRecordingFailure(AutoCloseable closeable, List<Exception> failures) {
+    private static void closeRecordingFailure(Closeable closeable, List<Exception> failures) {
         try {
             closeable.close();
-        }
-        // AutoCloseable.close() declares Exception itself, so the catch cannot be narrower
-        // cui-rewrite:disable InvalidExceptionUsageRecipe
-        catch (Exception e) {
+        } catch (IOException e) {
             failures.add(e);
         }
     }

@@ -56,8 +56,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * the whole body arrives; on JDK 27 the call ends within the bounded wait with an {@link IOException} as its
  * cause and nothing broader: an {@link HttpTimeoutException} when the request timeout wins, or the plain
  * {@link IOException} the JDK reports for the body it cut short when it closes the connection at the timeout,
- * and which of the two it is varies from run to run. Any other outcome fails the test. The test publishes which
- * outcome it saw,
+ * and which of the two it is varies from run to run. The fixed-text {@link IOException}s of
+ * {@link BackChannelHttp}, which stand for an unrecognised or a cancelled exchange, are not accepted. Any other
+ * outcome fails the test. The test publishes which outcome it saw,
  * together with the feature version of the running JDK, as a report entry and in its assertion messages, so a
  * build log names the observed behaviour. The positive control uses the same server holding everything, the
  * headers included: that call ends through the request timeout within the same bounded wait on JDK 21, 25
@@ -128,6 +129,11 @@ class BackChannelHttpBodyPhaseTest {
             assertInstanceOf(IOException.class, cause,
                     jdk + ": the call ended within twice the read timeout, so its cause is the request timeout "
                             + "or the body the JDK cut short at it, and nothing broader, not " + cause);
+            assertNotEquals(BackChannelHttp.EXCHANGE_FAILED, cause.getMessage(),
+                    jdk + ": the cause is the JDK's own failure, not the fixed text of an unrecognised failure");
+            assertNotEquals(BackChannelHttp.EXCHANGE_CANCELLED, cause.getMessage(),
+                    jdk + ": the cause is the JDK's own failure, not the fixed text of a cancelled exchange");
+            reporter.publishEntry(BODY_PHASE_ENTRY, jdk + ": the call ended with " + cause.getClass().getName());
         }
     }
 

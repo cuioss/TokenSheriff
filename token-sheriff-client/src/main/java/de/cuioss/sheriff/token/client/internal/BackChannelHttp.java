@@ -138,7 +138,8 @@ import java.util.function.Supplier;
  *       {@link HttpHandler#requestBuilder()} ({@code HttpRequest.Builder.timeout}). The request timeout
  *       bounds the wait until the response headers arrive. Whether it also bounds the body read that
  *       follows depends on the JDK: on JDK 21 and 25 it was observed not to, on JDK 27 it was observed to,
- *       ending the call with the request-timeout failure. The code relies on the size bound of the body
+ *       ending the call with the request-timeout failure or with the JDK's own failure for the body it cut
+ *       short. The code relies on the size bound of the body
  *       read, not on a time bound: the ceiling this instance was constructed with — the JWT payload
  *       ceiling for the token, PAR, userinfo and revocation clients,
  *       {@link ClientConfiguration#getDiscoveryDocumentMaxSize()} for discovery — see
@@ -529,8 +530,9 @@ public final class BackChannelHttp {
      * {@link java.net.http.HttpTimeoutException} when no response headers arrive within it. Whether the
      * request timeout also bounds the body read depends on the JDK: on JDK 21 and 25 it was observed not
      * to, so a server that sends the headers and then stalls the body keeps the calling thread waiting; on
-     * JDK 27 it was observed to, so such a call ends with the
-     * {@link java.net.http.HttpTimeoutException}, rethrown as an {@link IOException}. On every JDK the body
+     * JDK 27 it was observed to, so such a call ends with an {@link IOException}: the
+     * {@link java.net.http.HttpTimeoutException} of the request timeout, or the plain {@link IOException} the JDK
+     * reports for the body it cut short, and which of the two arrives varies. On every JDK the body
      * read is bounded in size by {@code bodyHandler} — the {@link BoundedBodyHandler} ceiling on the
      * back-channel path — and that size bound, not a time bound, is what this method relies on.
      * </p>
