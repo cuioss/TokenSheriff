@@ -195,7 +195,10 @@ public final class RawHttpServer implements AutoCloseable {
     private static void closeRecordingFailure(Closeable closeable, List<Exception> failures) {
         try {
             closeable.close();
-        } catch (IOException | RuntimeException e) {
+        }
+        // Every release step must run: an unchecked failure of one close is recorded, never allowed to skip the next
+        // cui-rewrite:disable InvalidExceptionUsageRecipe
+        catch (IOException | RuntimeException e) {
             failures.add(e);
         }
     }
