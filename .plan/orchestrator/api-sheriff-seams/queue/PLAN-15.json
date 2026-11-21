@@ -2,10 +2,10 @@
   "id": "PLAN-15",
   "slug": "final-fix-sweep",
   "workstream": "WS-02",
-  "status": "staged",
+  "status": "shipped",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
-  "pr": "",
-  "landing": "",
+  "plan_marshall_plan_id": "plan-15-final-fix-sweep",
+  "pr": "#940",
+  "landing": "landings/PLAN-15.md",
   "seq": 15
 }
