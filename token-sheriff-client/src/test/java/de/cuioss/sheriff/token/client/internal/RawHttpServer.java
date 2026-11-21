@@ -191,7 +191,8 @@ public final class RawHttpServer implements AutoCloseable {
         try {
             closeable.close();
         }
-        /*TODO: Catch specific not Exception. Suppress: // cui-rewrite:disable InvalidExceptionUsageRecipe*/
+        // AutoCloseable.close() declares Exception itself, so the catch cannot be narrower
+        // cui-rewrite:disable InvalidExceptionUsageRecipe
         catch (Exception e) {
             failures.add(e);
         }
