@@ -145,10 +145,12 @@ public final class RawHttpServer implements AutoCloseable {
      * to end. Closing the connection being served is what ends a read a client left blocked on an incomplete
      * request: {@link ExecutorService#shutdownNow()} does not interrupt a socket read. Every release step
      * runs even when an earlier one fails: the server socket and the connection being served are each
-     * closed, and the thread is stopped and awaited in a {@code finally}, so a failing close never leaves the
-     * thread running. The first failure is thrown and every later one — the {@link IllegalStateException}
-     * of the wait included — is attached to it as suppressed. Calling this method again has no further
-     * effect.
+     * closed, and the thread is stopped and awaited in a {@code finally}. A close that throws after it has
+     * released its resource therefore still ends the thread; one that throws before releasing it can leave a
+     * blocked {@code accept()} running until the wait times out. The first failure is thrown and every later
+     * one — the {@link IllegalStateException} of the wait included — is attached to it as suppressed. Calling
+     * this method again repeats the release steps: it has no further effect once the resources are released
+     * and the thread has ended, but a close that throws on every call throws again.
      *
      * @throws IOException           if closing the server socket or the connection being served fails
      * @throws IllegalStateException if the server thread did not end within the wait, or the wait was
