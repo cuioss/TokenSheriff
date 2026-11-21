@@ -86,7 +86,7 @@ class StoredTokenTest {
         }
 
         @Test
-        @DisplayName("Should report the token still valid strictly before its expiry instant")
+        @DisplayName("Should report the token valid strictly before its expiry instant")
         void shouldNotBeExpiredBeforeExpiry() {
             var expiresAt = Instant.now().plus(Duration.ofMinutes(5));
             var stored = bearerToken(expiresAt);

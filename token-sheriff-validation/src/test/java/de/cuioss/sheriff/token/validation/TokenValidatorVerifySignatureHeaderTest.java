@@ -109,7 +109,7 @@ class TokenValidatorVerifySignatureHeaderTest {
         }
 
         @Test
-        @DisplayName("A mixed-case typ is returned unchanged, not normalised")
+        @DisplayName("A mixed-case typ is returned verbatim, not normalised")
         void shouldReturnMixedCaseTypVerbatim() {
             assertEquals(Optional.of("Application/Logout+JWT"),
                     validator().verifySignature(signed(validClaims(), "Application/Logout+JWT")).getTypHeader());

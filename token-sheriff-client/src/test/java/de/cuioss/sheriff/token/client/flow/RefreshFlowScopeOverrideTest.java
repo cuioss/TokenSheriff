@@ -188,7 +188,7 @@ class RefreshFlowScopeOverrideTest {
     }
 
     @Test
-    @DisplayName("Should leave the shared configuration's scopes unchanged by a per-call override")
+    @DisplayName("Should not mutate the shared configuration's scopes with a per-call override")
     void shouldNotMutateConfiguration(URIBuilder uriBuilder, MockWebServer server) throws Exception {
         moduleDispatcher.respondWith(grantedScopeResponse(PER_CALL_RENDERED));
         ClientConfiguration config = config(false);

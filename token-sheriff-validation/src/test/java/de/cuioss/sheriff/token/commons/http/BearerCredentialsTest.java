@@ -187,7 +187,7 @@ class BearerCredentialsTest {
         }
 
         @Test
-        @DisplayName("A token of the configured maximum token size passes unchanged")
+        @DisplayName("A token of the configured maximum token size is returned in full")
         void shouldNotLimitTokenSize() {
             String token = "a".repeat(ParserConfig.DEFAULT_MAX_TOKEN_SIZE);
 

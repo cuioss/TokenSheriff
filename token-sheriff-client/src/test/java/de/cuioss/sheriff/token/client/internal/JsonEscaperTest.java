@@ -33,7 +33,7 @@ class JsonEscaperTest {
     private static final String QUOTE = String.valueOf((char) 34);
 
     @Test
-    @DisplayName("Should pass a printable value through unchanged")
+    @DisplayName("Should return a printable value verbatim")
     void shouldPassPrintableThrough() {
         String value = Generators.letterStrings(5, 30).next();
 

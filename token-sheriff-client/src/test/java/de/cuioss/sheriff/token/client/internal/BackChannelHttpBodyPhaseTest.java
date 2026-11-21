@@ -53,8 +53,12 @@ import static org.junit.jupiter.api.Assertions.*;
  * until the test releases it. A call through {@link BackChannelHttp#send} is then awaited for twice the
  * configured read timeout, and two outcomes are accepted, because the JDKs differ: on JDK 21 and 25 the call is
  * still pending after the bounded wait, so the request timeout did not end it, and once the server is released
- * the whole body arrives; on JDK 27 the call ends within the bounded wait with an {@link HttpTimeoutException}
- * as its cause and nothing broader. Any other outcome fails the test. The test publishes which outcome it saw,
+ * the whole body arrives; on JDK 27 the call ends within the bounded wait with an {@link IOException} as its
+ * cause and nothing broader: an {@link HttpTimeoutException} when the request timeout wins, or the plain
+ * {@link IOException} the JDK reports for the body it cut short when it closes the connection at the timeout,
+ * and which of the two it is varies from run to run. The fixed-text {@link IOException}s of
+ * {@link BackChannelHttp}, which stand for an unrecognised or a cancelled exchange, are not accepted. Any other
+ * outcome fails the test. The test publishes which outcome it saw,
  * together with the feature version of the running JDK, as a report entry and in its assertion messages, so a
  * build log names the observed behaviour. The positive control uses the same server holding everything, the
  * headers included: that call ends through the request timeout within the same bounded wait on JDK 21, 25
@@ -122,9 +126,14 @@ class BackChannelHttpBodyPhaseTest {
             Throwable cause = ended.getCause();
 
             assertNotNull(cause, jdk + ": the call ended within twice the read timeout with a cause");
-            assertEquals(HttpTimeoutException.class, cause.getClass(),
+            assertInstanceOf(IOException.class, cause,
                     jdk + ": the call ended within twice the read timeout, so its cause is the request timeout "
-                            + "and nothing broader, not " + cause);
+                            + "or the body the JDK cut short at it, and nothing broader, not " + cause);
+            assertNotEquals(BackChannelHttp.EXCHANGE_FAILED, cause.getMessage(),
+                    jdk + ": the cause is the JDK's own failure, not the fixed text of an unrecognised failure");
+            assertNotEquals(BackChannelHttp.EXCHANGE_CANCELLED, cause.getMessage(),
+                    jdk + ": the cause is the JDK's own failure, not the fixed text of a cancelled exchange");
+            reporter.publishEntry(BODY_PHASE_ENTRY, jdk + ": the call ended with " + cause.getClass().getName());
         }
     }
 
@@ -166,8 +175,10 @@ class BackChannelHttpBodyPhaseTest {
     /**
      * Starts a loopback server that serves one connection: it reads the request head, then, when
      * {@code sendHead} is set, writes the status line, the headers and the first part of the body and signals
-     * {@link #headSent}. Either way it then holds the connection until the test counts {@link #release} down,
-     * and when {@code sendHead} is set writes the rest of the body.
+     * {@link #headSent}. Either way it then holds the connection until the test counts {@link #release} down
+     * or {@link #tearDown()} stops the thread, and never closes it on its own, so a failure the client sees
+     * cannot come from the fixture. When {@code sendHead} is set it writes the rest of the body after the
+     * release.
      *
      * @return the URL of the {@code /endpoint} path on the server
      */
@@ -188,7 +199,10 @@ class BackChannelHttpBodyPhaseTest {
                     out.flush();
                     headSent.countDown();
                 }
-                if (release.await(SIGNAL_WAIT_SECONDS, TimeUnit.SECONDS) && sendHead) {
+                // No bound on this wait: a connection the fixture closed on its own would end the client's
+                // body read with the same premature-EOF IOException the probe accepts as the JDK's cut-short body.
+                release.await();
+                if (sendHead) {
                     out.write(rest);
                     out.flush();
                 }

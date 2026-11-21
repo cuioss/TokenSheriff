@@ -219,8 +219,8 @@ class TokenBuilderTest {
         }
 
         @Test
-        @DisplayName("A mapper throwing a TokenValidationException propagates it unchanged and counts it once under its own event type")
-        void propagatesMapperTokenValidationExceptionUnchanged() {
+        @DisplayName("A mapper throwing a TokenValidationException propagates that same instance and counts it once under its own event type")
+        void propagatesMapperTokenValidationExceptionAsIs() {
             TokenValidationException thrown = new TokenValidationException(
                     SecurityEventCounter.EventType.INVALID_JWT_FORMAT, Generators.letterStrings(5, 20).next());
             TokenBuilder builder = builderWithMapper((map, name) -> {

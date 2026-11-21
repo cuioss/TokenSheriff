@@ -204,7 +204,7 @@ class BearerScopeValidationBuildStepTest {
     }
 
     @Test
-    @DisplayName("Should merge a grandchild that inherits the method unchanged, not one below an override")
+    @DisplayName("Should merge a grandchild that inherits the method without an override, not one below an override")
     void shouldResolveGrandchildBeanClasses() throws Exception {
         List<String> belowOverride = TokenSheriffProcessor.findScopeViolations(
                 Index.of(LengthBase.class, OverridingSubclass.class, GrandchildBelowOverride.class));

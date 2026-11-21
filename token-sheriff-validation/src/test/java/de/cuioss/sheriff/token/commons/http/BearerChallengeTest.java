@@ -207,7 +207,7 @@ class BearerChallengeTest {
         }
 
         @Test
-        @DisplayName("Non-ASCII text and characters next to the refused ranges pass unchanged")
+        @DisplayName("Non-ASCII text and characters next to the refused ranges pass verbatim")
         void shouldKeepNonAsciiAndPrintable() {
             String description = "Zugriff verweigert: höhere Rechte nötig ~   \u0080";
 

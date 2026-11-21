@@ -61,7 +61,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *   <li>a blank or whitespace-only {@code kid} is omitted</li>
  *   <li>a duplicate {@code kid} is reported once, the later key resolving through {@code getKeyInfo}</li>
  *   <li>the snapshot refuses {@code add} and {@code remove}</li>
- *   <li>a returned snapshot is unchanged by a later key rotation</li>
+ *   <li>a returned snapshot holds its ids after a later key rotation</li>
  *   <li>a retired key set's id is excluded while {@code getKeyInfo} still resolves it within the grace
  *       period, and is not resolved after it</li>
  *   <li>{@code getLoaderStatus()} is {@code OK} only while a usable key set is installed, and a refresh
@@ -215,8 +215,8 @@ class JwksLoaderKeyIdsContractTest {
     // Already pinned by HttpJwksLoaderKeyRotationTest ("Should report only the active key set's ids after
     // a rotation, as a snapshot"), which drives the refresh directly.
     @Test
-    @DisplayName("(f) a returned snapshot is unchanged by a later key rotation")
-    void pointF_snapshotUnchangedByRotation() {
+    @DisplayName("(f) a returned snapshot holds its ids after a later key rotation")
+    void pointF_snapshotHoldsIdsAfterRotation() {
         JwksLoader loader = createLoader(LoaderType.HTTP, twoKeyJwks(), REFRESH_INTERVAL_SECONDS);
         try {
             loader.initJWKSLoader(securityEventCounter).join();

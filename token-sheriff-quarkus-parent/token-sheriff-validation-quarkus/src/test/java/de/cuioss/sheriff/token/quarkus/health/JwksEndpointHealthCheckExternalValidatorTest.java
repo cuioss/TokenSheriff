@@ -132,7 +132,7 @@ class JwksEndpointHealthCheckExternalValidatorTest {
     }
 
     @Test
-    @DisplayName("Opted-in external validator with a still-loading issuer reports DOWN and IN_PROGRESS")
+    @DisplayName("Opted-in external validator with a loading issuer reports DOWN and IN_PROGRESS")
     void optedInExternalValidatorInProgress() {
         try (TokenValidator external = externalValidator(new IssuerSpec("ext-loading", LoaderStatus.UNDEFINED))) {
             HealthCheckResponse response = new JwksEndpointHealthCheck(reportingExternal(external), 30).call();
@@ -198,8 +198,8 @@ class JwksEndpointHealthCheckExternalValidatorTest {
     }
 
     @Test
-    @DisplayName("The opt-in leaves the PROPERTY_CONFIGURED payload unchanged")
-    void optInLeavesPropertyConfiguredPayloadUnchanged() {
+    @DisplayName("The opt-in leaves the PROPERTY_CONFIGURED payload equal to the default one")
+    void optInLeavesPropertyConfiguredPayloadEqualToDefault() {
         IssuerConfig healthy = configuredIssuer("healthy-issuer", LoaderStatus.OK);
         IssuerConfig unhealthy = configuredIssuer("unhealthy-issuer", LoaderStatus.ERROR);
 

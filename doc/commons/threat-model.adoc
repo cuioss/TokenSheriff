@@ -87,7 +87,7 @@ were audited to the requirements below during the move into commons.
   host that never answers is cut off. Whether it also covers the body depends on the JDK: on the client
   back-channel path it was observed not to on JDK 21 and 25, so a body stalled after the headers keeps the
   calling thread waiting — an accepted limit; on JDK 27 it was observed to, so such a call ends with the
-  request-timeout failure. The validation-side metadata and JWKS fetches use the same JDK client and the
+  request-timeout failure or with the JDK's own failure for the body it cut short. The validation-side metadata and JWKS fetches use the same JDK client and the
   same cui-http request timeout, but were not run themselves. On every JDK the body is bounded in size by the response-size limit, and the mitigation relies on that
   size bound.
 | https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4], https://www.rfc-editor.org/rfc/rfc7230[RFC 7230]

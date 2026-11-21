@@ -52,7 +52,9 @@ parser is `InsufficientScopeChallengeRoundTripTest` in token-sheriff-client (`cl
 `HttpWellKnownResolverTest`, `JwksHostnameVerificationTest`, `JwksHttpContentConverterTest`,
 `LoadingStatusProviderTest`, `ParserConfigTest`, `WellKnownConfigTest`,
 `WellKnownConfigurationConverterTest`, `WellKnownResultConverterTest`,
-`WellKnownResultMappingTest`
+`WellKnownResultMappingTest`; `ParserConfig` parsing a JWKS in a booted Quarkus application is
+`JwksParserConfigBootTest` in token-sheriff-validation-quarkus-deployment (`deployment` row, test package
+`quarkus.deployment`), because a Quarkus boot test needs the extension's deployment class path
 
 |`validation`
 |`ClientConfusionAttackTest`, `CustomClaimMapperTest`, `DSLJsonSecurityTest`,
@@ -106,7 +108,7 @@ parser is `InsufficientScopeChallengeRoundTripTest` in token-sheriff-client (`cl
 `JwksLoaderKeyIdsContractTest`, `LoaderStatusTest`
 
 |`validation.jwks.http`
-|`HttpJwksLoaderAsyncInitializationTest`, `HttpJwksLoaderDefaultBehaviourUnchangedTest`,
+|`HttpJwksLoaderAsyncInitializationTest`, `HttpJwksLoaderDefaultBehaviourTest`,
 `HttpJwksLoaderEgressRefreshTest`, `HttpJwksLoaderExecutorHandOffTest`,
 `HttpJwksLoaderFailureAdvertisedJwksUriTest`, `HttpJwksLoaderFailureTest`,
 `HttpJwksLoaderGracePeriodTest`, `HttpJwksLoaderInitialRetryGuardOrderTest`,
@@ -204,7 +206,7 @@ Package prefix: `de.cuioss.sheriff.token.client`.
 
 |`discovery`
 |`CachingDiscoveryResolverAdversarialTest`, `CachingDiscoveryResolverFailureHandlingTest`,
-`CachingDiscoveryResolverHookFailureTest`, `CachingDiscoveryResolverRefreshRegressionTest`,
+`CachingDiscoveryResolverHookFailureTest`, `CachingDiscoveryResolverRefreshPathTest`,
 `CachingDiscoveryResolverStalePolicyTest`, `CachingDiscoveryResolverTest`,
 `DiscoveryAdversarialTest`, `DiscoveryResolverSizeCapTest`, `DiscoveryResolverTest`,
 `ProviderMetadataTest`
@@ -218,7 +220,7 @@ Package prefix: `de.cuioss.sheriff.token.client`.
 `AuthorizationCodeFlowPushedTest`, `AuthorizationCodeFlowTest`,
 `AuthorizationRequestBuilderParametersTest`, `AuthorizationRequestBuilderTest`,
 `AuthorizationRequestInjectionAttackDatabaseTest`, `AuthorizationRequestOptionsTest`,
-`CallbackHandlerTest`, `CallbackParametersAttackDatabaseTest`, `CallbackParametersTest`,
+`BackChannelClientExchangeFailureTest`, `CallbackHandlerTest`, `CallbackParametersAttackDatabaseTest`, `CallbackParametersTest`,
 `ClientCredentialsFlowTest`, `CodeInjectionTest`, `InsufficientScopeChallengeAttackDatabaseTest`,
 `InsufficientScopeChallengeParserTest`, `InsufficientScopeChallengeRoundTripTest`,
 `IssValidatorTest`, `ParClientMalformedResponseTest`, `ParClientTest`, `PkceChallengeTest`,
@@ -263,7 +265,7 @@ drive the retrieval path across several production packages.
 |===
 
 Fixtures that are not test classes: `NativeImageClassScanner` (root package),
-`CachingDiscoveryResolverSupport` (`discovery`), `DpopBoundAccessTokens`,
+`CachingDiscoveryResolverSupport` (`discovery`), `DpopBoundAccessTokens`, `FailingAfterStatusHttpClient`,
 `TokenEndpointStubDispatcher` and `WiredFlowTestSupport` (`flow`), `HeaderLineBreakAttackDatabase`
 (`hardening`), `RawHttpServer` and `StubHttpClient` (`internal`) and `RefreshTestSupport` (`token`).
 `RawHttpServerTest` (`internal`) checks the `RawHttpServer` fixture, not production code.
@@ -367,7 +369,9 @@ Package prefix: `de.cuioss.sheriff.token.quarkus`.
 `BearerScopeValidationDependencyVetoedPackageBootTest`, `BearerScopeValidationGeneratedBeanBootTest`,
 `BearerScopeValidationGeneratedBeanControlBootTest`, `BearerScopeValidationRefusalBootTest`,
 `BearerScopeValidationVetoedPackageBootTest`, `BearerScopeValidationVetoedPackageBuildStepTest`,
-`TokenSheriffDevUIIntegrationTest`,
+`JwksParserConfigBootTest` (boots `ParserConfig` of token-sheriff-validation, `commons.transport` row:
+a Quarkus boot test must live in the deployment module while the code it boots is in
+token-sheriff-validation), `TokenSheriffDevUIIntegrationTest`,
 `TokenSheriffIntegrationTest`, `TokenSheriffProcessorBuildStepTest`, `TokenSheriffProcessorTest`,
 `TokenValidatorEagerStartupTest`; the extension as a whole is booted by
 `TokenSheriffExtensionTest` (test package `quarkus.test`)

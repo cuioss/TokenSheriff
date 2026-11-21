@@ -390,8 +390,8 @@ class HttpJwksLoaderFailureTest {
         }
 
         @Test
-        @DisplayName("Refresh with unchanged content keeps OK")
-        void unchangedContentRefreshKeepsOk(URIBuilder uriBuilder) {
+        @DisplayName("Refresh with identical content keeps OK")
+        void identicalContentRefreshKeepsOk(URIBuilder uriBuilder) {
             try (HttpJwksLoader loader = new HttpJwksLoader(config(uriBuilder, 60))) {
                 assertEquals(LoaderStatus.OK, loader.initJWKSLoader(securityEventCounter).join());
                 int callsBeforeRefresh = moduleDispatcher.getCallCounter();

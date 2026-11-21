@@ -118,25 +118,28 @@ import java.util.function.Supplier;
  *       raw header value: the {@link HttpClient#sendAsync} future completes with it, {@link HttpClient#send}
  *       wraps it in an {@link IllegalArgumentException}, and since JDK 27 it sits under a
  *       {@link ProtocolException} in the cause chain, see {@link #isMalformedFraming(Throwable)}. Both sends
- *       wait on {@link HttpClient#sendAsync} through {@link #exchange}: a malformed-framing failure of the
+ *       wait on {@link HttpClient#sendAsync} through {@link #exchange}, which unwraps the failure of the
+ *       exchange through {@link CompletionException} and {@link ExecutionException} wrappers alike, nested
+ *       ones included, for at most {@code MAX_CAUSE_DEPTH} levels: a malformed-framing failure of the
  *       exchange is mapped to a {@link TransportException} with the failure context and the fixed text
  *       {@value #MALFORMED_RESPONSE}, the JDK's exception neither chained nor echoed because its message
  *       is remote content; an {@link IOException} or {@link Error} failure of the exchange is rethrown as
  *       the client reported it; a cancelled wait, and a future failed with a wrapped
- *       {@link CancellationException}, is an {@link IOException} with a fixed text; any other runtime
- *       failure of the exchange, an {@link IllegalArgumentException} of another cause included, is an
- *       {@link IOException} with a fixed text and no chained cause, so each client classifies it through
- *       its {@link IOException} handling. The wrapped-cancellation and runtime-failure mappings are
- *       defensive: no JDK path producing either is known from reading the client. An
- *       {@link IllegalArgumentException} thrown synchronously, for a request the client refuses before
- *       sending, is a request-side fault and reaches the caller as thrown.</li>
+ *       {@link CancellationException}, is an {@link IOException} with a fixed text; any other failure of
+ *       the exchange, checked or runtime, an {@link IllegalArgumentException} of another cause included,
+ *       is an {@link IOException} with a fixed text and no chained cause, so each client classifies it
+ *       through its {@link IOException} handling. The wrapped-cancellation, nested-wrapper, checked-cause
+ *       and runtime-failure mappings are defensive: no JDK path producing any of them is known from
+ *       reading the client. An {@link IllegalArgumentException} thrown synchronously, for a request the
+ *       client refuses before sending, is a request-side fault and reaches the caller as thrown.</li>
  *   <li><strong>Wait bounds:</strong> cui-http 3.2's {@link HttpHandler} sets two timeouts and no
  *       other: the connect timeout on the {@link HttpClient} it builds
  *       ({@code HttpClient.Builder.connectTimeout}), and the read timeout as the request timeout in
  *       {@link HttpHandler#requestBuilder()} ({@code HttpRequest.Builder.timeout}). The request timeout
  *       bounds the wait until the response headers arrive. Whether it also bounds the body read that
  *       follows depends on the JDK: on JDK 21 and 25 it was observed not to, on JDK 27 it was observed to,
- *       ending the call with the request-timeout failure. The code relies on the size bound of the body
+ *       ending the call with the request-timeout failure or with the JDK's own failure for the body it cut
+ *       short. The code relies on the size bound of the body
  *       read, not on a time bound: the ceiling this instance was constructed with — the JWT payload
  *       ceiling for the token, PAR, userinfo and revocation clients,
  *       {@link ClientConfiguration#getDiscoveryDocumentMaxSize()} for discovery — see
@@ -169,13 +172,18 @@ public final class BackChannelHttp {
     static final String EXCHANGE_CANCELLED = "the HTTP exchange was cancelled";
 
     /**
-     * Fixed text of the {@link IOException} that replaces a response-side runtime failure of
-     * {@link #exchange}, and wraps a checked, non-I/O failure of it.
+     * Fixed text of the {@link IOException} that replaces every response-side failure of
+     * {@link #exchange} that is none of malformed framing, an {@link IOException}, a
+     * {@link CancellationException} and an {@link Error} — a runtime or a checked cause alike, and a
+     * wrapper chain deeper than the unwrap bound — with no chained cause.
      */
     static final String EXCHANGE_FAILED = "the HTTP exchange failed";
 
-    /** Bound of the cause-chain walk of {@link #isMalformedFraming(Throwable)}. */
-    private static final int MAX_CAUSE_DEPTH = 8;
+    /**
+     * Bound of the cause-chain walk of {@link #isMalformedFraming(Throwable)}, and of the unwrap of nested
+     * {@link CompletionException} and {@link ExecutionException} wrappers in {@link #exchange}.
+     */
+    static final int MAX_CAUSE_DEPTH = 8;
 
     /**
      * Tells whether {@code failure} is the JDK HTTP client's refusal of a response whose
@@ -196,8 +204,9 @@ public final class BackChannelHttp {
      * loop.
      *
      * @param failure the failure of an exchange, as {@link #exchange} passes it: the cause that completed
-     *                the {@link HttpClient#sendAsync} future, unwrapped from its
-     *                {@link ExecutionException} and any {@link CompletionException}; may be {@code null}
+     *                the {@link HttpClient#sendAsync} future, unwrapped from its {@link ExecutionException}
+     *                and from any nested {@link CompletionException} or {@link ExecutionException}, within
+     *                the bound of {@code MAX_CAUSE_DEPTH} levels; may be {@code null}
      * @return {@code true} if it is the malformed {@code Content-Length} refusal
      */
     public static boolean isMalformedFraming(@Nullable Throwable failure) {
@@ -447,9 +456,11 @@ public final class BackChannelHttp {
      * is a malformed response, whether or not the body handler was invoked; an {@link IOException} or
      * {@link Error} failure of the exchange is rethrown as the client reported it; a cancelled wait and a
      * future failed with a wrapped cancellation are an {@link IOException} with a fixed text; any other
-     * runtime failure of the exchange is an {@link IOException} with the fixed text
-     * {@code "the HTTP exchange failed"} and no chained cause. The wrapped-cancellation and runtime-failure
-     * mappings are defensive, no JDK path producing either being known. The
+     * failure of the exchange, checked or runtime, is an {@link IOException} with the fixed text
+     * {@code "the HTTP exchange failed"} and no chained cause. Each of these is decided on the cause
+     * unwrapped from nested {@link CompletionException} and {@link ExecutionException} wrappers within the
+     * bound of {@code MAX_CAUSE_DEPTH} levels. The wrapped-cancellation, nested-wrapper, checked-cause and
+     * runtime-failure mappings are defensive, no JDK path producing any of them being known. The
      * request's timeout, which {@link HttpHandler#requestBuilder()} sets to the configured read timeout,
      * bounds the wait until the response headers arrive; whether it also bounds the body read depends on
      * the JDK (observed: not on JDK 21 and 25, yes on JDK 27), and the body read is bounded in size by the
@@ -461,8 +472,8 @@ public final class BackChannelHttp {
      * @param failureContext a short, caller-safe prefix identifying the endpoint for exception messages
      * @return the response, its body read under the ceiling this instance was constructed with
      * @throws IOException              if the exchange fails, including a body over the ceiling, a request
-     *                                  timeout, a cancelled exchange and a response-side runtime failure
-     *                                  mapped to the fixed text {@code "the HTTP exchange failed"}
+     *                                  timeout, a cancelled exchange and a response-side checked or runtime
+     *                                  failure mapped to the fixed text {@code "the HTTP exchange failed"}
      * @throws InterruptedException     if the calling thread is interrupted before the request is sent,
      *                                  in which case nothing is sent, or while waiting, see {@link #exchange}
      * @throws TransportException       if the HTTP client refuses the response as malformed
@@ -482,9 +493,12 @@ public final class BackChannelHttp {
      * the client refuses is thrown synchronously from {@code sendAsync}, while every failure of the
      * exchange, the response included, completes the returned future exceptionally.
      * <p>
-     * A failure of the future that {@link #isMalformedFraming(Throwable)} recognises — checked on the cause
-     * unwrapped from the {@link ExecutionException} and any {@link CompletionException} — is a response the
-     * client refused as malformed: a {@code Content-Length} that is not a number, which the JDK HTTP/1.1
+     * Every failure of the future is decided on its cause, unwrapped from the {@link ExecutionException} and
+     * from any nested {@link CompletionException} or {@link ExecutionException} below it; the unwrap stops
+     * after {@code MAX_CAUSE_DEPTH} levels, so a cyclic or over-deep wrapper chain cannot loop and ends as the
+     * fixed {@code "the HTTP exchange failed"} failure below. A failure that
+     * {@link #isMalformedFraming(Throwable)} recognises on that cause is a response the client refused as
+     * malformed: a {@code Content-Length} that is not a number, which the JDK HTTP/1.1
      * client parses itself, for a {@code 204} or other no-body reply even before any body handler runs. It is
      * replaced by the exception {@code malformedResponse} supplies; the JDK's exception is neither chained
      * nor reused, because its message carries the raw header value (CWE-117, CWE-532). An
@@ -497,18 +511,17 @@ public final class BackChannelHttp {
      *   <li>a {@link CancellationException} cause is replaced by an {@link IOException} with the fixed text
      *       {@code "the HTTP exchange was cancelled"} and no chained cause, the same text a future cancelled
      *       while waiting raises;</li>
-     *   <li>any other {@link RuntimeException} cause — an {@link IllegalArgumentException} that is not the
-     *       malformed-framing form included — is replaced by an {@link IOException} with the fixed text
-     *       {@code "the HTTP exchange failed"} and no chained cause, because a response-side runtime message
-     *       can carry remote content; only the cause's class name is logged at debug level;</li>
      *   <li>an {@link Error} cause is rethrown as is;</li>
-     *   <li>any other checked cause is wrapped in an {@link IOException} with the fixed text
-     *       {@code "the HTTP exchange failed"}, the cause chained.</li>
+     *   <li>every other cause, checked or runtime — an {@link IllegalArgumentException} that is not the
+     *       malformed-framing form included, and a wrapper left over when the unwrap bound is reached — is
+     *       replaced by an {@link IOException} with the fixed text {@code "the HTTP exchange failed"} and no
+     *       chained cause, because a response-side failure message can carry remote content; only the
+     *       cause's class name is logged at debug level.</li>
      * </ul>
      * <p>
-     * The wrapped-cancellation and runtime-cause mappings are defensive: no JDK path that completes the
-     * future with either shape is known from reading the client, so they guard the caller against a raw
-     * runtime exception rather than map an observed failure.
+     * The wrapped-cancellation, nested-wrapper, checked-cause and runtime-cause mappings are defensive: no JDK
+     * path that completes the future with any of these shapes is known from reading the client, so they
+     * guard the caller against a raw exception or remote text rather than map an observed failure.
      * </p>
      * <p>
      * The wait has no bound of its own. The timeout of {@code request} bounds it until the response headers
@@ -517,8 +530,9 @@ public final class BackChannelHttp {
      * {@link java.net.http.HttpTimeoutException} when no response headers arrive within it. Whether the
      * request timeout also bounds the body read depends on the JDK: on JDK 21 and 25 it was observed not
      * to, so a server that sends the headers and then stalls the body keeps the calling thread waiting; on
-     * JDK 27 it was observed to, so such a call ends with the
-     * {@link java.net.http.HttpTimeoutException}, rethrown as an {@link IOException}. On every JDK the body
+     * JDK 27 it was observed to, so such a call ends with an {@link IOException}: the
+     * {@link java.net.http.HttpTimeoutException} of the request timeout, or the plain {@link IOException} the JDK
+     * reports for the body it cut short, and which of the two arrives varies. On every JDK the body
      * read is bounded in size by {@code bodyHandler} — the {@link BoundedBodyHandler} ceiling on the
      * back-channel path — and that size bound, not a time bound, is what this method relies on.
      * </p>
@@ -539,7 +553,7 @@ public final class BackChannelHttp {
      * @param <T>               the response body type
      * @return the response
      * @throws IOException              if the exchange fails, times out or is cancelled, including a
-     *                                  response-side runtime failure mapped to the fixed text
+     *                                  response-side checked or runtime failure mapped to the fixed text
      *                                  {@code "the HTTP exchange failed"} and a wrapped cancellation mapped
      *                                  to {@code "the HTTP exchange was cancelled"}
      * @throws InterruptedException     if the calling thread is already interrupted on entry, in which case
@@ -574,24 +588,25 @@ public final class BackChannelHttp {
 
     /**
      * Maps the failure of an exchange's future to what {@link #exchange} reaches its caller with, as that
-     * method documents: the cause is unwrapped from {@code failure} and any {@link CompletionException}, a
-     * malformed-framing cause is replaced by the exception {@code malformedResponse} supplies, an
+     * method documents: the cause is unwrapped from {@code failure} and from any nested
+     * {@link CompletionException} or {@link ExecutionException}, for at most {@code MAX_CAUSE_DEPTH} levels;
+     * a malformed-framing cause is replaced by the exception {@code malformedResponse} supplies, an
      * {@link Error} cause is rethrown as is, and every other cause is mapped to the returned
      * {@link IOException}.
      *
      * @param failure           the failure of the exchange's future
      * @param malformedResponse supplies the caller-safe exception that replaces a malformed-framing failure
      * @return the {@link IOException} the caller is to throw: the {@link IOException} cause itself, the
-     *         fixed text {@code "the HTTP exchange was cancelled"} for a wrapped cancellation, the fixed text
-     *         {@code "the HTTP exchange failed"} without a chained cause for a runtime cause, or with the
-     *         cause chained for any other checked cause
+     *         fixed text {@code "the HTTP exchange was cancelled"} for a wrapped cancellation, or the fixed
+     *         text {@code "the HTTP exchange failed"} without a chained cause for every other cause, checked
+     *         or runtime, and for a wrapper chain deeper than the unwrap bound
      * @throws RuntimeException the exception {@code malformedResponse} supplies, for a malformed-framing cause
      * @throws Error            an {@link Error} cause, rethrown as is
      */
     private static IOException exchangeFailure(ExecutionException failure,
             Supplier<? extends RuntimeException> malformedResponse) {
         Throwable cause = failure.getCause();
-        while (cause instanceof CompletionException && cause.getCause() != null) {
+        for (int depth = 0; depth < MAX_CAUSE_DEPTH && isWrapper(cause) && cause.getCause() != null; depth++) {
             cause = cause.getCause();
         }
         if (isMalformedFraming(cause)) {
@@ -606,16 +621,17 @@ public final class BackChannelHttp {
             // Defensive: no JDK path is known to fail the future with a wrapped cancellation.
             return new IOException(EXCHANGE_CANCELLED);
         }
-        if (cause instanceof RuntimeException runtimeException) {
-            // Defensive: deliberately not chained, a response-side runtime message can carry remote content.
-            LOGGER.debug("The HTTP exchange failed with a runtime failure of type %s",
-                    runtimeException.getClass().getName());
-            return new IOException(EXCHANGE_FAILED);
-        }
         if (cause instanceof Error error) {
             throw error;
         }
-        return new IOException(EXCHANGE_FAILED, cause);
+        // Defensive: deliberately not chained, a response-side failure message can carry remote content.
+        LOGGER.debug("The HTTP exchange failed with a failure of type %s",
+                cause == null ? "none" : cause.getClass().getName());
+        return new IOException(EXCHANGE_FAILED);
+    }
+
+    private static boolean isWrapper(@Nullable Throwable failure) {
+        return failure instanceof CompletionException || failure instanceof ExecutionException;
     }
 
     /**

@@ -144,8 +144,8 @@ class HttpJwksLoaderUnknownKidRefreshTest {
     }
 
     @Test
-    @DisplayName("An unchanged key set is discarded without a swap and logged at DEBUG, not as a warning")
-    void shouldDiscardUnchangedKeySet(URIBuilder uriBuilder) throws Exception {
+    @DisplayName("A key set identical to the installed one is discarded without a swap and logged at DEBUG, not as a warning")
+    void shouldDiscardIdenticalKeySet(URIBuilder uriBuilder) throws Exception {
         HttpJwksLoader loader = initializedLoader(configBuilder(uriBuilder).build());
 
         assertTrue(loader.getKeyInfo("invented-kid").isEmpty());

@@ -77,11 +77,11 @@ class TokenLifecycleManagerApplyRefreshTest {
     }
 
     @Nested
-    @DisplayName("A base token the store no longer holds")
+    @DisplayName("A base token that differs from the stored refresh token")
     class StaleBase {
 
         @Test
-        @DisplayName("Should return the newer grant unchanged and keep it stored when a late result derived from an older grant is applied")
+        @DisplayName("Should return the newer grant and keep it stored when a late result derived from an older grant is applied")
         void shouldKeepNewerGrantOnLateExternalResult() {
             String grantA = token();
             String successorOfA = token();
@@ -147,7 +147,7 @@ class TokenLifecycleManagerApplyRefreshTest {
     }
 
     @Nested
-    @DisplayName("A base token the store still holds")
+    @DisplayName("A base token equal to the stored refresh token")
     class MatchingBase {
 
         @Test

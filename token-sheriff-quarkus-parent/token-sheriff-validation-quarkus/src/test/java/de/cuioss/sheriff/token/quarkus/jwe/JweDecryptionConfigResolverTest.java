@@ -387,8 +387,8 @@ class JweDecryptionConfigResolverTest {
     }
 
     @Test
-    @DisplayName("Should keep dotted multi-key discovery unchanged on a SmallRye config")
-    void shouldKeepDottedMultiKeyDiscovery() throws Exception {
+    @DisplayName("Should discover every dotted multi-key entry on a SmallRye config")
+    void shouldDiscoverDottedMultiKeyEntries() throws Exception {
         Path firstPem = createRsaPemFile("dotted-1.pem");
         Path secondPem = createRsaPemFile("dotted-2.pem");
         Config config = new SmallRyeConfigBuilder()

@@ -21,10 +21,14 @@ import de.cuioss.sheriff.token.quarkus.deployment.vetoed.sub.VetoedSubpackageEnd
 import de.cuioss.sheriff.token.quarkus.deployment.vetoeddep.DependencyPackageEndpoint;
 import org.jboss.jandex.CompositeIndex;
 import org.jboss.jandex.Index;
+import org.jboss.jandex.IndexView;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.List;
+import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -34,8 +38,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * ({@link TokenSheriffProcessor#findScopeViolations}) reads, and that the veto covers the {@code @Vetoed} package
  * alone.
  * <p>
- * The build step scans a {@link CompositeIndex} of the bean-archive index and the combined index. A class is
- * read as being in a {@code @Vetoed} package when the composite holds its {@code {package}.package-info} with
+ * The build step scans the index {@link TokenSheriffProcessor#scannedIndex} builds: a {@link CompositeIndex} of the
+ * bean-archive index and the combined index. That method is the composite under test here. A class is read as
+ * being in a {@code @Vetoed} package when the composite holds its {@code {package}.package-info} with
  * {@code @Vetoed}, whichever of the two indexes that {@code package-info} comes from. A subpackage of a
  * {@code @Vetoed} package is not vetoed, as CDI applies a package-level {@code @Vetoed} to the package alone.
  * <p>
@@ -68,6 +73,32 @@ class BearerScopeValidationVetoedPackageBuildStepTest {
         assertTrue(control.getFirst().contains(OVER_BOUND), control.getFirst());
     }
 
+    /**
+     * Each ordering catches one single-index form of {@link TokenSheriffProcessor#scannedIndex}: with the
+     * {@code package-info} in the bean-archive index, returning the combined index alone leaves the class without
+     * its veto; with the {@code package-info} in the combined index, returning the bean-archive index alone does.
+     */
+    @ParameterizedTest(name = "package-info in the {0} only")
+    @EnumSource(PackageInfoIndex.class)
+    @DisplayName("Should veto the class through scannedIndex whichever of the two indexes holds the package-info")
+    void shouldVetoThroughScannedIndexWhicheverIndexHoldsPackageInfo(PackageInfoIndex packageInfoIndex)
+            throws Exception {
+        Index classIndex = Index.of(DependencyPackageEndpoint.class);
+        Index packageInfoOnly = Index.of(packageInfo(DependencyPackageEndpoint.class));
+
+        IndexView scanned = switch (packageInfoIndex) {
+            case BEAN_ARCHIVE_INDEX -> TokenSheriffProcessor.scannedIndex(packageInfoOnly, classIndex);
+            case COMBINED_INDEX -> TokenSheriffProcessor.scannedIndex(classIndex, packageInfoOnly);
+        };
+        List<String> vetoed = TokenSheriffProcessor.findScopeViolations(scanned);
+        List<String> control = TokenSheriffProcessor.findScopeViolations(classIndex);
+
+        assertEquals(List.of(), vetoed,
+                "the package-info of the " + packageInfoIndex + " vetoes the class of the other index: " + vetoed);
+        assertEquals(1, control.size(), "control: the class index alone is refused: " + control);
+        assertTrue(control.getFirst().contains(OVER_BOUND), control.getFirst());
+    }
+
     @Test
     @DisplayName("Should merge a class in a subpackage of a @Vetoed package and refuse it over the bound")
     void shouldMergeClassInSubpackageOfVetoedPackage() throws Exception {
@@ -88,6 +119,16 @@ class BearerScopeValidationVetoedPackageBuildStepTest {
                 NonVetoedWithinBound.class, packageInfo(VetoedPackageEndpoint.class)));
 
         assertEquals(List.of(), violations, "1 class-level scope plus 32 method scopes must not be refused");
+    }
+
+    /** The index of the two {@link TokenSheriffProcessor#scannedIndex} composes that holds the package-info. */
+    enum PackageInfoIndex {
+        BEAN_ARCHIVE_INDEX, COMBINED_INDEX;
+
+        @Override
+        public String toString() {
+            return name().toLowerCase(Locale.ROOT).replace('_', '-');
+        }
     }
 
     private static Class<?> packageInfo(Class<?> classInPackage) throws ClassNotFoundException {

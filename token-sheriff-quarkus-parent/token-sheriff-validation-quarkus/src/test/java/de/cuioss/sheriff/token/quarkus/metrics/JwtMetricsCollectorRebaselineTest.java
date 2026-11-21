@@ -122,7 +122,7 @@ class JwtMetricsCollectorRebaselineTest {
     }
 
     @Test
-    @DisplayName("Update without new events leaves exported totals unchanged")
+    @DisplayName("Update without new events exports nothing further")
     void updateWithoutNewEventsIsNoop() {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         SecurityEventCounter securityEventCounter = new SecurityEventCounter();

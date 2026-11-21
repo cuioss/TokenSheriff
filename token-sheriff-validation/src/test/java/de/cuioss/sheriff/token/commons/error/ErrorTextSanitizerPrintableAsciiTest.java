@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Pins the printable-ASCII escape form {@link ErrorTextSanitizer#escapeNonPrintableAscii(String, int, String)}
  * (OD-4) character class by character class: each escaped class with its exact upper-case rendering, the
- * printable ASCII range kept unchanged, the backslash escaped, the truncation boundary at zero, at the cap
+ * printable ASCII range kept verbatim, the backslash escaped, the truncation boundary at zero, at the cap
  * and one past it, and {@code null}. Every escaped class is paired with a printable neighbour that is kept.
  */
 @DisplayName("ErrorTextSanitizer.escapeNonPrintableAscii renders printable ASCII only")
@@ -106,7 +106,7 @@ class ErrorTextSanitizerPrintableAsciiTest {
     }
 
     @Test
-    @DisplayName("Every printable ASCII character other than the backslash is kept unchanged")
+    @DisplayName("Every printable ASCII character other than the backslash is kept verbatim")
     void shouldKeepPrintableAscii() {
         String printable = IntStream.rangeClosed(0x20, 0x7E)
                 .filter(c -> c != 0x5C)

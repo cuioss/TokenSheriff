@@ -224,7 +224,7 @@ class HttpJwksLoaderExecutorHandOffTest {
     }
 
     @Test
-    @DisplayName("A miss inside a claimed window leaves the guard free; the claim path still holds it")
+    @DisplayName("A miss inside a claimed window leaves the guard free; the claim path holds it")
     void shouldLeaveGuardFreeForMissInsideClaimedWindow(URIBuilder uriBuilder) throws Exception {
         GatedClock gatedClock = new GatedClock();
         HttpJwksLoader loader = initializedLoader(uriBuilder, gatedClock);

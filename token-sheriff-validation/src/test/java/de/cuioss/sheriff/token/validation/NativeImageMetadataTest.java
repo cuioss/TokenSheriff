@@ -242,7 +242,7 @@ class NativeImageMetadataTest {
         }
 
         @Test
-        @DisplayName("Should ignore the condition attribute while still counting real flags")
+        @DisplayName("Should ignore the condition attribute and count the real flags")
         void shouldIgnoreConditionAttribute() {
             JsonArray entries = parseEntries("""
                     [

@@ -169,7 +169,7 @@ class BoundedBodyHandlerCapacityTest {
         private static final long CEILING = 2_000;
 
         @Test
-        @DisplayName("should fail with the unchanged message under FAIL and release the array")
+        @DisplayName("should fail with the over-limit message under FAIL and release the array")
         void shouldFailAtCrossing() {
             AtomicBoolean cancelled = new AtomicBoolean(false);
             BoundedSubscriber subscriber = subscribed(CEILING, OverLimitPolicy.FAIL, cancelled);

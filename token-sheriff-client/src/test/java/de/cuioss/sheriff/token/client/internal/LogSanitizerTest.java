@@ -58,7 +58,7 @@ class LogSanitizerTest {
     }
 
     @Test
-    @DisplayName("Should pass a printable value through unchanged")
+    @DisplayName("Should return a printable value verbatim")
     void shouldPassPrintableThrough() {
         String value = Generators.letterStrings(5, 40).next();
 

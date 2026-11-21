@@ -584,7 +584,7 @@ an isolated-component or server-capability test alone does not qualify the row a
   exception recorded as `FAILED` with its class name only, under the backoff and the stale policy,
   the same recorded instance handed to the winner and a joined caller, and an interrupted refresh
   aborted without writing state, with the joined caller running its own refresh;
-  `CachingDiscoveryResolverRefreshRegressionTest`: a refreshed document with new token and userinfo
+  `CachingDiscoveryResolverRefreshPathTest`: a refreshed document with new token and userinfo
   endpoints reaches the caller after the refresh and not before the TTL, a joined caller of a failed
   refresh receives the `TransportException` with nothing resolved and the stale copy within grace,
   an `Error` in the winner releases the slot and the joined caller re-evaluates, and the recovery

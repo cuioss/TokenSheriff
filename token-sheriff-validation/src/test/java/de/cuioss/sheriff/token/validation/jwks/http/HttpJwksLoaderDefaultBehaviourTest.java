@@ -51,8 +51,9 @@ import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Proves that {@link HttpJwksLoader} behaves as before when neither the unknown-kid refresh window nor
- * the initial-load retry is configured.
+ * Proves that, when neither the unknown-kid refresh window nor the initial-load retry is configured,
+ * {@link HttpJwksLoader} fetches nothing for an unknown kid and retries a failed first load only at the
+ * fixed refresh interval.
  * <p>
  * The proof is taken on the server side: {@link UnknownKidJwksDispatcher} counts every request that
  * actually reaches the JWKS endpoint, so a default that silently fetched would show up regardless of
@@ -63,7 +64,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @EnableTestLogger
 @EnableMockWebServer
 @DisplayName("HttpJwksLoader default behaviour without the opt-in settings")
-class HttpJwksLoaderDefaultBehaviourUnchangedTest {
+class HttpJwksLoaderDefaultBehaviourTest {
 
     private static final String DEFAULT_KID = InMemoryJWKSFactory.DEFAULT_KEY_ID;
     private static final Duration WINDOW = Duration.ofSeconds(30);

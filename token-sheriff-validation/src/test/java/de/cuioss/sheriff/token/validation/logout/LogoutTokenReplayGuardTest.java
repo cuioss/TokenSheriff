@@ -95,7 +95,7 @@ class LogoutTokenReplayGuardTest {
     class Capacity {
 
         @Test
-        @DisplayName("At capacity a new jti is refused as FULL and every live jti is still refused as REPLAYED")
+        @DisplayName("At capacity a new jti is refused as FULL and every live jti is refused as REPLAYED")
         void shouldRefuseWhenFullWithoutEvicting() {
             LogoutTokenReplayGuard guard = new LogoutTokenReplayGuard(3);
             List<String> live = List.of("jti-1", "jti-2", "jti-3");
