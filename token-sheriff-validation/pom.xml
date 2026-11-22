@@ -88,7 +88,7 @@
         <dependency>
             <groupId>com.dslplatform</groupId>
             <artifactId>dsl-json</artifactId>
-            <version>2.0.2</version>
+            <version>2.1.0</version>
         </dependency>
         <!-- JSpecify for nullability annotations -->
         <dependency>
@@ -214,7 +214,7 @@
                         <path>
                             <groupId>com.dslplatform</groupId>
                             <artifactId>dsl-json</artifactId>
-                            <version>2.0.2</version>
+                            <version>2.1.0</version>
                         </path>
                     </annotationProcessorPaths>
                     <release>21</release>

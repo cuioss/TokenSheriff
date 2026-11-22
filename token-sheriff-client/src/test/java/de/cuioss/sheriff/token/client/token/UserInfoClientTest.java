@@ -42,6 +42,7 @@ import org.junit.jupiter.params.provider.ArgumentsSource;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -229,7 +230,7 @@ class UserInfoClientTest {
         assertAll("declared parse failure",
                 () -> assertTrue(thrown.getMessage().startsWith("Failed to parse userinfo endpoint response"),
                         thrown.getMessage()),
-                () -> assertInstanceOf(ArrayIndexOutOfBoundsException.class, thrown.getCause(),
+                () -> assertInstanceOf(IOException.class, thrown.getCause(),
                         "the truncated-escape parse failure must be carried as the cause"));
     }
 
