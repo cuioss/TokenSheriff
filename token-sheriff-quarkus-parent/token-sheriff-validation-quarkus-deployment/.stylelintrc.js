@@ -146,7 +146,6 @@ export default {
     'max-nesting-depth': 3,
     'selector-max-id': 0,
     'selector-max-universal': 1,
-    'declaration-block-single-line-max-declarations': 1,
     
     // CSS quality rules
     'declaration-property-value-no-unknown': true,
