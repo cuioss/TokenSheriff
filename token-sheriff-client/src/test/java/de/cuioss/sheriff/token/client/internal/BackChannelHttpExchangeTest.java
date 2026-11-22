@@ -47,15 +47,15 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests every branch of {@link BackChannelHttp#exchange}: the wait on the {@link HttpClient#sendAsync} future
- * and the mapping of the way that future ends.
+ * Tests the wait of {@link BackChannelHttp#exchange} on the {@link HttpClient#sendAsync} future and the
+ * mapping of the ways that future ends that are not pinned elsewhere; together with
+ * {@link BackChannelHttpExchangeFailureMappingTest} it covers every branch of {@code exchange}.
  * <p>
  * The branch tests drive {@code exchange} through {@link StubHttpClient}, whose {@code sendAsync} returns a
  * future the test prepared, so each outcome — a response, a failure cause, a cancellation, an incomplete future
@@ -63,7 +63,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * cancellation, of a cause below a nested {@link java.util.concurrent.ExecutionException} and of a wrapper
  * chain deeper than the unwrap bound is pinned by {@link BackChannelHttpExchangeFailureMappingTest}; this
  * class holds the positive controls for a response, the malformed-framing forms, an {@link IOException} and
- * an {@link Error} cause and a directly cancelled future. The request-timeout tests use a loopback server socket that accepts the
+ * an {@link Error} cause, nested {@link CompletionException}s around an {@link IOException}, a directly
+ * cancelled future and the interrupted and the completed wait. The request-timeout tests use a loopback server socket that accepts the
  * connection in its backlog and never sends response headers, so the wait of every endpoint client for the
  * headers ends only through the request's timeout. They cover the headers phase only; whether the request
  * timeout also bounds the body read that follows the headers depends on the JDK and is observed by
@@ -136,19 +137,6 @@ class BackChannelHttpExchangeTest {
         IOException thrown = assertThrows(IOException.class, () -> exchange(future));
 
         assertSame(cause, thrown, "The innermost cause reaches the caller, not a CompletionException");
-    }
-
-    @Test
-    @DisplayName("should map a checked cause that is not an IOException to an IOException with a fixed text and no cause")
-    void shouldMapCheckedCauseToFixedIOExceptionWithoutCause() {
-        TimeoutException cause = new TimeoutException("checked failure");
-        CompletableFuture<HttpResponse<String>> future = failedWith(cause);
-
-        IOException thrown = assertThrows(IOException.class, () -> exchange(future));
-
-        assertAll("Checked cause",
-                () -> assertEquals(BackChannelHttp.EXCHANGE_FAILED, thrown.getMessage(), "The text is fixed"),
-                () -> assertNull(thrown.getCause(), "The checked cause is not chained"));
     }
 
     static Stream<Arguments> malformedFramingForms() {

@@ -19,18 +19,26 @@ import de.cuioss.sheriff.token.quarkus.annotation.BearerAuth;
 import de.cuioss.sheriff.token.quarkus.deployment.vetoed.VetoedPackageEndpoint;
 import de.cuioss.sheriff.token.quarkus.deployment.vetoed.sub.VetoedSubpackageEndpoint;
 import de.cuioss.sheriff.token.quarkus.deployment.vetoeddep.DependencyPackageEndpoint;
+import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
+import io.quarkus.arc.deployment.ValidationPhaseBuildItem.ValidationErrorBuildItem;
+import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
+import jakarta.enterprise.inject.spi.DeploymentException;
 import org.jboss.jandex.CompositeIndex;
 import org.jboss.jandex.Index;
 import org.jboss.jandex.IndexView;
+import org.jboss.jandex.Indexer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -43,6 +51,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * being in a {@code @Vetoed} package when the composite holds its {@code {package}.package-info} with
  * {@code @Vetoed}, whichever of the two indexes that {@code package-info} comes from. A subpackage of a
  * {@code @Vetoed} package is not vetoed, as CDI applies a package-level {@code @Vetoed} to the package alone.
+ * The build step itself is driven with a {@code BeanArchiveIndexBuildItem} and a {@code CombinedIndexBuildItem}
+ * as well, so its call of {@link TokenSheriffProcessor#scannedIndex} is pinned, not only that method.
  * <p>
  * Every fixture over the bound declares 33 class-level and 32 method-level scopes, within the bound alone and
  * over it only when merged, so a refusal shows that the check took the class for a bean class.
@@ -97,6 +107,53 @@ class BearerScopeValidationVetoedPackageBuildStepTest {
                 "the package-info of the " + packageInfoIndex + " vetoes the class of the other index: " + vetoed);
         assertEquals(1, control.size(), "control: the class index alone is refused: " + control);
         assertTrue(control.getFirst().contains(OVER_BOUND), control.getFirst());
+    }
+
+    /**
+     * Pins the call site in {@link TokenSheriffProcessor#validateAnnotationScopes}: the build step, driven with its
+     * two index build items, reads the package veto across both, so replacing {@link TokenSheriffProcessor#scannedIndex}
+     * there by either index alone fails one ordering. The negative control runs the same step with the
+     * {@code package-info} left out, which produces the deployment error.
+     */
+    @ParameterizedTest(name = "package-info in the {0} item only")
+    @EnumSource(PackageInfoIndex.class)
+    @DisplayName("Should produce no validation error from the build step whichever index item holds the package-info")
+    void shouldProduceNoValidationErrorWhicheverBuildItemHoldsPackageInfo(PackageInfoIndex packageInfoIndex)
+            throws Exception {
+        Index classIndex = Index.of(DependencyPackageEndpoint.class);
+        Index packageInfoOnly = Index.of(packageInfo(DependencyPackageEndpoint.class));
+        Index empty = new Indexer().complete();
+
+        List<ValidationErrorBuildItem> vetoed = runStepWithOtherIndex(packageInfoIndex, packageInfoOnly, classIndex);
+        List<ValidationErrorBuildItem> control = runStepWithOtherIndex(packageInfoIndex, empty, classIndex);
+
+        assertEquals(List.of(), vetoed,
+                "the package-info of the " + packageInfoIndex + " item vetoes the class of the other item");
+        assertEquals(1, control.size(), "control: without the package-info the step produces one error item");
+        List<Throwable> errors = control.getFirst().getValues();
+        assertEquals(1, errors.size(), "control: exactly the merge in the bean class: " + errors);
+        assertInstanceOf(DeploymentException.class, errors.getFirst());
+        assertTrue(errors.getFirst().getMessage().contains(OVER_BOUND), errors.getFirst().getMessage());
+    }
+
+    /**
+     * Runs {@link TokenSheriffProcessor#validateAnnotationScopes} with {@code packageInfoSide} in the index item
+     * {@code packageInfoIndex} names and {@code classIndex} in the other one, and returns the produced items.
+     */
+    private static List<ValidationErrorBuildItem> runStepWithOtherIndex(PackageInfoIndex packageInfoIndex,
+            Index packageInfoSide, Index classIndex) {
+        return switch (packageInfoIndex) {
+            case BEAN_ARCHIVE_INDEX -> runStep(packageInfoSide, classIndex);
+            case COMBINED_INDEX -> runStep(classIndex, packageInfoSide);
+        };
+    }
+
+    private static List<ValidationErrorBuildItem> runStep(Index beanArchiveIndex, Index combinedIndex) {
+        List<ValidationErrorBuildItem> produced = new ArrayList<>();
+        new TokenSheriffProcessor().validateAnnotationScopes(null,
+                new BeanArchiveIndexBuildItem(beanArchiveIndex, beanArchiveIndex, Set.of()),
+                new CombinedIndexBuildItem(combinedIndex, combinedIndex), produced::add);
+        return produced;
     }
 
     @Test
