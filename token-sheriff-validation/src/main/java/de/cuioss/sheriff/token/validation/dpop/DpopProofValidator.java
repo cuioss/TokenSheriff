@@ -269,9 +269,8 @@ public class DpopProofValidator {
             headerMap = MapRepresentation.fromJson(dslJson, headerBytes);
             bodyMap = MapRepresentation.fromJson(dslJson, bodyBytes);
         } catch (IllegalArgumentException | IOException | ArrayIndexOutOfBoundsException e) {
-            // The JSON library can signal malformed input with an unchecked exception outside its
-            // declared IOException contract, so the read is also guarded against it. Both take the same
-            // rejection.
+            // The catch also covers an ArrayIndexOutOfBoundsException, which is outside the library's
+            // declared IOException contract. Both take the same rejection.
             // A DSL-JSON parse error quotes the client-supplied proof bytes around the failure position;
             // rejectWith neutralizes the whole message against log injection (CWE-117) before it is
             // logged or thrown, so it is not sanitised here a second time.

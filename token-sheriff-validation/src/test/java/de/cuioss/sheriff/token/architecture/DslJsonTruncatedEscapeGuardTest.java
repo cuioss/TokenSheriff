@@ -32,15 +32,17 @@ import java.util.regex.Pattern;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Keeps every DSL-JSON read in the production sources inside a catch that covers
+ * Keeps every DSL-JSON read site the detector finds inside a catch that covers
  * {@link ArrayIndexOutOfBoundsException}.
  * <p>
- * The JSON library can signal malformed input with an unchecked exception outside the
- * {@link IOException} contract its API declares. A read guarded only by {@code catch (IOException e)}
- * would let an attacker-shaped body escape as an undeclared unchecked exception, so every read is also
- * guarded against it. A payload truncated inside a string escape — a trailing lone backslash, a
- * cut-off unicode escape — is reported as a {@code ParsingException}, which is an {@link IOException}.
- * This guard keeps a read without that defensive catch from landing.
+ * An {@link ArrayIndexOutOfBoundsException} from the JSON library is outside the {@link IOException}
+ * contract its API declares. A read guarded only by {@code catch (IOException e)} would let it escape
+ * as an undeclared unchecked exception, so each read site also catches it. A payload truncated inside
+ * a string escape — a trailing lone backslash, a cut-off unicode escape — is reported as a
+ * {@code ParsingException}, which is an {@link IOException}. This guard keeps a read site without that
+ * defensive catch from landing. It checks the call that opens the read, not what is done with a reader
+ * afterwards: a {@code newReader(...)} site counts as covered when its own method holds it inside such
+ * a {@code try}, even if the returned reader is used outside it.
  * <p>
  * <strong>What is scanned.</strong> The {@code src/main/java} tree of every module in the repository, as
  * source text — the client module is not on this module's test classpath, so a bytecode scan could not

@@ -267,10 +267,10 @@ public class UserInfoClient {
             }
             return userInfo;
         } catch (IOException | ArrayIndexOutOfBoundsException e) {
-            // The JSON library can signal malformed input with an unchecked exception outside its
-            // declared IOException contract, so the read is also guarded against it. A body truncated
-            // inside a string escape is reported as a ParsingException (an IOException). Both take the
-            // same TransportException, as in TokenEndpointClient.deserialize.
+            // The catch also covers an ArrayIndexOutOfBoundsException, which is outside the library's
+            // declared IOException contract. A body truncated inside a string escape is reported as a
+            // ParsingException (an IOException). Both take the same TransportException, as in
+            // TokenEndpointClient.deserialize.
             // The parse-error message can echo an AS-controlled JSON fragment; sanitize it (CWE-117)
             // before it reaches the log appender or the exception message.
             String sanitizedError = LogSanitizer.sanitize(e.getMessage());

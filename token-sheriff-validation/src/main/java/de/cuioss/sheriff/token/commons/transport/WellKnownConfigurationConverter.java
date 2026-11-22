@@ -137,10 +137,9 @@ class WellKnownConfigurationConverter implements HttpResponseConverter<WellKnown
             return Optional.of(config);
 
         } catch (IOException | ArrayIndexOutOfBoundsException e) {
-            // The JSON library can signal malformed input with an unchecked exception outside its
-            // declared IOException contract, so the read is also guarded against it. Both take the same
-            // path; the message of such an exception never matches a security-limit pattern, so it lands
-            // on the plain parse failure.
+            // The catch also covers an ArrayIndexOutOfBoundsException, which is outside the library's
+            // declared IOException contract. Both take the same path; the message of such an exception
+            // never matches a security-limit pattern, so it lands on the plain parse failure.
             // A DSL-JSON parse error echoes excerpts of the remote document, so the message is
             // neutralized against log injection (CWE-117) before it is logged or put into an exception
             String errorMessage = ErrorTextSanitizer.sanitize(e.getMessage());

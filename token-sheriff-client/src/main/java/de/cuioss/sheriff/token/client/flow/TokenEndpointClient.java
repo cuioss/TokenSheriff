@@ -513,11 +513,10 @@ public class TokenEndpointClient {
                 reader.getNextToken();
             }
         } catch (IOException | ArrayIndexOutOfBoundsException e) {
-            // The JSON library can signal malformed input with an unchecked exception outside its declared
-            // IOException contract, so the read is also guarded against it. A body truncated inside a
-            // string escape is reported as a ParsingException (an IOException). The description is
-            // optional, so an unreadable one is dropped; the message can echo an AS-controlled fragment,
-            // so it is sanitized (CWE-117).
+            // The catch also covers an ArrayIndexOutOfBoundsException, which is outside the library's
+            // declared IOException contract. A body truncated inside a string escape is reported as a
+            // ParsingException (an IOException). The description is optional, so an unreadable one is
+            // dropped; the message can echo an AS-controlled fragment, so it is sanitized (CWE-117).
             LOGGER.debug("Failed to read the token endpoint error_description: %s",
                     LogSanitizer.sanitize(e.getMessage()));
             return null;

@@ -96,9 +96,9 @@ public class JwksParser {
             }
             jwksParsed = jwks != null;  // Remember if we parsed a JWKS structure
         } catch (IOException | ArrayIndexOutOfBoundsException e) {
-            // JSON syntax error - continue to try single JWK parsing. The JSON library can signal
-            // malformed input with an unchecked exception outside its declared IOException contract, so
-            // the read is also guarded against it; it is the same malformed-input condition.
+            // JSON syntax error - continue to try single JWK parsing. The catch also covers an
+            // ArrayIndexOutOfBoundsException, which is outside the library's declared IOException
+            // contract; it is the same malformed-input condition.
         }
 
         // Design Decision: bare JWK fallback retained for real-world interoperability.
@@ -113,8 +113,8 @@ public class JwksParser {
                 return result;
             }
         } catch (IOException | ArrayIndexOutOfBoundsException e) {
-            // If both parsers failed on malformed input, it's invalid JSON. An unchecked exception from
-            // the JSON library is handled the same way as an IOException.
+            // If both parsers failed on malformed input, it's invalid JSON. An ArrayIndexOutOfBoundsException
+            // from the JSON library is handled the same way as an IOException.
             // A DSL-JSON parse error echoes excerpts of the (possibly remote) JWKS, so the message is
             // neutralized against log injection (CWE-117) before it is logged
             LOGGER.error(JWTValidationLogMessages.ERROR.JWKS_INVALID_JSON, ErrorTextSanitizer.sanitize(e.getMessage()));
