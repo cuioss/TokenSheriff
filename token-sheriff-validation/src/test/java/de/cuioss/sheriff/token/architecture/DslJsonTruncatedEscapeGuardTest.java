@@ -32,15 +32,17 @@ import java.util.regex.Pattern;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Keeps every DSL-JSON read in the production sources inside a catch that covers
+ * Keeps every DSL-JSON read site the detector finds inside a catch that covers
  * {@link ArrayIndexOutOfBoundsException}.
  * <p>
- * DSL-JSON reports a payload truncated inside a string escape — a trailing lone backslash, a cut-off
- * unicode escape — by reading past the end of its buffer, i.e. as an
- * {@link ArrayIndexOutOfBoundsException} rather than the {@link IOException} its API declares. A read
- * guarded only by {@code catch (IOException e)} therefore lets an attacker-shaped body escape as an
- * undeclared unchecked exception. Every site found so far was fixed by hand; this guard keeps the next
- * one from landing.
+ * An {@link ArrayIndexOutOfBoundsException} from the JSON library is outside the {@link IOException}
+ * contract its API declares. A read guarded only by {@code catch (IOException e)} would let it escape
+ * as an undeclared unchecked exception, so each read site also catches it. A payload truncated inside
+ * a string escape — a trailing lone backslash, a cut-off unicode escape — is reported as a
+ * {@code ParsingException}, which is an {@link IOException}. This guard keeps a read site without that
+ * defensive catch from landing. It checks the call that opens the read, not what is done with a reader
+ * afterwards: a {@code newReader(...)} site counts as covered when its own method holds it inside such
+ * a {@code try}, even if the returned reader is used outside it.
  * <p>
  * <strong>What is scanned.</strong> The {@code src/main/java} tree of every module in the repository, as
  * source text — the client module is not on this module's test classpath, so a bytecode scan could not
@@ -61,7 +63,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * both directions, and every {@link #EXEMPT} entry must still excuse a live uncovered site — so an
  * exemption made obsolete by a fix fails here until the entry is removed.
  */
-@DisplayName("Every DSL-JSON read catches the ArrayIndexOutOfBoundsException a truncated escape raises")
+@DisplayName("Every DSL-JSON read is guarded against an unchecked exception from the reader")
 class DslJsonTruncatedEscapeGuardTest {
 
     /** Reason category: the read propagates to callers that each catch the exception themselves. */
@@ -93,7 +95,7 @@ class DslJsonTruncatedEscapeGuardTest {
             Map.entry("de.cuioss.sheriff.token.client.flow.TokenEndpointClient#duplicateTopLevelMember",
                     BROAD_FOLD + " — the newReader walk over the top-level member names"));
 
-    /** Catch types that cover the truncated-escape failure. */
+    /** Catch types that count as covering an unchecked exception raised by the reader. */
     private static final Set<String> NARROW_CATCH_TYPES = Set.of(
             "ArrayIndexOutOfBoundsException", "IndexOutOfBoundsException");
 
@@ -174,9 +176,10 @@ class DslJsonTruncatedEscapeGuardTest {
         }
         assertTrue(uncovered.isEmpty(),
                 "DSL-JSON reads with no catch covering ArrayIndexOutOfBoundsException in their enclosing"
-                        + " method: " + uncovered + ". DSL-JSON raises that exception, not IOException, for a"
-                        + " payload truncated inside a string escape. Add ArrayIndexOutOfBoundsException to the"
-                        + " catch around the read (it is the same malformed-input condition). A broad"
+                        + " method: " + uncovered + ". The JSON library can signal malformed input with an"
+                        + " unchecked exception outside its declared IOException contract. Add"
+                        + " ArrayIndexOutOfBoundsException to the catch around the read (it is the same"
+                        + " malformed-input condition). A broad"
                         + " RuntimeException catch counts only as a listed EXEMPT entry with its reason.");
     }
 

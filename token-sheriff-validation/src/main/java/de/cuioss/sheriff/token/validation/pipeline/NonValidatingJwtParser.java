@@ -425,8 +425,9 @@ public class NonValidatingJwtParser {
         } catch (TokenValidationException e) {
             throw e;
         } catch (IOException | ArrayIndexOutOfBoundsException e) {
-            // A truncated escape in the JWE header surfaces from DSL-JSON as
-            // ArrayIndexOutOfBoundsException; it is rejected exactly like any other malformed header.
+            // The catch also covers an ArrayIndexOutOfBoundsException, which is outside the library's
+            // declared IOException contract; the JWE header is rejected exactly like any other malformed
+            // header.
             // DSL-JSON's parse-error message quotes the raw input around the failure position,
             // i.e. unauthenticated header bytes including CR/LF (CWE-117). Neither the WARN nor
             // the exception message may carry it; the cause chain keeps it for callers that
@@ -559,9 +560,8 @@ public class NonValidatingJwtParser {
 
             return new DecodedJwt(header, body, signature, parts, token);
         } catch (IOException | ArrayIndexOutOfBoundsException e) {
-            // DSL-JSON reports a truncated escape (a trailing lone backslash, a cut-off unicode escape) by
-            // reading past the end of its buffer, i.e. as ArrayIndexOutOfBoundsException rather than
-            // IOException; it is the same malformed-input condition and takes the same rejection.
+            // The catch also covers an ArrayIndexOutOfBoundsException, which is outside the library's
+            // declared IOException contract. Both take the same rejection.
             // IOException from DSL-JSON deserialization. Its message quotes the raw input around
             // the failure position, i.e. unauthenticated header/payload bytes including CR/LF
             // (CWE-117). Neither the WARN nor the exception message may carry it; the cause chain

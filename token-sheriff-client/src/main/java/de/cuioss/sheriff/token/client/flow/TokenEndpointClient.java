@@ -513,9 +513,10 @@ public class TokenEndpointClient {
                 reader.getNextToken();
             }
         } catch (IOException | ArrayIndexOutOfBoundsException e) {
-            // DSL-JSON signals a body truncated inside a string escape with ArrayIndexOutOfBoundsException
-            // rather than IOException. The description is optional, so an unreadable one is dropped; the
-            // message can echo an AS-controlled fragment, so it is sanitized (CWE-117).
+            // The catch also covers an ArrayIndexOutOfBoundsException, which is outside the library's
+            // declared IOException contract. A body truncated inside a string escape is reported as a
+            // ParsingException (an IOException). The description is optional, so an unreadable one is
+            // dropped; the message can echo an AS-controlled fragment, so it is sanitized (CWE-117).
             LOGGER.debug("Failed to read the token endpoint error_description: %s",
                     LogSanitizer.sanitize(e.getMessage()));
             return null;
@@ -765,14 +766,15 @@ public class TokenEndpointClient {
 
     /**
      * The single JSON deserialize seam for every authorization-server-controlled payload this client
-     * reads. DSL-JSON reports some malformed input — for example a body truncated inside a string
-     * escape, i.e. ending in a backslash within an unterminated string — with an unchecked exception (an
-     * {@link ArrayIndexOutOfBoundsException}) instead of a parse error. That exception is folded into
-     * the {@link IOException} every call site already handles, so an unreadable payload always takes
-     * the site's existing parse-failure path and never escapes the documented
+     * reads. The JSON library can signal malformed input with an unchecked exception outside its
+     * declared {@link IOException} contract, so the read is also guarded against it. Such an exception
+     * is folded into the {@link IOException} every call site already handles, so an unreadable payload
+     * always takes the site's parse-failure path and never escapes the documented
      * {@link TransportException} / {@link RedeemedResponseException} contract after the grant was
-     * redeemed. The fold changes no acceptance decision: input the library reads is returned as before.
-     * The wrapping message is fixed text only; the cause is attached.
+     * redeemed. A body truncated inside a string escape is reported by the library as a
+     * {@code ParsingException}, which already is an {@link IOException}. The fold changes no acceptance
+     * decision: input the library reads is returned unchanged. The wrapping message is fixed text only;
+     * the cause is attached.
      *
      * @return the deserialized value, or {@code null} when the payload is the JSON literal {@code null}
      * @throws IOException when the payload cannot be read as {@code type}, whether the library signalled
@@ -785,9 +787,10 @@ public class TokenEndpointClient {
         }
         // cui-rewrite:disable InvalidExceptionUsageRecipe
         catch (RuntimeException e) {
-            // Deliberate broad catch: the JSON library signals a payload it cannot read with unchecked
-            // exceptions that are not part of its contract (a body cut off inside a string escape throws
-            // ArrayIndexOutOfBoundsException), so no specific type can be named without leaving a hole.
+            // Deliberate broad catch: the JSON library can signal a payload it cannot read with an
+            // unchecked exception outside its declared IOException contract, so no specific type can be
+            // named without leaving a hole. A body cut off inside a string escape is reported as a
+            // ParsingException (an IOException).
             throw new IOException("Unreadable JSON (" + e.getClass().getSimpleName() + ")", e);
         }
     }
