@@ -236,6 +236,12 @@ public final class ParserConfig {
      * Quarkus dev mode this artifact is loaded by a Quarkus class loader instead. Through the context class
      * loader no converter would be found, and a JWKS parsed through the instance would fail with
      * {@code TokenSheriff-141}.
+     * <p>
+     * The lookup finds only the converters the class loader of this class can see. That covers a
+     * {@code token-sheriff-client} type parsed through this instance as long as the client artifact is loaded by
+     * the same class loader as this one or by one this loader delegates to; in a Quarkus extension boot test both
+     * artifacts share one class loader. A client type loaded by a class loader this one does not see would find no
+     * converter through this instance; that case is not covered by this lookup.
      *
      * @return a DslJson instance configured with security settings and compile-time mapping
      */
