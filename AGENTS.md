@@ -327,7 +327,10 @@ its broad catch is deliberate, and these are all the forms the tree holds:
 - **Release steps that must all run.** `TokenValidator` catches `Throwable` around the `Runnable`
   release steps of `close()`, so every step runs after any failure, and rethrows the last failure
   unwrapped once they have run, with each earlier distinct failure attached as suppressed. An earlier
-  failure that is the same instance as the propagated one is not attached to itself.
+  failure that is the same instance as the propagated one is not attached to itself. One unit-test
+  fixture follows the same rule: `RawHttpServer.closeRecordingFailure` catches
+  `IOException | RuntimeException` around each `Closeable.close()` release step of the fixture's
+  `close()`, so an unchecked failure of one close is recorded instead of skipping the next step.
 - **A test that funnels an unanticipated failure into its own report**: the integration tests
   `RefreshProductionPathSpecIT` and `RefreshConcurrentRedemptionSpecIT`, whose engine failure mode is
   not known in advance, and one unit-test fixture, `CachingDiscoveryResolverSupport`, whose caller
