@@ -278,7 +278,7 @@ class RawHttpServerTest {
     }
 
     @Test
-    @DisplayName("should still close the served connection and rethrow when closing the server socket fails unchecked")
+    @DisplayName("should close the served connection and rethrow when closing the server socket fails unchecked")
     void shouldCloseConnectionAndRethrowWhenServerSocketCloseFailsUnchecked() throws Exception {
         IllegalStateException serverSocketFailure = new IllegalStateException("closing the server socket failed");
         UncheckedClosingServerSocket serverSocket = new UncheckedClosingServerSocket(serverSocketFailure);
