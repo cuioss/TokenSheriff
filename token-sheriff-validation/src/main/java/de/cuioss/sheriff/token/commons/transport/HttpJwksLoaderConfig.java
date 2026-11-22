@@ -213,12 +213,8 @@ public class HttpJwksLoaderConfig {
     private final int maxRetiredKeySets;
 
     /**
-     * The parser configuration for JSON parsing (DSL-JSON).
-     * <p>
-     * This is pre-initialized on the caller's thread to ensure the correct
-     * classloader is used for ServiceLoader discovery, avoiding issues with
-     * ForkJoinPool threads that may have a different classloader context
-     * (e.g., in NiFi's NAR classloading model).
+     * The parser configuration for JSON parsing (DSL-JSON), shared by the JWKS content parsing and the
+     * well-known discovery parsing.
      */
     @Getter
     @EqualsAndHashCode.Exclude
@@ -675,17 +671,16 @@ public class HttpJwksLoaderConfig {
         }
 
         /**
-         * Sets a pre-initialized ParserConfig for JSON parsing.
+         * Sets the ParserConfig for JSON parsing.
          * <p>
-         * When set, this ParserConfig will be used for both JWKS content parsing
-         * and well-known discovery parsing, avoiding ServiceLoader calls on
-         * ForkJoinPool threads that may have the wrong classloader.
+         * When set, this ParserConfig is shared by the JWKS content parsing and the well-known
+         * discovery parsing.
          * </p>
          * <p>
          * If not set, a default ParserConfig will be created during {@link #build()}.
          * </p>
          *
-         * @param parserConfig the pre-initialized parser configuration
+         * @param parserConfig the parser configuration
          * @return this builder instance
          */
         public HttpJwksLoaderConfigBuilder parserConfig(ParserConfig parserConfig) {

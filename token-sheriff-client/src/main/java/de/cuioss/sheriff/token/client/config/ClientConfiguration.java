@@ -178,13 +178,13 @@ public class ClientConfiguration {
      * request timeout: cui-http 3.2's {@code HttpHandler.requestBuilder()} sets it through
      * {@code HttpRequest.Builder.timeout(Duration)}, and the JDK client fails the exchange with an
      * {@code HttpTimeoutException} when the response headers have not arrived within it. It bounds the
-     * wait until the response headers arrive on JDK 21, 25 and 27; whether it also bounds the body read that
-     * follows depends on the JDK: on JDK 21 and 25 it was observed not to, on JDK 27 it was observed to.
-     * The code therefore does not rely on a time bound for the body read; it relies on the size bound,
-     * the ceiling of the endpoint called — the JWT payload ceiling
+     * wait until the response headers arrive on JDK 21, 25 and 27. On JDK 21 and 25 the request timeout
+     * was observed not to bound a body that stalls after the response headers; on JDK 27 it was observed
+     * to, so such a call ends with the request-timeout failure or with the JDK's own {@code IOException}
+     * for the body it cut short. The code therefore does not rely on a time bound for the body read; it
+     * relies on the size bound, the ceiling of the endpoint called — the JWT payload ceiling
      * ({@code ParserConfig.getMaxPayloadSize()}) for the token, PAR, userinfo and revocation calls,
-     * {@link #discoveryDocumentMaxSize} for discovery. On a JDK that bounds the body read, a body that
-     * stalls past the timeout ends the call with the {@code HttpTimeoutException}. Defaults to
+     * {@link #discoveryDocumentMaxSize} for discovery. Defaults to
      * {@value #DEFAULT_READ_TIMEOUT_SECONDS} seconds. Configurable for the same reason as
      * {@link #connectTimeoutSeconds} (L15).
      */
