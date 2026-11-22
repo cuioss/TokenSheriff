@@ -42,7 +42,7 @@ github-automation:
 consumers:
   - nifi-extensions:version.token-sheriff
   - API-Sheriff:version.token-sheriff
-  - TrailHand:version.token-sheriff
+  - Audit-Notary:version.token-sheriff
 
 dependency-propagation:
   group-id: de.cuioss.sheriff.token
