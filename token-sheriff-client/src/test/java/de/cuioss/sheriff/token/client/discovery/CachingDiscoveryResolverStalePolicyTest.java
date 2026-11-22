@@ -198,7 +198,7 @@ class CachingDiscoveryResolverStalePolicyTest {
     }
 
     @Test
-    @DisplayName("Should keep failing without a fetch within the interval when nothing was ever resolved")
+    @DisplayName("Should fail every call within the interval without a fetch when nothing was ever resolved")
     void shouldThrowWithinIntervalWithoutFetch(URIBuilder uriBuilder) {
         moduleDispatcher.returnError();
         var resolver = resolver(uriBuilder, GRACE, Duration.ofMinutes(1));
