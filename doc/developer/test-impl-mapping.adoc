@@ -54,7 +54,9 @@ parser is `InsufficientScopeChallengeRoundTripTest` in token-sheriff-client (`cl
 `WellKnownConfigurationConverterTest`, `WellKnownResultConverterTest`,
 `WellKnownResultMappingTest`; `ParserConfig` parsing a JWKS in a booted Quarkus application is
 `JwksParserConfigBootTest` in token-sheriff-validation-quarkus-deployment (`deployment` row, test package
-`quarkus.deployment`), because a Quarkus boot test needs the extension's deployment class path
+`quarkus.deployment`), because a Quarkus boot test needs the extension's deployment class path;
+`ParserConfig` parsing a client `@CompiledJson` type in a booted application is
+`ClientCompiledJsonParserConfigBootTest` in token-sheriff-client-quarkus-deployment (`deployment` row)
 
 |`validation`
 |`ClientConfusionAttackTest`, `CustomClaimMapperTest`, `DSLJsonSecurityTest`,
@@ -165,7 +167,7 @@ the attack tests `EmbeddedJwkAttackTest`, `JkuX5uAttackTest`,
 The test package `validation.test` and its sub-packages hold the shared test infrastructure:
 token generators, key material, tamper utilities and the MockWebServer dispatchers. Its own
 tests check that infrastructure, not production code: `InMemoryKeyHandlingTest`,
-`JwtTokenTamperingUtilReproductionTest`, `JwtTokenTamperingUtilTest`, `TestTokenHolderTest`,
+`JwtTokenTamperingUtilDecodedSignatureTest`, `JwtTokenTamperingUtilTest`, `TestTokenHolderTest`,
 `EndpointDispatchersTest` (`test.dispatcher`), `ClaimValueGeneratorTest`,
 `TestTokenGeneratorsTest`, `TokenSecurityPropertiesTest` (`test.generator`) and
 `TestTokenSourceProviderTest` (`test.junit`).
@@ -417,7 +419,10 @@ Package prefix: `de.cuioss.sheriff.token.client.quarkus`.
 |Production package |Test classes
 
 |`deployment`
-|`DefaultBeanReplacementTest`, `DiscoveryCacheDisabledNoInjectionDeploymentTest`,
+|`ClientCompiledJsonParserConfigBootTest` (boots `ParserConfig` of token-sheriff-validation,
+`commons.transport` row, with a client `@CompiledJson` type: it lives here because the validation
+deployment module has no client on its class path), `DefaultBeanReplacementTest`,
+`DiscoveryCacheDisabledNoInjectionDeploymentTest`,
 `DiscoveryCacheDisabledRemovedInjectionDeploymentTest`,
 `DiscoveryCacheEnabledInjectionDeploymentTest`, `DiscoveryCacheInjectionDeploymentTest`,
 `TokenSheriffClientProcessorTest`

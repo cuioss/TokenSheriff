@@ -52,10 +52,12 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>
  * The discovery, PAR, revocation and userinfo clients are built through their public constructors and sent
  * to a {@link RawHttpServer} that answers {@code 200} with a {@code Content-Length} larger than the body it
- * sends before closing the connection, so the exchange fails with an {@link IOException} after the status:
- * each client reports a {@link TransportException} with its failure context and that {@link IOException} as
- * cause. The positive control is the same server answering a complete body, which gives the client's normal
- * result. Every client reaches the loopback server through the configured back-channel origin, so the
+ * sends before closing the connection. That case is a characterisation of the JDK: the exchange fails with the
+ * JDK's own premature-EOF {@link IOException} after the status, which the back channel passes on as it is, and
+ * each client reports a {@link TransportException} with its failure context and that {@link IOException}, not
+ * the back channel's fixed text, as cause. It does not exercise the fixed-text mapping of the back channel,
+ * which the token endpoint cases above and the {@code BackChannelHttp} exchange tests pin. The positive control
+ * is the same server answering a complete body, which gives the client's normal result. Every client reaches the loopback server through the configured back-channel origin, so the
  * advertised URLs and the discovery document name a fixed issuer.
  */
 @DisplayName("Back-channel client treatment of a failed exchange")
@@ -191,10 +193,15 @@ class BackChannelClientExchangeFailureTest {
                                     ISSUER + "/userinfo", "access-token-value")));
         }
 
+        /**
+         * Characterises the JDK, not the back channel's mapping: the premature end of the body after HTTP 200
+         * is the JDK's own {@link IOException}, which the back channel passes on as it is, so this case does
+         * not reach the fixed-text mapping and passes with that mapping reverted.
+         */
         @ParameterizedTest(name = "{0}")
         @MethodSource("clients")
-        @DisplayName("should report an IOException after HTTP 200 as a transport failure with its context and cause")
-        void shouldReportIoExceptionAfterStatusAsTransportFailure(String clientName, String failureContext,
+        @DisplayName("characterisation: the JDK's own premature-EOF IOException after HTTP 200 reaches each client as cause")
+        void shouldPassJdkPrematureEofAfterStatusToClientAsCause(String clientName, String failureContext,
                 String completeBody, CallSite callSite) throws Exception {
             // The body announced is longer than the body sent before the server closes the connection.
             ClientConfiguration configuration = serving(answer("{", completeBody.length() + 64));
@@ -205,7 +212,9 @@ class BackChannelClientExchangeFailureTest {
                     () -> assertTrue(failure.getMessage().contains(failureContext),
                             "The failure carries the client's failure context: " + failure.getMessage()),
                     () -> assertInstanceOf(IOException.class, failure.getCause(),
-                            "The IOException of the exchange is the cause"));
+                            "The JDK's IOException of the exchange is the cause"),
+                    () -> assertNotEquals(EXCHANGE_FAILED, failure.getCause().getMessage(),
+                            "The cause is the JDK's own premature-EOF failure, not the back channel's fixed text"));
         }
 
         @ParameterizedTest(name = "{0}")

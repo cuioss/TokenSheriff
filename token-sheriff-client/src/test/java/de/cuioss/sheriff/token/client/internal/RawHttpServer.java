@@ -52,7 +52,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * {@value #MAX_CONSECUTIVE_ACCEPT_FAILURES} consecutive failures of {@link ServerSocket#accept()} on a server
  * socket that is still open, so a persistent accept failure does not spin the thread until {@link #close()}.
  * A successful accept resets the count, and a connection the client resets while it is served does not
- * count.
+ * count. An end at that bound is recorded and reported by {@link #endedAtAcceptBound()}; an end through
+ * {@link #close()} is not.
  */
 public final class RawHttpServer implements AutoCloseable {
 
@@ -70,6 +71,7 @@ public final class RawHttpServer implements AutoCloseable {
     private final Object connectionLock = new Object();
     private Socket activeConnection;
     private boolean closing;
+    private volatile boolean endedAtAcceptBound;
 
     private RawHttpServer(ServerSocket serverSocket) {
         this.serverSocket = serverSocket;
@@ -113,6 +115,15 @@ public final class RawHttpServer implements AutoCloseable {
     /** @return {@code true} once the server socket is closed and the server thread has ended */
     boolean isStopped() {
         return serverSocket.isClosed() && serverThread.isTerminated();
+    }
+
+    /**
+     * @return {@code true} once the accept loop has ended on its own after
+     *         {@value #MAX_CONSECUTIVE_ACCEPT_FAILURES} consecutive accept failures, {@code false} while it
+     *         runs and when it ended through {@link #close()}
+     */
+    boolean endedAtAcceptBound() {
+        return endedAtAcceptBound;
     }
 
     /**
@@ -230,7 +241,11 @@ public final class RawHttpServer implements AutoCloseable {
             } catch (SocketException acceptFailed) {
                 // A closed server socket ends the loop; a persistent accept failure ends it at the bound.
                 consecutiveAcceptFailures++;
-                if (serverSocket.isClosed() || consecutiveAcceptFailures >= MAX_CONSECUTIVE_ACCEPT_FAILURES) {
+                if (serverSocket.isClosed()) {
+                    return;
+                }
+                if (consecutiveAcceptFailures >= MAX_CONSECUTIVE_ACCEPT_FAILURES) {
+                    endedAtAcceptBound = true;
                     return;
                 }
                 continue;

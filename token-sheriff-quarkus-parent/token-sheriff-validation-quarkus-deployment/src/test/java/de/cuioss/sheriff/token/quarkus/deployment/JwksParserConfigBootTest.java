@@ -37,11 +37,12 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
  * {@code token-sheriff-validation}.
  * <p>
  * That is the thread a JWKS load runs on: a {@code ForkJoinPool} common-pool worker carries the system class
- * loader, while Quarkus dev mode loads {@code token-sheriff-validation} through a Quarkus class loader. When the
- * generated DSL-JSON converters were looked up through the context class loader, the dev-mode boot logged
- * {@code TokenSheriff-141} ("Unable to find reader for provided type: class ...Jwks") for every issuer. The thread
- * here carries the platform class loader, which sees none of the application's artifacts, so the case does not
- * depend on how the test class path is assembled.
+ * loader, while Quarkus dev mode loads {@code token-sheriff-validation} through a Quarkus class loader. A converter
+ * lookup through the context class loader of such a thread finds no generated DSL-JSON converter, and the parse
+ * fails with {@code TokenSheriff-141} ("Unable to find reader for provided type: class ...Jwks"); the test pins
+ * that the lookup goes through the class loader of {@link ParserConfig} instead. The thread here carries the
+ * platform class loader, which sees none of the application's artifacts, so the case does not depend on how the
+ * test class path is assembled.
  * <p>
  * The test lives in the deployment module because a Quarkus boot test needs the extension's deployment class
  * path, while {@link ParserConfig} is in {@code token-sheriff-validation}.

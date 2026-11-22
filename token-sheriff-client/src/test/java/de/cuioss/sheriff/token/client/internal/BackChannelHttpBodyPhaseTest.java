@@ -53,12 +53,13 @@ import static org.junit.jupiter.api.Assertions.*;
  * until the test releases it. A call through {@link BackChannelHttp#send} is then awaited for twice the
  * configured read timeout, and two outcomes are accepted, because the JDKs differ: on JDK 21 and 25 the call is
  * still pending after the bounded wait, so the request timeout did not end it, and once the server is released
- * the whole body arrives; on JDK 27 the call ends within the bounded wait with an {@link IOException} as its
- * cause and nothing broader: an {@link HttpTimeoutException} when the request timeout wins, or the plain
- * {@link IOException} the JDK reports for the body it cut short when it closes the connection at the timeout,
- * and which of the two it is varies from run to run. The fixed-text {@link IOException}s of
- * {@link BackChannelHttp}, which stand for an unrecognised or a cancelled exchange, are not accepted. Any other
- * outcome fails the test. The test publishes which outcome it saw,
+ * the whole body arrives; on JDK 27 the call ends within the bounded wait with one of two causes, each matched
+ * by its exact class: an {@link HttpTimeoutException} when the request timeout wins, or a plain
+ * {@link IOException}, of no subclass, that the JDK reports for the body it cut short when it closes the
+ * connection at the timeout, and which of the two it is varies from run to run. A subclass of either, such as
+ * an {@code HttpConnectTimeoutException}, is not accepted, and neither are the fixed-text {@link IOException}s
+ * of {@link BackChannelHttp}, which stand for an unrecognised or a cancelled exchange. A response returned
+ * before the release, and any other outcome, fails the test. The test publishes which outcome it saw,
  * together with the feature version of the running JDK, as a report entry and in its assertion messages, so a
  * build log names the observed behaviour. The positive control uses the same server holding everything, the
  * headers included: that call ends through the request timeout within the same bounded wait on JDK 21, 25
@@ -107,11 +108,10 @@ class BackChannelHttpBodyPhaseTest {
         assertTrue(headSent.await(SIGNAL_WAIT_SECONDS, TimeUnit.SECONDS),
                 "The server sent the status line, the headers and the first part of the body");
 
-        try {
-            HttpResponse<String> early = call.get(BOUNDED_WAIT_SECONDS, TimeUnit.SECONDS);
-            fail(jdk + ": the call returned status " + early.statusCode()
-                    + " before the server released the rest of the body");
-        } catch (TimeoutException stillPending) {
+        Exception boundedWait = assertThrows(Exception.class, () -> call.get(BOUNDED_WAIT_SECONDS, TimeUnit.SECONDS),
+                jdk + ": the call did not return a response before the server released the rest of the body");
+
+        if (boundedWait instanceof TimeoutException) {
             reporter.publishEntry(BODY_PHASE_ENTRY, jdk + ": the request timeout does not bound the body read");
             release.countDown();
             HttpResponse<String> response = call.get(SIGNAL_WAIT_SECONDS, TimeUnit.SECONDS);
@@ -121,20 +121,25 @@ class BackChannelHttpBodyPhaseTest {
                     () -> assertEquals(FIRST_PART + REST, response.body(),
                             jdk + ": the call was still pending after twice the read timeout, "
                                     + "and the whole body arrives after the release"));
-        } catch (ExecutionException ended) {
-            reporter.publishEntry(BODY_PHASE_ENTRY, jdk + ": the request timeout bounds the body read");
-            Throwable cause = ended.getCause();
-
-            assertNotNull(cause, jdk + ": the call ended within twice the read timeout with a cause");
-            assertInstanceOf(IOException.class, cause,
-                    jdk + ": the call ended within twice the read timeout, so its cause is the request timeout "
-                            + "or the body the JDK cut short at it, and nothing broader, not " + cause);
-            assertNotEquals(BackChannelHttp.EXCHANGE_FAILED, cause.getMessage(),
-                    jdk + ": the cause is the JDK's own failure, not the fixed text of an unrecognised failure");
-            assertNotEquals(BackChannelHttp.EXCHANGE_CANCELLED, cause.getMessage(),
-                    jdk + ": the cause is the JDK's own failure, not the fixed text of a cancelled exchange");
-            reporter.publishEntry(BODY_PHASE_ENTRY, jdk + ": the call ended with " + cause.getClass().getName());
+            return;
         }
+        ExecutionException ended = assertInstanceOf(ExecutionException.class, boundedWait,
+                jdk + ": the bounded wait either timed out with the call pending or saw the call end, not "
+                        + boundedWait);
+        reporter.publishEntry(BODY_PHASE_ENTRY, jdk + ": the request timeout bounds the body read");
+        Throwable cause = ended.getCause();
+
+        assertNotNull(cause, jdk + ": the call ended within twice the read timeout with a cause");
+        Class<? extends Throwable> causeClass = cause.getClass();
+        assertTrue(causeClass == HttpTimeoutException.class || causeClass == IOException.class,
+                jdk + ": the call ended within twice the read timeout, so its cause is exactly the "
+                        + "HttpTimeoutException of the request timeout or exactly the IOException of the body the "
+                        + "JDK cut short at it, not " + cause);
+        assertNotEquals(BackChannelHttp.EXCHANGE_FAILED, cause.getMessage(),
+                jdk + ": the cause is the JDK's own failure, not the fixed text of an unrecognised failure");
+        assertNotEquals(BackChannelHttp.EXCHANGE_CANCELLED, cause.getMessage(),
+                jdk + ": the cause is the JDK's own failure, not the fixed text of a cancelled exchange");
+        reporter.publishEntry(BODY_PHASE_ENTRY, jdk + ": the call ended with " + causeClass.getName());
     }
 
     @Test

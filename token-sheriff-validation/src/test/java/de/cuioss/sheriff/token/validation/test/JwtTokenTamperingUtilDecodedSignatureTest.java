@@ -32,19 +32,19 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
  * {@link JwtTokenTamperingUtil.TamperingStrategy#MODIFY_SIGNATURE_LAST_CHAR}
  * actually changes the decoded signature bytes, not just the base64url characters.
  * <p>
- * The cases cover two causes that together can leave a tampered signature decoding to the original
- * bytes, as seen in {@code shouldRejectAccessTokenWithInvalidSignature[44]}:
+ * The cases cover the two inputs on which a character-level change alone would leave the tampered
+ * signature decoding to the original bytes:
  * <ol>
- *   <li>Modifying the last base64url character may not change decoded bytes due to padding bits
- *       (e.g., 'A' and 'B' both decode to the same byte at the last position of a 256-byte
- *       RS256 signature)</li>
- *   <li>{@code generateDifferentChar} with a 2-value generator could fail to produce a different
- *       character within 10 attempts</li>
+ *   <li>The last base64url character of a 256-byte RS256 signature carries padding bits, so
+ *       characters that differ only in those bits (e.g., 'A' and 'B') decode to the same last
+ *       byte</li>
+ *   <li>A middle character drawn from a 2-value generator ('X' or 'Y') can equal the character it
+ *       replaces</li>
  * </ol>
  */
 @EnableGeneratorController
 @DisplayName("JwtTokenTamperingUtil MODIFY_SIGNATURE_LAST_CHAR changes the decoded signature")
-class JwtTokenTamperingUtilReproductionTest {
+class JwtTokenTamperingUtilDecodedSignatureTest {
 
     /**
      * Creates a minimal valid JWT string with a controlled signature.
