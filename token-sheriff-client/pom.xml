@@ -20,7 +20,7 @@
 
     <properties>
         <maven.jar.plugin.automatic.module.name>de.cuioss.sheriff.token.client</maven.jar.plugin.automatic.module.name>
-        <version.dsl.json>2.0.2</version.dsl.json>
+        <version.dsl.json>2.1.0</version.dsl.json>
         <!-- Make this module's integration tier obey -DskipTests.
 
              Failsafe 3.6.0 ignores -DskipTests. On the snapshot-deploy lane (which passes -DskipTests)
