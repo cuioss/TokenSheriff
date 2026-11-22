@@ -41,6 +41,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.Set;
@@ -160,7 +161,7 @@ class DiscoveryResolverTest {
 
         assertAll("declared discovery failure",
                 () -> assertEquals(1, moduleDispatcher.getCallCounter(), "the document must have been fetched"),
-                () -> assertInstanceOf(ArrayIndexOutOfBoundsException.class, failure.getCause(),
+                () -> assertInstanceOf(IOException.class, failure.getCause(),
                         "the truncated-escape parse failure must be carried as the cause"));
     }
 
