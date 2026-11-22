@@ -1,7 +1,7 @@
 {
   "kind": "orchestrator",
   "title": "API Sheriff separation seams (0.9.10)",
-  "phase": "orchestrating",
+  "phase": "closed",
   "workstreams": [
     "WS-01",
     "WS-02"
