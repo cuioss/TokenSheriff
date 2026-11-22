@@ -165,7 +165,7 @@ the attack tests `EmbeddedJwkAttackTest`, `JkuX5uAttackTest`,
 The test package `validation.test` and its sub-packages hold the shared test infrastructure:
 token generators, key material, tamper utilities and the MockWebServer dispatchers. Its own
 tests check that infrastructure, not production code: `InMemoryKeyHandlingTest`,
-`JwtTokenTamperingUtilReproductionTest`, `JwtTokenTamperingUtilTest`, `TestTokenHolderTest`,
+`JwtTokenTamperingUtilDecodedSignatureTest`, `JwtTokenTamperingUtilTest`, `TestTokenHolderTest`,
 `EndpointDispatchersTest` (`test.dispatcher`), `ClaimValueGeneratorTest`,
 `TestTokenGeneratorsTest`, `TokenSecurityPropertiesTest` (`test.generator`) and
 `TestTokenSourceProviderTest` (`test.junit`).
