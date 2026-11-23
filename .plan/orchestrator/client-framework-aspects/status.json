@@ -1,0 +1,15 @@
+{
+  "kind": "orchestrator",
+  "title": "Client framework aspects: session and BFF layers above the engine",
+  "phase": "orchestrating",
+  "workstreams": [
+    "WS-01",
+    "WS-02",
+    "WS-03",
+    "WS-04"
+  ],
+  "metadata": {
+    "parallelization_scope": "2"
+  },
+  "created": "2026-11-23T08:28:44Z"
+}

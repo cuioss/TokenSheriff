@@ -1,0 +1,34 @@
+<!-- GENERATED FILE — never hand-edit. Rendered from this epic's ledger (status.json, resume_anchor.md, queue/*.json) by `orchestrator regenerate-view --slug client-framework-aspects`. On a merge conflict in this file, do not merge it by hand: merge the source files, run `orchestrator regenerate-view --slug client-framework-aspects`, and `git add` the result. -->
+
+# Queue view: Client framework aspects: session and BFF layers above the engine
+
+## START HERE
+
+**Resume anchor**: Run /plan-orchestrator next slug=client-framework-aspects: PLAN-01 (ADR-0032, docs-only) and PLAN-02 (step-up binding + back-channel selector) have no dependencies and share no file, so both may be emitted under scope 2. After PLAN-01 lands: run /plan-orchestrator cleanup to re-ground PLAN-03..PLAN-10 against the accepted ADR (retire PLAN-08..10 if Part C is rejected). Ledger not yet on main: run /plan-orchestrator land when convenient.
+**Phase**: orchestrating
+**Queue** (staged, in order):
+1. PLAN-01 (WS-01)
+2. PLAN-02 (WS-02)
+3. PLAN-03 (WS-02)
+4. PLAN-04 (WS-02)
+5. PLAN-05 (WS-03)
+6. PLAN-06 (WS-03)
+7. PLAN-07 (WS-03)
+8. PLAN-08 (WS-04)
+9. PLAN-09 (WS-04)
+10. PLAN-10 (WS-04)
+
+## Ordered Queue
+
+| # | Plan | Workstream | Status | Surface (expected) | Lane |
+|---|------|------------|--------|--------------------|------|
+| 1 | PLAN-01 | WS-01 | staged | doc/README.adoc; doc/adr/; doc/client/README.adoc; doc/client/architecture.adoc; doc/client/threat-model.adoc | plan-marshall |
+| 2 | PLAN-02 | WS-02 | staged | doc/client/requirements.adoc; doc/client/specification/step-up-and-logout.adoc; doc/developer/test-impl-mapping.adoc; doc/validation/requirements.adoc; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/StepUpResultVerifier.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/logout/BackChannelLogoutHandler.java; token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/flow/; token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/logout/; token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/domain/token/IdTokenContent.java; token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/logout/LogoutTokenReplayGuard.java | plan-marshall |
+| 3 | PLAN-03 | WS-02 | staged | doc/LogMessages.adoc; doc/client/requirements.adoc; doc/client/specification/retrieval-flow.adoc; doc/client/threat-model.adoc; doc/developer/test-impl-mapping.adoc; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/internal/ClientLogMessages.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/pending/; token-sheriff-client/src/main/resources/META-INF/native-image/de.cuioss.sheriff.token/token-sheriff-client/native-image.properties; token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/pending/ | plan-marshall |
+| 4 | PLAN-04 | WS-02 | staged | doc/LogMessages.adoc; doc/client/requirements.adoc; doc/client/specification/step-up-and-logout.adoc; doc/client/specification/token-handling.adoc; doc/developer/test-impl-mapping.adoc; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/internal/ClientLogMessages.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/lifecycle/RefreshDisposition.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/lifecycle/TokenLifecycleManager.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/logout/LogoutStep.java; token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/lifecycle/; token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/logout/ | plan-marshall |
+| 5 | PLAN-05 | WS-03 | staged | bom/pom.xml; doc/README.adoc; doc/developer/test-impl-mapping.adoc; doc/session/; pom.xml | plan-marshall |
+| 6 | PLAN-06 | WS-03 | staged | doc/LogMessages.adoc; doc/developer/test-impl-mapping.adoc; doc/session/ | plan-marshall |
+| 7 | PLAN-07 | WS-03 | staged | doc/developer/test-impl-mapping.adoc; doc/session/ | plan-marshall |
+| 8 | PLAN-08 | WS-04 | staged | bom/pom.xml; token-sheriff-quarkus-parent/pom.xml; token-sheriff-quarkus-parent/token-sheriff-bff-quarkus-deployment/; token-sheriff-quarkus-parent/token-sheriff-bff-quarkus/ | plan-marshall |
+| 9 | PLAN-09 | WS-04 | staged | doc/bff/; doc/developer/test-impl-mapping.adoc; token-sheriff-quarkus-parent/token-sheriff-bff-quarkus-deployment/; token-sheriff-quarkus-parent/token-sheriff-bff-quarkus/ | plan-marshall |
+| 10 | PLAN-10 | WS-04 | staged | doc/README.adoc; doc/bff/; token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/ | plan-marshall |
