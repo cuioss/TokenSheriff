@@ -142,6 +142,15 @@ claims did not hold.
 
 Nothing here is staged. Each note goes to the consumer's own repository once the named release exists.
 
+- **Delivered to Audit Notary (2026-11-23):** `Audit-Notary/doc/tokensheriff.md` collects every finding
+  below, the planned modules, the ADR state and the local-MCP-gateway gap analysis, and states the
+  directive "for further changes, assume this epic is implemented".
+  - Written at the operator's explicit request. This is a deliberate exception to the orchestrator's
+    write boundary: one documentation file, with no git operation in that repository. Committing it is
+    the operator's.
+  - Keep the file in step: when a plan here changes a requirement id, a default or the module layout,
+    note that Audit Notary's copy is stale.
+
 - **Audit Notary, deletable against 0.9.10 now:**
   - `security/QueryResponseModeRequestBuilder` (84 lines) and its test → `ResponseMode.QUERY`
     (CLIENT-27).
