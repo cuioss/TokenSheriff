@@ -59,7 +59,7 @@ The resolver reports on the `TokenValidator` actually in use, so the panel stays
 application supplies its own `TokenValidator` and leaves the `sheriff.token.issuers.*` namespace
 empty. Its three outcomes map to three view states:
 
-* `PROPERTY_CONFIGURED` — the extension's own validator; every view renders as before.
+* `PROPERTY_CONFIGURED` — the extension's own validator; every view renders its full data.
 * `EXTERNAL_VALIDATOR` — an externally-produced validator is observed. Token validation works, but
   its issuer configurations and parser limits are not exposed, so `getJwksStatus()` reports
   `EXTERNAL_VALIDATOR` with an empty `issuers` array and `getConfiguration()` emits a
@@ -127,3 +127,58 @@ Sections: Status Overview (indicator dot, metrics grid), Issuers (per-issuer car
 . Start Quarkus in dev mode: `./mvnw quarkus:dev`
 . Open `http://localhost:8080/q/dev-ui/`
 . Locate the "Token-Sheriff" extension card
+
+== [[testing]] Testing
+
+The web components are tested at two levels: Jest unit tests of each Lit component in isolation
+with mocked JSON-RPC responses, and Playwright end-to-end tests against a running Quarkus dev
+instance.
+
+=== Unit tests (Jest)
+
+Run from `token-sheriff-validation-quarkus-deployment/` with `npm test` (also `test:watch`,
+`test:coverage`, `test:ci`). The tests live under `src/test/js/`:
+
+[source]
+----
+src/test/js/
+├── setup/              # Jest configuration and setup
+├── mocks/              # Mock implementations (Lit, DevUI, directives)
+└── components/         # qwc-jwt-status-config.test.js, qwc-jwt-debugger.test.js,
+                        # simple-component.test.js
+----
+
+The setup provides the custom matchers `toHaveRenderedContent()`, `toHaveShadowClass()` and
+`toBeDefinedAsCustomElement()` and the helpers `waitForComponentUpdate()`, `createTestComponent()`
+and `cleanupTestComponents()`.
+
+=== End-to-end tests (Playwright)
+
+The suite lives in `token-sheriff-quarkus-parent/e-2-e-playwright/`:
+
+[source]
+----
+e-2-e-playwright/
+├── tests/
+│   ├── self-devui-accessible.spec.js          # Environment gate-keeper tests
+│   ├── 01-verify-status-config.spec.js        # Status & Config page
+│   ├── 03-verify-token-debugger.spec.js       # Token Debugger page
+│   └── accessibility-wcag-compliance.spec.js  # WCAG 2.1 AA compliance, keyboard navigation
+├── utils/                                     # constants, SPA navigation, Keycloak token
+│                                              # acquisition, pre-flight checks, logging
+└── fixtures/
+    └── test-fixtures.js                       # Shared test fixtures
+----
+
+Run from `token-sheriff-quarkus-parent/`:
+
+[source,bash]
+----
+docker compose up -d
+./mvnw -f token-sheriff-quarkus-integration-tests/pom.xml quarkus:dev
+cd e-2-e-playwright && npx playwright test
+----
+
+Quarkus DevUI is a single-page application (Vaadin Router and Lit web components) that registers
+extension sub-page routes lazily, so the tests navigate by clicking through the extension card,
+traversing the shadow DOM to the anchors inside the `qwc-extension-link` elements.

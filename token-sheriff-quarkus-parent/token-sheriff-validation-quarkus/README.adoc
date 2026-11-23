@@ -41,7 +41,7 @@ For Maven dependency information, see xref:../README.adoc#_maven_coordinates[Mav
 * Integration with Micrometer for JWT validation metrics
 * Token validation success/failure counters
 * Performance metrics for validation operations
-* See xref:../doc/integration/metrics-integration.adoc[Metrics Integration Documentation] for comprehensive monitoring setup
+* See xref:../doc/integration/metrics-integration.adoc[Metrics Integration Documentation] for the monitoring setup
 
 == Detailed Component Documentation
 
@@ -96,11 +96,11 @@ xref:../../doc/adr/0031-Bearer_extraction_scope_challenge_sanitiser_escape_and_b
 
 === Health Checks
 
-For comprehensive health check configuration, implementation details, and Kubernetes integration, see xref:../doc/integration/health-checks.adoc[Health Checks Documentation].
+For health check configuration, implementation details, and Kubernetes integration, see xref:../doc/integration/health-checks.adoc[Health Checks Documentation].
 
 === Metrics Integration
 
-For comprehensive metrics configuration, Prometheus queries, alerting examples, and Grafana dashboard setup, see xref:../doc/integration/metrics-integration.adoc[Metrics Integration Documentation].
+For metrics configuration, Prometheus queries, alerting examples, and Grafana dashboard setup, see xref:../doc/integration/metrics-integration.adoc[Metrics Integration Documentation].
 
 === Runtime Services
 
@@ -235,8 +235,8 @@ xref:../../doc/adr/0026-Orphaned_or_unresolvable_extension_configuration_fails_s
 
 === Unknown-kid Refresh and Initial-load Retry (opt-in)
 
-Two further per-issuer keys sit next to `max-staleness-seconds`. Both are off by default, so an issuer
-without them behaves exactly as before.
+Two further per-issuer keys sit next to `max-staleness-seconds`. Both are off by default; an issuer
+without them neither fetches on an unknown `kid` nor retries a failed initial load early.
 
 * `sheriff.token.issuers.<name>.jwks.http.unknown-kid-refresh-window-seconds` — unset, a token whose `kid`
   the installed key set does not hold is rejected without any fetch. Set to a whole number of seconds from
@@ -268,66 +268,12 @@ xref:../../doc/adr/0030-An_opt-in_unknown-kid_refresh_claims_one_window_per_load
 and
 xref:../../doc/adr/0026-Orphaned_or_unresolvable_extension_configuration_fails_startup_instead_of_being_ignored.adoc[ADR-0026].
 
-== Best Practices
+== Compatibility
 
-=== Configuration Management
-
-* Use YAML format for complex configurations with multiple issuers
-* Set appropriate cache TTL values based on key rotation frequency
-* Configure reasonable timeout values for JWKS endpoints
-* Enable health checks in production environments
-
-=== Security Considerations
-
-* Validate all required JWT claims (audience, issuer, expiration)
-* Use appropriate leeway values for clock skew tolerance
-* Restrict allowed signing algorithms to secure options
-* Regularly monitor JWKS endpoint availability
-
-=== Performance Optimization
-
-* Configure JWKS caching to reduce network calls
-* Set appropriate refresh intervals for key rotation
-* Monitor validation metrics to identify performance issues
-* Use connection pooling for JWKS HTTP clients
-
-=== Error Handling
-
-* Implement proper fallback mechanisms for JWKS failures
-* Log validation failures with appropriate detail levels
-* Monitor health check status for early problem detection
-* Handle network timeouts gracefully
-
-== Technical Details
-
-=== Thread Safety
-
-* All CDI beans are thread-safe and can be used concurrently
-* JWKS caching uses thread-safe data structures
-* Metrics collection is atomic and thread-safe
-* Health checks handle concurrent execution appropriately
-
-=== Performance Characteristics
-
-* JWKS caching reduces validation latency significantly
-* Token validation is CPU-intensive but scales well
-* Memory usage scales with number of cached keys
-* Network I/O is minimized through intelligent caching
-
-=== Dependencies
-
-* Requires Quarkus 3.x framework
-* Integrates with SmallRye Config for configuration management
-* Uses Micrometer for metrics collection
-* Depends on SmallRye Health for health check integration
-* Compatible with GraalVM native image compilation
+* Requires Quarkus 3.x; configuration through SmallRye Config, metrics through Micrometer, health checks
+  through SmallRye Health.
 * The exception mappers (`application/problem+json` rendering) and the access-log filter are registered for RESTEasy Classic (`quarkus-resteasy`) only. Applications on Quarkus REST (RESTEasy Reactive) do not get the `application/problem+json` mapping or the access-log filter automatically.
-
-=== Native Image Support
-
-* Full GraalVM native image compatibility
-* Automatic reflection and runtime initialization configuration
-* See xref:../doc/configuration/native-image-configuration.adoc[Native Image Configuration] for detailed configuration and testing information
+* Native image: reflection and run-time initialization are configured automatically; see xref:../doc/configuration/native-image-configuration.adoc[Native Image Configuration].
 
 == Related Documentation
 
@@ -336,6 +282,6 @@ xref:../../doc/adr/0026-Orphaned_or_unresolvable_extension_configuration_fails_s
 * xref:../doc/integration/health-checks.adoc[Health Checks Documentation]
 * xref:../doc/integration/metrics-integration.adoc[Metrics Integration Documentation]
 * xref:../doc/configuration/native-image-configuration.adoc[Native Image Configuration]
-* xref:../doc/development/devui-testing.adoc[DevUI Testing Guide]
+* xref:../doc/development/devui-implementation.adoc[DevUI Implementation and Testing]
 * xref:../../doc/validation/architecture.adoc[Architecture Reference]
 * xref:../../doc/validation/security-reference.adoc[Security Reference]

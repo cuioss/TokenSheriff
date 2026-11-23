@@ -187,51 +187,21 @@ token-sheriff-quarkus-integration-tests/
 ├── src/main/
 │   ├── java/de/cuioss/sheriff/token/integration/
 │   │   ├── TestApplication.java
-│   │   └── endpoint/
-│   │       ├── ClientEngineNativeEndpoint.java
-│   │       ├── JwtValidationEndpoint.java
-│   │       └── MockJwtValidationEndpoint.java
+│   │   └── endpoint/          # JAX-RS endpoints under test (validation, class-level
+│   │                          # @BearerAuth variants, client-engine native endpoint)
 │   ├── resources/application.properties
-│   └── docker/
-│       ├── Dockerfile.native.distroless
-│       ├── Dockerfile.native.jfr
-│       ├── certificates/
-│       │   ├── generate-certificates.sh
-│       │   └── generate-truststore.sh
-│       ├── health-check.sh
-│       └── keycloak/
-│           ├── benchmark-realm.json
-│           ├── client-engine-realm.json
-│           ├── integration-realm.json
-│           └── single-use-refresh-realm.json
+│   └── docker/                # Dockerfile.native.distroless, Dockerfile.native.jfr,
+│                              # certificates/, keycloak/ realms, zitadel/, health-check.sh
 ├── src/test/java/de/cuioss/sheriff/token/integration/
-│   ├── BaseIntegrationTest.java
-│   ├── TestConstants.java
-│   ├── TestRealm.java
-│   ├── TestProviders.java
-│   ├── token/{TokenValidationSpecIT,WellKnownRetryConfigSpecIT}.java
-│   ├── bearer/BearerAuthSpecIT.java
-│   ├── client/{DiscoverySpecIT,ClientAuthSpecIT,AuthCodePkceSpecIT,MixUpSpecIT,ParSpecIT,
-│   │           UserInfoSpecIT,DpopBoundSpecIT,LogoutSpecIT,StepUpSpecIT,
-│   │           InsufficientScopeChallengeSpecIT,ClientNativeImageSpecIT,FullFlowE2EIT,
-│   │           RefreshProductionPathSpecIT,RefreshErrorPathSpecIT,RefreshLifecycleSpecIT,
-│   │           RefreshClientAuthSpecIT,RefreshConcurrentRedemptionSpecIT,
-│   │           RefreshConstraintLifecycleSpecIT,RefreshIdentityScopeSpecIT,
-│   │           RefreshSingleFlightSpecIT,RefreshSingleUseSpecIT,
-│   │           DpopBackChannelOriginSpecIT,RefreshEngineSupport,FormPostSupport,KeycloakAdminSupport,
-│   │           KeycloakUrlSupport}.java
-│   ├── security/{DpopSpecIT,JweDecryptionSpecIT,DpopProofHelper}.java
-│   ├── health/{HealthCheckIntegrationIT,HealthCheckResponsivenessIT}.java
-│   └── api/{ApiValidationSpecIT,TokenRequestSpecIT}.java
+│   │                          # *SpecIT / *IT specifications by feature package
+│   └── {api,bearer,client,error,health,security,token}/
 ├── src/test/resources/junit-platform.properties
-└── scripts/
-    ├── start-integration-container.sh
-    ├── stop-integration-container.sh
-    ├── build-native-if-needed.sh
-    ├── dump-app-logs.sh
-    ├── dump-keycloak-logs.sh
-    └── verify-environment.sh
+└── scripts/                   # start/stop container, build-native-if-needed, log dumps,
+                               # environment check, benchmark monitoring
 ----
+
+The specifications and their support classes are listed per feature area in
+xref:../../doc/developer/test-impl-mapping.adoc#integration-tests[Test-to-Implementation Mapping § Integration-test specifications].
 
 === Maven Clean Integration
 
@@ -334,11 +304,11 @@ sheriff.token.issuers.keycloak.issuer-identifier=https://localhost:1443/realms/b
 sheriff.token.issuers.keycloak.jwks.http.url=https://keycloak:8443/realms/benchmark/protocol/openid-connect/certs
 ----
 
-*Coverage trade-off.* This issuer used to resolve its JWKS through well-known discovery. Under the
+*Coverage trade-off.* This issuer uses a direct JWKS URL rather than well-known discovery. Under the
 static hostname the discovery document advertises its `jwks_uri` on `localhost:1443`, which inside
 the compose network resolves to the application container itself. `hostname-backchannel-dynamic` is
-deliberately not set and no realm carries a `frontendUrl`, so no discovery path that works inside the
-compose network remains; the issuer therefore switched to the direct JWKS URL. Well-known discovery
+deliberately not set and no realm carries a `frontendUrl`, so no discovery path works inside the
+compose network. Well-known discovery
 stays covered by the retry probe (xref:#_retry_probe[]), the `%multi-idp` Dex issuer and the client-side
 `DiscoverySpecIT`.
 
@@ -493,17 +463,20 @@ Build different image variants using environment variables:
 
 [source,bash]
 ----
-# Production build (distroless image, 104MB)
+# Production build (distroless image)
 DOCKERFILE=Dockerfile.native.distroless DOCKER_IMAGE_TAG=distroless docker compose build
 
-# JFR profiling build (UBI 9 micro image, 96MB)
+# JFR profiling build (UBI 9 micro image)
 DOCKERFILE=Dockerfile.native.jfr DOCKER_IMAGE_TAG=jfr docker compose build
 ----
 
 **Image Characteristics**:
 
-* **Distroless**: Minimal production native image with ultra-fast startup (~0.2s)
-* **JFR-enabled**: Native image with JFR profiling support and debugging tools (~0.2s startup)
+* **Distroless**: Minimal production native image
+* **JFR-enabled**: Native image with JFR profiling support and debugging tools
+
+The recorded sizes and startup times of both images are in
+xref:../doc/performance/native-optimization-guide.adoc#_runtime_verification[Native Optimization Guide § Runtime Verification].
 
 == Troubleshooting
 
