@@ -66,11 +66,11 @@ target/benchmark-results/
 │   │   ├── benchmark-data.json      # Processed results read by the HTML pages
 │   │   ├── original-jmh-result.json # Copy of the raw JMH result (micro-benchmarks)
 │   │   └── *-server-metrics.json    # Prometheus metrics (WRK)
-│   └── api/
-│       ├── latest.json              # Latest run summary
-│       ├── benchmarks.json          # Benchmark results
-│       └── status.json              # Status and last-run timestamp
-├── history/                         # Archived runs for trend analysis (not deployed)
+│   ├── api/
+│   │   ├── latest.json              # Latest run summary
+│   │   ├── benchmarks.json          # Benchmark results
+│   │   └── status.json              # Status and last-run timestamp
+│   └── history/                     # Archived runs for trend analysis (default location, see below)
 ├── prometheus/                      # Raw Prometheus metrics (WRK, not deployed)
 └── wrk/                             # Raw WRK output (WRK, not deployed)
 ----

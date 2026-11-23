@@ -385,13 +385,13 @@ authorization-code-response rule that FAPI 2.0 dropped.
 
 [NOTE]
 ====
-*Breaking record-shape change.* `RotationResult` gained the `grantedScope` and `scopeDelta`
-components, and `StoredToken` gained `subject`. Both are Java records, so a relying party that
-constructs either *directly* — rather than receiving one from `RefreshFlow` or
-`TokenLifecycleManager` — must supply the new components. `scopeDelta` is rejected as `null`;
-`grantedScope` and `subject` are nullable. The two new `RotationResult` components are
-authorization metadata rather than credentials, so unlike the token fields they are rendered in
-full by `toString()` — which is what makes a grant delta diagnosable from a log line.
+*Record shape.* `RotationResult` carries the `grantedScope` and `scopeDelta` components, and
+`StoredToken` carries `subject`. Both are Java records, so a relying party that constructs either
+*directly* — rather than receiving one from `RefreshFlow` or `TokenLifecycleManager` — must supply
+every component. `scopeDelta` is rejected as `null`; `grantedScope` and `subject` are nullable. The
+two scope components of `RotationResult` are authorization metadata rather than credentials, so
+unlike the token fields they are rendered in full by `toString()` — which is what makes a grant
+delta diagnosable from a log line.
 ====
 
 == [[_sender_constraint_preservation]] Preserving the sender-constraint

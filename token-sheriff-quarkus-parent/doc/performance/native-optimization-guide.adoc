@@ -160,7 +160,7 @@ jfr print --events ExecutionSample target/jfr-output/jwt-profile.jfr
 
 JFR CPU sampling under load under-represents JWT validation: with the CPU saturated, most threads are off-CPU at a sample point, so the samples do not match the wall-clock latency split. See link:../../../benchmarking/doc/Analysis-03.2026-JFR-Profiling.adoc#_why_cpu_doesnt_match_latency[CPU/latency mismatch analysis] and link:../../../benchmarking/doc/JFR-Instrumentation.adoc[JFR Instrumentation].
 
-JFR with `settings=profile` costs under 2% CPU and roughly 10-50MB for the recording buffer.
+JFR with `settings=profile` adds recording overhead and a recording buffer; no overhead figure is measured in this project, so measure it on the target workload before relying on a number.
 
 == Complete Configuration Examples
 

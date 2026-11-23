@@ -9,15 +9,17 @@
 // summary: A refused refresh is classified into three states, not two — pre-redemption, credential-rejected, and redeemed — because a credential the authorization server declared invalid is neither a transient fault nor a redemption; an amendment adds a fourth, scope-refused (invalid_scope), which keeps the session and owes no retry
 // tags: oauth, refresh-token, fail-closed, session-lifecycle, client
 // affects: token-sheriff-client
-// supersedes: 5
 // end-adr-metadata
 
 == Status
 
-Accepted. Supersedes the earlier two-state redemption rule, whose record was removed once its content
-was carried here; its redeemed-branch disposition is carried forward unchanged in the Decision below.
+Accepted
 
 == Context
+
+This decision supersedes the earlier two-state redemption rule, whose record was removed once its
+content was carried here; its redeemed-branch disposition is carried forward unchanged in the Decision
+below.
 
 The client's response to a refused refresh was decided by one question: had the authorization server
 already redeemed the presented token? That partitions failures at the transport layer into two
