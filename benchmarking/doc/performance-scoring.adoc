@@ -8,9 +8,7 @@
 
 == Overview
 
-A weighted performance score combining throughput, latency, and error resilience into a single metric.
-
-Two formulas exist (both in `MetricsComputer`): one for micro (JMH) benchmarks and one for integration (WRK) benchmarks.
+A performance score combining throughput and latency into a single number, mapped to a letter grade. Two formulas exist, both in `MetricsComputer`: one for micro (JMH) benchmarks and one for integration (WRK) benchmarks. The score is reported in badges and reports; no run fails because of it.
 
 == Micro (JMH) Formula
 
@@ -25,24 +23,14 @@ Step 1: Calculate intermediate scores
 - Latency_Score = 100 ÷ Latency_ms          // 1 ms = score 100 (uncapped)
 
 Step 2: Apply weights and sum
-- Throughput = Average operations/second from benchmarks
-- Latency_ms = Average latency in milliseconds
+- Throughput = operations/second of the configured throughput benchmark
+- Latency_ms = milliseconds/operation of the configured latency benchmark
 
 Note: Scores are not capped, allowing exceptional performance to exceed 100.
 Final scores are rounded to the nearest integer.
 ----
 
-=== Throughput (50% weight)
-
-* Measures: Average operations per second across all throughput benchmarks
-* Score normalized: 10,000 ops/s = 100 points
-* Higher is better, no upper limit
-
-=== Latency (50% weight)
-
-* Measures: Average latency across all latency benchmarks
-* Score normalized: 1 ms = 100 points (inverse relationship)
-* Lower is better, no upper limit on score
+The throughput and latency benchmarks are the ones named in the runner's `ReportConfiguration` (for example `measureThroughput` and `measureAverageTime`); `MetricsComputer` takes the first JMH result whose name contains each configured name and converts its unit to ops/s and ms/op.
 
 == Integration (WRK) Formula
 
@@ -120,14 +108,7 @@ Performance Score = round(562.41) = 562 (Grade A+, exceptional performance)
 
 == Badge Format
 
-[source,text]
-----
-Performance Score: Grade A (45k ops/s, 0.15ms)
-                      ↑      ↑            ↑
-                      |      |            └─ Average validation time
-                      |      └─ Throughput (rounded)
-                      └─ Grade based on score
-----
+The performance badge (`BadgeGenerator`) has the label `Performance` and a message of the form `Grade A (45k ops/s, 0.15ms)`: the grade, the rounded throughput and the latency per operation. Its color follows the grade (A+ bright green to F red).
 
 == Trend Calculation
 
@@ -152,23 +133,9 @@ Trend Direction:
   - Down (red):    change < -2%
 ----
 
-**Rationale**: EWMA weights recent results heavily while still considering historical context. This prevents false positives from single anomalous runs while quickly detecting real performance shifts. The λ=0.25 decay factor is standard for performance monitoring (NIST guidelines).
-
-== Usage
-
-* **Regression Detection**: Track performance over releases
-* **Optimization Tracking**: Measure improvement impact
-* **Capacity Planning**: Understand performance characteristics
+EWMA weights recent results heavily while still considering historical context, so a single anomalous run does not flip the trend. The baseline is computed over the archived runs (at most 10, see `HistoricalDataManager`); without history the trend badge reads `No history`.
 
 == Limitations
 
-* Environment dependent (hardware, JVM settings)
-* Based on synthetic test tokens
-* Single library performance only
-
-== Best Practices
-
-1. Focus on trends over absolute values
-2. Use consistent test environments
-3. Run multiple iterations for accuracy
-4. Consider context when interpreting results
+* Scores depend on the environment (hardware, JVM settings); compare trends from the same environment rather than absolute values.
+* The benchmarks use synthetic test tokens.

@@ -27,18 +27,16 @@ The benchmark processing is automatically triggered in GitHub Actions:
 
 2. **Historical Data Preparation**
    - Fetch previous benchmark history from `cuioss.github.io` (micro and integration)
-   - Prepare it via `benchmarking/scripts/benchmark-pages.py prepare-history` for trend calculation
+   - Prepare it via `benchmarking/scripts/benchmark-pages.py prepare-history` and pass it to each benchmark run as `-Dbenchmark.history.dir` for trend calculation
 
 3. **Micro Benchmarks**
    - Run JMH benchmarks using `benchmark` profile
-   - Automatically generates artifacts in `target/benchmark-results`
-   - Creates performance badges, reports, and metrics
+   - Generates reports, badges and data in `target/benchmark-results`
 
 4. **WRK Load Testing Benchmarks**
-   - Start Quarkus and Keycloak containers
-   - Run WRK HTTP load tests
-   - Collect Prometheus metrics
-   - Automatically generates WRK-specific artifacts
+   - Build the native image, start the Quarkus, Keycloak and Prometheus containers (`benchmark` profile, default load)
+   - Run the WRK HTTP load tests and collect the Prometheus metrics
+   - Generates the integration reports, badges and data
 
 5. **Artifact Combination**
    - Merge artifacts from both benchmark modules via `benchmark-pages.py assemble`
@@ -49,60 +47,17 @@ The benchmark processing is automatically triggered in GitHub Actions:
    - Deploy combined results to cuioss.github.io
    - Results available at `TokenSheriff/benchmarks`
 
-== Local Development
-
-=== Running Benchmarks Locally
-
-[source,bash]
-----
-# Full micro benchmark suite
-./mvnw clean verify -pl benchmarking/benchmark-core -Pbenchmark
-
-# Quick test (1 iteration)
-./mvnw clean verify -pl benchmarking/benchmark-core -Pbenchmark \
-  -Djmh.iterations=1 -Djmh.warmupIterations=1
-
-# With profiling
-./mvnw clean verify -pl benchmarking/benchmark-core -Pbenchmark-jfr
-
-# WRK load testing benchmarks
-./mvnw clean verify -pl benchmarking/benchmark-integration-wrk -Pbenchmark
-----
-
-=== Viewing Generated Artifacts
-
-After running benchmarks, artifacts are automatically generated:
-
-[source,bash]
-----
-# View micro benchmark artifacts
-ls -la benchmarking/benchmark-core/target/benchmark-results/
-
-# View WRK benchmark artifacts
-ls -la benchmarking/benchmark-integration-wrk/target/benchmark-results/
-
-# Serve library benchmark reports for viewing
-cd benchmarking/scripts
-./serve-reports.sh library
-# Open http://localhost:8080
-
-# Or serve WRK benchmark reports
-./serve-reports.sh wrk
-# Open http://localhost:8080
-----
+The same commands run locally; see link:local-testing.adoc[Local Testing Guide] for viewing the results and the module READMEs for profiles and parameters.
 
 == Generated Artifacts
 
-=== Structure
-
-Each benchmark module generates a consistent artifact structure. See link:../README.adoc#_generated_structure[Generated Structure] in the benchmarking README for the full directory tree.
+Each benchmark module generates the structure described in link:../README.adoc#_generated_structure[Generated Structure], including the API endpoints under `api/`.
 
 === Badge Types
 
-* **Performance Score** - Weighted composite score (uncapped; higher is better)
-* **Trend** - Up/down/stable indicator with percentage change
-* **Last Run** - Timestamp of most recent benchmark
-* **WRK Performance** - WRK load testing specific score
+* **Performance** (`performance-badge.json`, `integration-performance-badge.json` for WRK) - grade, throughput and latency of the run
+* **Trend** (`trend-badge.json`, `integration-trend-badge.json` for WRK) - up/down/stable indicator with percentage change
+* **Last Run** (`last-run-badge.json`) - date of the most recent run
 
 === Regression Visibility
 
@@ -110,14 +65,6 @@ There is no automated pass/fail quality gate — regressions surface through:
 
 * **Trend badges** - EWMA-based change detection (up/stable/down with ±2% threshold, see link:performance-scoring.adoc#_trend_calculation[Trend Calculation])
 * **Historical trends** - `trends.html` charts against previous runs
-
-== API Endpoints
-
-The generated artifacts include JSON API endpoints:
-
-* `api/latest.json` - Latest benchmark results
-* `api/status.json` - Run status and last-run timestamp
-* `api/benchmarks.json` - List of all benchmarks
 
 == Performance Requirements
 
@@ -142,8 +89,4 @@ Review:
 
 === Local Viewing Issues
 
-Ensure:
-
-- Python installed for `serve-reports.sh` (Python 3 or 2)
-- Port 8080 available (or use `./serve-reports.sh stop` to stop existing server)
-- Generated reports exist in `benchmark-core/target/benchmark-results/gh-pages-ready/` (or `benchmark-integration-wrk/target/benchmark-results/gh-pages-ready/` for WRK)
+See link:local-testing.adoc#_troubleshooting[Local Testing Guide, Troubleshooting].

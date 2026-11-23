@@ -120,7 +120,7 @@ NOTE: Identifier gaps (100-102, 104, 106-110, 112, 113, 117, 118, 124) belong to
 | 218 | JFR_VARIANCE_USAGE | Usage: JfrVarianceAnalyzer <path-to-jfr-file>
 |===
 
-NOTE: Identifier 216 belonged to a message that has been removed from the class; the identifier is not reused.
+NOTE: Identifier 216 is retired and is not reused.
 
 == Usage
 

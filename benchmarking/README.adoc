@@ -6,185 +6,102 @@
 :source-highlighter: highlight.js
 
 
-Comprehensive performance testing infrastructure for JWT validation.
-
-== Overview
-
-The benchmarking infrastructure provides:
-
-* **Automated Artifact Generation** - Badges, reports, and metrics generated automatically
-* **Dual Benchmark Types** - Micro benchmarks for library performance, integration benchmarks for real-world scenarios
-* **GitHub Pages Integration** - Ready-to-deploy artifacts for visualization
-* **Performance Tracking** - Historical trends and quality gates
-* **Common Infrastructure** - Shared utilities in benchmarking-common for consistency
+Performance testing infrastructure for JWT validation: JMH micro-benchmarks of the library and WRK load tests of the Quarkus integration, with generated reports, badges and trend data for GitHub Pages.
 
 == Modules
 
 |===
-|Module |Purpose |Execution Time
+|Module |Purpose
 
-|link:benchmarking-common/[benchmarking-common]
-|Shared infrastructure and utilities
-|N/A (library)
+|link:benchmarking-common/README.adoc[benchmarking-common]
+|Shared infrastructure and utilities (library)
 
-|link:benchmark-core/[benchmark-core]
-|JMH micro-benchmarks for JWT library
-|< 10 minutes
+|link:benchmark-core/README.adoc[benchmark-core]
+|JMH micro-benchmarks for the JWT validation library
 
-|link:benchmark-integration-wrk/[benchmark-integration-wrk]
-|WRK-based HTTP load testing
-|< 5 minutes
+|link:benchmark-integration-wrk/README.adoc[benchmark-integration-wrk]
+|WRK-based HTTP load testing against the Quarkus integration (requires Docker)
 |===
 
-== Quick Start
+Module boundaries and code placement are defined in link:doc/Architecture.adoc[Architecture].
 
-=== Run Benchmarks
+== Quick Start
 
 [source,bash]
 ----
 # Library micro-benchmarks
 ./mvnw verify -pl benchmarking/benchmark-core -Pbenchmark
 
-# WRK load testing benchmarks (requires Docker)
-./mvnw verify -pl benchmarking/benchmark-integration-wrk -Pbenchmark
-----
-
-=== Run with Profiling
-
-[source,bash]
-----
-# Library benchmarks with JFR profiling
+# Library micro-benchmarks with JFR instrumentation
 ./mvnw verify -pl benchmarking/benchmark-core -Pbenchmark-jfr
-----
 
-=== View Results Locally
+# WRK load testing benchmarks (requires Docker, ports 10443 and 1443 free)
+./mvnw verify -pl benchmarking/benchmark-integration-wrk -Pbenchmark
 
-[source,bash]
-----
+# View the results at http://localhost:8080
 cd benchmarking/scripts
-./serve-reports.sh library  # For library benchmarks
-# or
-./serve-reports.sh wrk      # For WRK benchmarks
-# Open http://localhost:8080 in your browser
+./serve-reports.sh library   # or: ./serve-reports.sh wrk
 ----
 
-See link:doc/local-testing.adoc[Local Testing Guide] for detailed instructions.
+Profiles and parameters are listed in the module READMEs; viewing results locally is described in link:doc/local-testing.adoc[Local Testing Guide]. Java 21+ is required.
 
-== Benchmark Types
+== Generated Structure
 
-=== Micro Benchmarks (benchmark-core)
-
-Located in `benchmarking/benchmark-core`:
-
-* `SimpleCoreValidationBenchmark` - Core JWT validation performance
-* `SimpleErrorLoadBenchmark` - Error handling and resilience testing
-* Automatic generation of performance badges and reports
-* Quality gates for throughput and latency
-
-See link:benchmark-core/README.adoc[benchmark-core README] for details.
-
-=== Load Testing Benchmarks (benchmark-integration-wrk)
-
-Located in `benchmarking/benchmark-integration-wrk`:
-
-* External HTTP load testing using WRK
-* JWT validation endpoint stress testing
-* Health check endpoint baseline comparison
-* System-level CPU and memory monitoring
-* Cross-platform monitoring support (macOS/Linux)
-
-See link:benchmark-integration-wrk/README.adoc[benchmark-integration-wrk README] for details.
-
-=== Common Infrastructure (benchmarking-common)
-
-Shared infrastructure providing benchmark framework, metrics collection, and artifact generation.
-
-See link:benchmarking-common/README.adoc[benchmarking-common README] for details.
-
-== Results and Artifacts
-
-=== Generated Structure
+Each module writes its results to its own `target/benchmark-results/` (the JFR library run to `target/benchmark-jfr-results/`). The layout is defined by `OutputDirectoryStructure`:
 
 [source]
 ----
 target/benchmark-results/
-├── gh-pages-ready/             # GitHub Pages deployment structure
-│   ├── index.html              # Main landing page
-│   ├── trends.html             # Historical trends
-│   ├── badges/                 # Shields.io compatible badges
-│   │   ├── performance-badge.json   # Overall performance score
-│   │   ├── trend-badge.json         # Trend indicator
-│   │   └── last-run-badge.json      # Timestamp badge
-│   ├── data/                   # Metrics and summary data
-│   │   ├── benchmark-summary.json   # Overall summary with quality gates
-│   │   └── *-metrics.json          # Individual benchmark metrics
-│   └── api/                    # JSON API endpoints
-│       ├── latest.json         # Latest benchmark results
-│       ├── benchmarks.json     # List of all benchmarks
-│       └── status.json         # Current quality gate status
-├── history/                    # Historical archive data (NOT deployed)
-├── prometheus/                 # Raw Prometheus metrics (NOT deployed)
-└── wrk/                        # WRK raw results (NOT deployed)
+├── gh-pages-ready/                  # Deployable to GitHub Pages
+│   ├── index.html                   # Overview of the latest run
+│   ├── trends.html                  # Historical trends
+│   ├── detailed.html                # Detailed results (micro-benchmarks only)
+│   ├── 404.html, robots.txt, sitemap.xml
+│   ├── report-styles.css, data-loader.js
+│   ├── badges/                      # shields.io endpoint JSON
+│   │   ├── performance-badge.json   # integration-performance-badge.json for WRK
+│   │   ├── trend-badge.json         # integration-trend-badge.json for WRK
+│   │   └── last-run-badge.json
+│   ├── data/
+│   │   ├── benchmark-data.json      # Processed results read by the HTML pages
+│   │   ├── original-jmh-result.json # Copy of the raw JMH result (micro-benchmarks)
+│   │   └── *-server-metrics.json    # Prometheus metrics (WRK)
+│   └── api/
+│       ├── latest.json              # Latest run summary
+│       ├── benchmarks.json          # Benchmark results
+│       └── status.json              # Status and last-run timestamp
+├── history/                         # Archived runs for trend analysis (not deployed)
+├── prometheus/                      # Raw Prometheus metrics (WRK, not deployed)
+└── wrk/                             # Raw WRK output (WRK, not deployed)
 ----
 
-=== Quality Gates
+`HistoricalDataManager` archives the last 10 runs in the directory named by the `benchmark.history.dir` system property; without that property it uses `gh-pages-ready/history/`. Module-specific files outside this tree (raw JMH results, logs) are listed in the module READMEs.
 
-Each benchmark run evaluates:
+== Scoring and Trends
 
-* **Throughput thresholds** - Minimum operations per second
-* **Latency targets** - Maximum response times
-* **Regression detection** - Performance degradation from baseline
-* **Overall scoring** - Weighted composite performance score
+Every run computes a performance score and letter grade from throughput and latency (link:doc/performance-scoring.adoc[Performance Scoring]) and compares the score with the archived runs to set the trend badge. There is no pass/fail quality gate: a run does not fail because of its score, and regressions show up in the trend badge and in `trends.html`.
 
-See link:doc/performance-scoring.adoc[Performance Scoring] for scoring methodology.
+== CI/CD Integration
 
-=== CI/CD Integration
-
-The GitHub Actions workflow automatically:
-
-1. Runs both micro and integration benchmarks
-2. Collects generated artifacts from each module
-3. Combines results into a unified GitHub Pages structure
-4. Deploys to `cuioss.github.io/TokenSheriff/benchmarks`
-
-See link:doc/workflow.adoc[Benchmark Workflow] for the complete process.
+The GitHub Actions benchmark workflow runs both benchmark modules, combines their `gh-pages-ready/` artifacts and deploys them to https://cuioss.github.io/TokenSheriff/benchmarks/. See link:doc/workflow.adoc[Benchmark Workflow].
 
 == Documentation
 
 === Core Documentation
 
-* link:doc/Architecture.adoc[Module Architecture] - Comprehensive module architecture, responsibilities, and code placement guidelines
-* link:doc/workflow.adoc[Benchmark Workflow] - Complete workflow guide for running and processing benchmarks
-* link:doc/local-testing.adoc[Local Testing Guide] - How to test visualizations locally
-* link:doc/performance-scoring.adoc[Performance Scoring] - Weighted metrics methodology
-* link:doc/benchmark-metrics.adoc[Benchmark Metrics System] - CPU, memory, and application metrics collection
-* link:doc/JFR-Instrumentation.adoc[JFR Instrumentation] - Variance analysis guide
-* xref:../doc/validation/requirements.adoc#VALIDATION-9[Performance Requirements] - Specific performance targets and verification criteria
+* link:doc/Architecture.adoc[Module Architecture] - module responsibilities and code placement
+* link:doc/workflow.adoc[Benchmark Workflow] - CI pipeline and processing of benchmark results
+* link:doc/local-testing.adoc[Local Testing Guide] - viewing reports locally
+* link:doc/performance-scoring.adoc[Performance Scoring] - score, grade and trend calculation
+* link:doc/benchmark-metrics.adoc[Benchmark Metrics System] - Prometheus metrics collected during WRK runs
+* link:doc/JFR-Instrumentation.adoc[JFR Instrumentation] - variance analysis of the library benchmarks
+* xref:../doc/validation/requirements.adoc#VALIDATION-9[Performance Requirements] - performance targets and verification criteria
 
 === Performance Analysis
+
+Dated measurement records; their numbers describe the code and environment at the time of measurement.
 
 * link:doc/Analysis-03.2026-Integration.adoc[Integration Benchmark Analysis (March 2026)] - WRK-based HTTP load testing with resource monitoring
 * link:doc/Analysis-03.2026-Micro.adoc[Micro-Benchmark Analysis (March 2026)] - JMH library performance and validation pipeline breakdown
 * link:doc/Analysis-03.2026-JFR-Profiling.adoc[JFR Profiling Analysis (March 2026)] - JFR-based variance and hotspot analysis
 * link:doc/Analysis-03.2026-Latency-Decomposition.adoc[Latency Decomposition Analysis (March 2026)] - End-to-end latency breakdown
-
-== Development
-
-When adding new benchmarks or utilities:
-
-1. Review link:doc/Architecture.adoc[Architecture.adoc] for code placement guidelines
-2. Follow the decision tree to determine the correct module
-3. Use existing patterns and base classes
-4. Ensure proper metrics collection and reporting
-
-== Prerequisites
-
-* Java 21+
-* Docker (for integration tests and WRK load testing)
-* Available ports: 10443, 1443 (for integration tests)
-
-== Published Results
-
-Live benchmark results are available at:
-
-* https://cuioss.github.io/TokenSheriff/benchmarks/

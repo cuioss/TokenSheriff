@@ -10,7 +10,7 @@ Common utilities and infrastructure for JMH benchmark modules.
 
 == Overview
 
-This module provides centralized components used by all benchmark modules to ensure consistency and reduce code duplication. It has been organized into logical sub-packages for better maintainability and clarity.
+This module provides the components shared by all benchmark modules. Module boundaries and code placement rules are in link:../doc/Architecture.adoc[Module Architecture].
 
 == Package Structure
 
@@ -43,7 +43,7 @@ de.cuioss.benchmarking.common/
 * **BenchmarkType** - Enumeration for benchmark categorization
   - MICRO - Library-level benchmarks
   - INTEGRATION - End-to-end benchmarks
-  - Affects thresholds and quality gates
+  - Selects the badge file names and labels
 
 * **ReportConfiguration** - Configuration record for report generation
   - Result file paths and formats
@@ -125,16 +125,11 @@ de.cuioss.benchmarking.common/
 * **MetricConversionUtil** - Metric conversion utilities
   - Unit normalization for comparison
 
-* **MetricsComputer** - Computes derived metrics from raw results
-  - Throughput, latency, and percentile calculations
+* **MetricsComputer** - Extracts throughput and latency from JMH results and computes the performance score and grade (micro and integration formulas, see link:../doc/performance-scoring.adoc[Performance Scoring])
 
-* **ReportDataGenerator** - Generates structured report data
-  - Prepares data for HTML report consumption
+* **ReportDataGenerator** - Writes `data/benchmark-data.json` for the HTML pages, archives the run to the history directory and writes the badges
 
-* **ReportGenerator** - Creates HTML reports
-  - Interactive visualizations
-  - Performance summaries
-  - Trend analysis charts
+* **ReportGenerator** - Creates the HTML pages (`index.html`, `trends.html`, `detailed.html`) and copies their support files
 
 * **StatisticsCalculator** - Statistical analysis of benchmark results
   - Mean, standard deviation, percentile calculations
@@ -142,10 +137,9 @@ de.cuioss.benchmarking.common/
 * **TrendDataProcessor** - Processes trend data across benchmark runs
   - Performance change detection and analysis
 
-* **GitHubPagesGenerator** - Creates deployment-ready structure
-  - Complete website structure with navigation
-  - API endpoints for programmatic access
-  - SEO optimization (robots.txt, sitemap.xml)
+* **GitHubPagesGenerator** - Adds the deployment assets to `gh-pages-ready/`
+  - `404.html`, `robots.txt`, `sitemap.xml`
+  - API endpoints `api/latest.json`, `api/benchmarks.json`, `api/status.json`
 
 === Benchmark Execution (`runner/`)
 
@@ -242,6 +236,7 @@ processor.processResults(results, "target/benchmark-results");
 The following system properties control benchmark execution:
 
 === JMH Configuration
+
 * `jmh.include` - Benchmark class include pattern (default: `.*Benchmark.*`)
 * `jmh.result.format` - Result format: JSON, CSV, etc. (default: JSON)
 * `jmh.result.filePrefix` - Result file prefix
@@ -253,6 +248,7 @@ The following system properties control benchmark execution:
 * `jmh.threads` - Thread count, supports "MAX" and "HALF" (default: 100)
 
 === Integration Configuration
+
 * `benchmark.results.dir` - Output directory for results
 * `integration.service.url` - Target service URL
 * `keycloak.url` - Keycloak server URL
@@ -260,41 +256,7 @@ The following system properties control benchmark execution:
 
 == Generated Artifacts
 
-The processor generates a complete artifact set:
-
-[source]
-----
-target/benchmark-results/
-├── badges/                      # Performance badges (shields.io JSON)
-│   ├── performance-badge.json
-│   ├── last-run-badge.json
-│   └── trend-badge.json
-├── data/                        # Metrics JSON files
-│   ├── micro-metrics.json
-│   └── integration-metrics.json
-├── reports/                     # HTML reports
-│   ├── micro-report.html
-│   └── integration-report.html
-├── gh-pages-ready/             # GitHub Pages structure
-│   ├── index.html
-│   ├── api/
-│   ├── badges/
-│   └── reports/
-├── benchmark-summary.json       # Overall summary
-├── jwt-validation-metrics.json  # JWT-specific metrics
-└── *-benchmark-result.json     # Raw JMH results
-----
-
-== Quality Gates
-
-Each benchmark run is evaluated against configurable thresholds:
-
-* **Throughput** - Minimum operations per second
-* **Latency** - Maximum response times (p50, p95, p99)
-* **Regression** - Performance change from baseline
-* **Overall Score** - Weighted composite metric
-
-Thresholds vary by benchmark type (micro vs integration).
+`BenchmarkResultProcessor` (JMH) and `WrkResultPostProcessor` (WRK) write the `gh-pages-ready/` structure described in link:../README.adoc#_generated_structure[Generated Structure]. A run computes a performance score, grade and trend (link:../doc/performance-scoring.adoc[Performance Scoring]); there is no pass/fail threshold.
 
 == Dependencies
 
