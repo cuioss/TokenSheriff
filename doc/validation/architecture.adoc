@@ -30,8 +30,6 @@ image::../resources/diagrams/validation-pipeline.svg["The ordered validation pip
 
 When `JweDecryptionConfig` is configured on `TokenValidator`, `NonValidatingJwtParser` transparently handles JWE (5-part) tokens: it decrypts the JWE using `JweDecryptor`, extracts the inner JWS, and feeds it through the existing pipeline. See xref:specification/token-decryption.adoc[Token Decryption] for details.
 
-This pipeline provides separation of concerns, clear error signaling through `TokenValidationException`, and comprehensive security coverage.
-
 [[access-token-cache]]
 === Access-Token Cache
 
@@ -217,6 +215,7 @@ The readiness check reports a loader healthy only with `OK`; while any loader is
 
 A loader that owns its refresh executor cannot be initialised again after `close()`; that initialisation is rejected explicitly.
 
+[[oidc-discovery]]
 === OIDC Discovery
 
 _See Requirement xref:requirements.adoc#VALIDATION-4.1[VALIDATION-4.1: JWKS Endpoint Support]_

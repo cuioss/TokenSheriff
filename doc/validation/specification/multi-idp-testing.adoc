@@ -126,7 +126,7 @@ Checklist for adding a new OIDC provider:
 2. **Certificate SAN** — Add `dns:<hostname>` to `generate-certificates.sh` SAN list and regenerate
 3. **Application Properties** — Add issuer configuration with `%multi-idp.` Quarkus profile prefix in `application.properties`
 4. **TestRealm Factory** — Add `createXxxProvider()` factory method declaring capabilities
-5. **TestProviders Registry** — Add `ProviderRegistration` entry mapping system property to factory
+5. **TestProviders Registry** — Add a `TestProviders.ProviderRegistration` entry to `PROVIDER_REGISTRY`, mapping the system property to the factory
 6. **Maven POM** — Add `<xxx.enabled>true</xxx.enabled>` to failsafe `systemPropertyVariables` in the multi-idp-tests profile
 7. **Startup Script** — Add health wait loop for the new provider in `start-integration-container.sh`
 8. **Documentation** — Update this specification and the integration tests README
