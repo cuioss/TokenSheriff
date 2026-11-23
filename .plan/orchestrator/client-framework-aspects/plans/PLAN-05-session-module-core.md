@@ -101,6 +101,10 @@ already implements this and is Quarkus-free. Drop its gateway-only fields (`acti
   - **Shared versioning, opt-in artifact.** The module stays on the reactor's one version, by
     deliberate choice. The BOM docs state that `token-sheriff-session` is opt-in.
 - Each PR stays at 100 files or fewer. If the extraction needs more, split it.
+- **Java 21 baseline** (`maven.compiler.release` 21, unchanged). API Sheriff compiles for 25, so code
+  extracted from its `bff` package that uses the unnamed variable `_` (or any other post-21 feature)
+  is rewritten for 21. The baseline stays 21 while nifi-extensions runs inside NiFi on JDK 21 (epic
+  Watch). This applies equally to PLAN-06 and PLAN-07.
 - Log records use the module's own identifier range as ADR-0032 assigns it, never `ApiSheriff-*` ids.
 - Do not edit API Sheriff or Audit Notary: this plan only adds the module.
 - Build and test with Maven through the project's build skill.

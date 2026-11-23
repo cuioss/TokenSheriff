@@ -220,6 +220,20 @@ Nothing here is staged. Each note goes to the consumer's own repository once the
 
   Trigger to revisit the parked items: the gateway spike (stage 1) lands, or a second native consumer
   appears.
+- **Java baseline stays 21** (operator question, 2026-11-23).
+  - **Why:** nifi-extensions uses `token-sheriff-validation` (plus its `generators` test-jar) and runs
+    inside NiFi. The official `apache/nifi` image ships JDK 21: `docker run apache/nifi:2.8.0 java
+    -version` gives 21.0.10 (BellSoft), and the Docker Hub 2.10.0 layer shows 21.0.11. A validation jar
+    built for Java 25 (class-file version 69) would fail to load in NiFi with
+    `UnsupportedClassVersionError`. Apache NiFi documents Java 21 as its minimum, and Java 25 is only in
+    CI work (NIFI-14981).
+  - **Not a reason to move:** Token Sheriff's JDK-specific test branches split 21/25 from 27, because
+    the JDK `HttpClient` changed in 27 (`BackChannelHttpMalformedResponseTest:133`,
+    `BackChannelHttpBodyPhaseTest:104`). They depend on the runtime and would survive a baseline change.
+  - **Consequence for PLAN-05 to PLAN-07:** extracted API Sheriff code that uses the unnamed variable
+    `_` (Java 22+) is rewritten with named variables.
+  - **Trigger to revisit:** NiFi's system requirements list Java 25, or the `apache/nifi` image ships
+    JDK 25, or nifi-extensions stops consuming Token Sheriff.
 - **Repository split-out triggers** (ADR-0032 question 12). Re-check at every release after the
   session and BFF modules first ship, and at 1.0.
   - Fires when: 3 or more releases changed only session/BFF code; under 20 % of session/BFF PRs touch
