@@ -11,8 +11,8 @@ dependency-light layer by ArchUnit rather than shipped as a separate artifact. C
 *moves bytes, raises typed errors, counts events and exposes metrics; it never interprets a
 token's trust* — that is the xref:../validation/README.adoc[validation] layer's job.
 
-Both validation and the xref:../client/README.adoc[client] consume it; the
-re-packaging and the ArchUnit boundary live inside `token-sheriff-validation`.
+Both validation and the xref:../client/README.adoc[client] consume it; its packages and
+the ArchUnit boundary live inside `token-sheriff-validation`.
 
 == Scope at a glance
 

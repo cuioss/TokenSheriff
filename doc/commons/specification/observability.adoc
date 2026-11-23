@@ -31,8 +31,7 @@ link to validation's log-message registry*. The correlation with `JWTValidationL
 numbering is maintained by convention and documented in the single global
 xref:../../LogMessages.adoc[Log Messages] registry, not by a cross-layer type reference.
 
-Quarkus extensions expose the counter as before — the move is a package relocation, not a
-behavioural change.
+The Quarkus extensions expose the counter.
 
 == Metric identifiers (`commons.metrics`)
 

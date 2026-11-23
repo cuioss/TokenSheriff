@@ -103,7 +103,7 @@ client, a gateway built on the library — uses one implementation
 | `commons.transport.BoundedBodyHandler`
 | The one bounded body reader, with an `OverLimitPolicy` of `FAIL` or `TRUNCATE`; see the
   xref:specification/transport.adoc#bounded_response_body[transport specification]. A `TRUNCATE` caller
-  must read `BoundedBody.truncated()`.
+  must read `BoundedBodyHandler.BoundedBody.truncated()`.
 |===
 
 == [[archunit]] ArchUnit boundary

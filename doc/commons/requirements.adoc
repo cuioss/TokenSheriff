@@ -61,7 +61,7 @@ the switch set, an `http://` endpoint is fetched without TLS, so what it returns
 interception and tampering; the TLS requirements still apply to every `https://` endpoint. The client
 switch does not relax the refusal of a non-`https` endpoint advertised by an `https` issuer's
 discovery document
-(xref:../adr/0028-Discovery_refuses_a_non-https_endpoint_advertised_by_an_https_issuer_regardless_of_allowInsecureHttp.adoc[ADR-0028]).
+(xref:specification/transport.adoc#discovery_endpoint_schemes[Transport specification]).
 
 *Carve-out — hostname matching.* Certificate validation decomposes into chain trust, expiry,
 algorithm constraints, and hostname matching. The first three are unconditional and admit no
@@ -76,13 +76,9 @@ xref:../adr/0008-Adopt_the_upstream_cui-http_verifyHostname_knob_rather_than_a_l
 
 *Client back-channel origin.* When the client engine's optional back-channel origin
 (`sheriff.client.back-channel-origin`, xref:../client/requirements.adoc#CLIENT-24[CLIENT-24]) is set,
-back-channel calls whose advertised endpoint shares the issuer's origin are sent to that configured
-origin with path and query kept, and every other endpoint is contacted unchanged. The TLS
-requirements above — including hostname matching under `sheriff.client.verify-hostname` — then
-apply to the back-channel host actually contacted, so its certificate is validated against its own
-name. The setting relaxes no part of certificate validation and leaves the issuer identity and the
-`issuer` / `iss` checks unchanged; the validation-side JWKS URL is configured separately and is not
-rewritten. See xref:specification/transport.adoc#client_back_channel_origin[Transport specification].
+the TLS requirements above, hostname matching included, apply to the back-channel host actually
+contacted. The setting relaxes no part of certificate validation and leaves the issuer identity
+unchanged; see xref:specification/transport.adoc#client_back_channel_origin[Transport specification].
 
 * Source: https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §2.6], https://www.rfc-editor.org/rfc/rfc8414[RFC 8414 §2] (metadata retrieved over TLS).
 
@@ -135,20 +131,9 @@ contain the entry. The refused classes are:
   which `URI.getHost()` reports no host;
 * a malformed IPv6 literal (`::g`, `[::1`, `[10.0.0.1]`).
 
-The one rule
-is `commons.transport.EgressHostValidator`; `EgressPolicy.EgressPolicyBuilder.allowedHost`,
-`WellKnownConfig.WellKnownConfigBuilder.allowedEgressHost`,
-`HttpJwksLoaderConfig.HttpJwksLoaderConfigBuilder.allowedEgressHost` and the client's
-`ClientConfiguration` all apply it. All four builders store an admitted entry in the canonical form
-`EgressHostValidator.requireBareHost` returns — lower-cased, a bare IPv6 literal in bracketed form — so
-a bare IPv6 entry matches the bracketed host of an IPv6 URL, and `ClientConfiguration` reports,
-compares and prints its list in that form; matching stays case-insensitive. Under
-Quarkus a port-carrying element of `sheriff.token.issuers.<name>.jwks.http.allowed-egress-hosts`
-fails startup naming the property; on this issuer path blank CSV elements are dropped and the
-whitespace around an element is trimmed before the rule runs, so `keycloak, dex` admits both hosts. The
-client path does not trim: a port-carrying element, or one with surrounding whitespace, of
-`sheriff.client.allowed-egress-hosts` fails the client mapping, so `keycloak, dex` fails it there, while
-the configuration reader drops empty CSV elements before the rule runs.
+One rule, `commons.transport.EgressHostValidator`, decides this for every builder that takes an
+entry, and every builder stores an admitted entry in one canonical form; see
+xref:specification/transport.adoc#egress_host_validator[Transport specification].
 
 * Source: https://owasp.org/www-community/attacks/Server_Side_Request_Forgery[OWASP SSRF], https://github.com/advisories/GHSA-7vw6-5q2f-7w5r[CVE-2026-1180], https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4.10].
 
@@ -159,20 +144,13 @@ Every outbound fetch MUST apply a connect/read timeout, a response-size limit, a
 retry/backoff. Large metadata, JWKS or userinfo responses MUST NOT be able to exhaust memory, and a
 host that does not answer MUST NOT block a caller indefinitely before the response headers arrive.
 
-cui-http 3.2's `HttpHandler` sets two timeouts and no other. The connect timeout is set on the
-`HttpClient` the handler builds (`HttpClient.Builder.connectTimeout`) and bounds establishing the
-connection. The read timeout is the request timeout `HttpHandler.requestBuilder()` sets
-(`HttpRequest.Builder.timeout`), and it bounds the wait until the response headers arrive. Whether it
-also bounds the body read that follows depends on the JDK: on the client back-channel path, with a stalled
-body, it was observed not to on JDK 21 and 25 and to on JDK 27; the validation-side discovery and JWKS
-reads use the same JDK client and the same cui-http request timeout but were not run themselves. The bound this requirement relies on for the body read is its size, the
-response-size limit of the fetch: `ParserConfig.maxHttpResponseSize` for the validation-side discovery and
-JWKS reads, `ClientConfiguration.discoveryDocumentMaxSize` for the client's discovery, and the JWT payload
-ceiling `ParserConfig.maxPayloadSize` for the client's token, PAR, userinfo and revocation calls. On a JDK
-that does not bound the body read, a host that sends the headers and then stalls the body keeps
-the calling thread waiting; this is an accepted limit. On JDK 21 and 25 the request timeout was observed
-not to bound a body that stalls after the response headers; on JDK 27 it was observed to, so such a call
-ends with the request-timeout failure or with the JDK's own `IOException` for the body it cut short.
+The read timeout bounds the wait until the response headers arrive; whether it also bounds the body
+read depends on the JDK. The bound this requirement relies on for the body read is therefore its
+size, the response-size limit of the fetch, which applies on every JDK. On a JDK whose request
+timeout does not bound the body read, a host that sends the headers and then stalls the body keeps
+the calling thread waiting; this is an accepted limit. The timeouts, the per-fetch size settings and
+the observed JDK behaviour are specified in
+xref:specification/transport.adoc#resilience_bounds[Transport specification].
 
 * Source: https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4] (availability), https://www.rfc-editor.org/rfc/rfc7230[RFC 7230] (message framing bounds).
 
@@ -190,67 +168,17 @@ ceiling into the assembled body, and offers two policies:
 * *Truncate* — the body is read up to the ceiling and the result carries exactly the first ceiling
   bytes with an explicit truncation signal.
 
-The handler bounds its own work as well as the bytes: the body read so far is kept in one array that
-grows by doubling, so the objects a body costs grow with the logarithm of its size, not with the number of
-buffers it arrives in, and an empty buffer costs nothing. The array never exceeds the ceiling and is at most
-twice the bytes received, or the first allocation (1024 bytes, or the ceiling when that is smaller) when
-that is larger. During a growth step the old and the new array are both live, so the memory held while the
-body streams peaks below twice the ceiling plus the
-buffers of the delivery in flight; assembling and, for the string variant, decoding the result at
-completion peaks at a small constant multiple of the ceiling. Under the fail policy, when the handler
-observes a `Content-Length` header that is not a valid number, it cancels the subscription without
-requesting a byte, and the body future fails with an `IOException` carrying a fixed message that does not
-echo the header value.
-
-That guarantee is the handler's own. Whether the surrounding client reaches the handler, and whether it
-parses the header itself first, is the client's behaviour. The JDK HTTP/1.1 client parses `Content-Length`
-itself: after the handler returned, and for a `204` or other no-body reply before any body handler runs.
-It refuses a value that is not a number with the parser's `NumberFormatException`, which carries the raw
-header value, so the handler's fixed message is not delivered: the `HttpClient.sendAsync` future completes
-with that exception, `HttpClient.send` wraps it in an `IllegalArgumentException`, and from JDK 27 on it sits
-under a `ProtocolException` in the cause chain. The JDK 27 form rests on the JDK 27 leg of the CI build. The
-handler has no hook before that parse, so the mapping belongs to the caller that sends.
-
-The client's discovery, PAR, userinfo and revocation clients send through `BackChannelHttp.send`, and the
-token endpoint client through its own send; both wait on `HttpClient.sendAsync` through
-`BackChannelHttp.exchange`. `exchange` recognises the refusal in each of its forms
-(`BackChannelHttp.isMalformedFraming`: the `NumberFormatException` itself, an `IllegalArgumentException`
-with a `NumberFormatException` in its cause chain, or a `ProtocolException` caused by a
-`NumberFormatException` anywhere in the chain) and fails the call with a `TransportException` whose
-message is the endpoint's failure context and the fixed text `BackChannelHttp.MALFORMED_RESPONSE`, neither
-chaining the JDK's exception nor echoing its message. The token endpoint reports that failure as its
-post-redemption failure when its body handler observed a success status, and as a pre-redemption failure
-when it never saw the status, as for a `204`. Each failure of the exchange is decided on its cause,
-unwrapped from the `ExecutionException` of the wait and from any nested `CompletionException` or
-`ExecutionException` below it, for at most a bounded number of levels (`BackChannelHttp`'s
-`MAX_CAUSE_DEPTH`), so a cyclic or over-deep wrapper chain cannot loop. Every failure other than malformed
-framing reaches the caller as an `IOException` or an `Error`: an `IOException` or `Error` cause is rethrown
-as the client reported it; a cancelled wait, and a future failed with a wrapped `CancellationException`, is
-an `IOException` with the fixed text "the HTTP exchange was cancelled"; every other cause, checked or
-runtime, an `IllegalArgumentException` of another cause and a wrapper left over at the unwrap bound
-included, is an `IOException` with the fixed text "the HTTP exchange failed" and no chained cause, because
-a response-side failure message can carry remote content. The wrapped-cancellation, nested-wrapper,
-checked-cause and runtime-cause mappings are defensive: no JDK path producing any of them is known from
-reading the client. Each client classifies them
-through its `IOException` handling, and the token endpoint reports one seen after a recorded success status
-as its post-redemption failure. Request-side and response-side faults
-are told apart by the documented `HttpClient.sendAsync` contract: an `IllegalArgumentException` thrown
-synchronously, for a request the client refuses before sending, is a request-side fault and reaches the
-caller as thrown. The wait has no bound of its own. The request timeout, which cui-http 3.2's
-`HttpHandler.requestBuilder()` sets to the configured read timeout, bounds it until the response headers
-arrive. Whether it also bounds the body read that follows depends on the JDK: on JDK 21 and 25 it was
-observed not to, so a server that sends the headers and then stalls the body keeps the calling thread
-waiting; on JDK 27 it was observed to, so such a call ends with the request-timeout failure or with the JDK's own
-failure for the body it cut short. On every
-JDK the body read is bounded in size by the `BoundedBodyHandler` ceiling the endpoint client was constructed
-with. The validation-side discovery and JWKS
-reads hand the handler to cui-http, whose adapter performs the send, so this repository has no send call
-there to map. A caller therefore treats the message of any
-exception that comes out of an HTTP exchange as remote content and sanitises it before logging.
+The handler bounds its own work as well as the bytes: the memory it holds while the body streams stays
+below twice the ceiling plus the buffers of the delivery in flight. Under the fail policy, a
+`Content-Length` header that is not a valid number fails the read with a fixed message that does not
+echo the header value. A client that sends through the JDK HTTP client MUST map the JDK's own refusal
+of such a header to a fixed failure text as well, and a caller treats the message of any exception that
+comes out of an HTTP exchange as remote content and sanitises it before logging.
 
 The ceiling is accepted from 0 to `Integer.MAX_VALUE - 8` bytes; any other value is refused when the
 handler is created. The handler logs nothing. See
-xref:specification/transport.adoc#bounded_response_body[Transport specification] and
+xref:specification/transport.adoc#bounded_response_body[Transport specification] (handler rules and the
+client's exchange-failure mapping) and
 xref:../adr/0031-Bearer_extraction_scope_challenge_sanitiser_escape_and_bounded_body_reads_are_public_commons_helpers.adoc[ADR-0031].
 
 * Source: https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4] (availability), https://www.rfc-editor.org/rfc/rfc9110#section-8.6[RFC 9110 §8.6] (`Content-Length`).
@@ -314,8 +242,8 @@ Library code MUST NOT produce HTTP problem documents — that is not its layer.
 
 Every HTTP edge — `token-sheriff-validation-quarkus`, `token-sheriff-client-quarkus`,
 and any future non-Quarkus/RESTEasy edge (e.g. a portal adapter) — MUST map the typed
-exceptions to `application/problem+json` per RFC 9457. Existing validation rejection
-responses are retrofitted to this contract.
+exceptions to `application/problem+json` per RFC 9457, validation rejection responses
+included.
 
 * Source: https://www.rfc-editor.org/rfc/rfc9457[RFC 9457].
 
@@ -358,7 +286,7 @@ _See xref:specification/observability.adoc[Observability specification]._
 
 `SecurityEventCounter` and the security-event types live in `commons.events` so validation
 and the client share one event surface. The counter MUST remain thread-safe and
-free of any Micrometer dependency; Quarkus extensions expose it as before.
+free of any Micrometer dependency; the Quarkus extensions expose it.
 
 * Source: https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4] (security monitoring).
 

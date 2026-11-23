@@ -29,8 +29,8 @@ the inbound normalization of IdP error responses; each edge owns its RFC 9457 ma
   future non-Quarkus / RESTEasy edge (e.g. a portal adapter)
 | MUST map those exceptions to `application/problem+json` per
   https://www.rfc-editor.org/rfc/rfc9457[RFC 9457], without leaking internal detail
-  (xref:../requirements.adoc#COMMONS-10[COMMONS-10], xref:../requirements.adoc#COMMONS-12[COMMONS-12]).
-  Existing validation rejection responses retrofit to this.
+  (xref:../requirements.adoc#COMMONS-10[COMMONS-10], xref:../requirements.adoc#COMMONS-12[COMMONS-12]),
+  validation rejection responses included.
 |===
 
 == Typed exception hierarchy (`commons.error`)

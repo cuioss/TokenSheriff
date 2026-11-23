@@ -27,8 +27,8 @@ retry/backoff and no discovery cache.
 |===
 | Endpoint | Purpose | Standard | Status
 
-| Discovery | OP metadata (`.well-known/openid-configuration`, RFC 8414 metadata) | https://openid.net/specs/openid-connect-discovery-1_0.html[OIDC Discovery 1.0], https://www.rfc-editor.org/rfc/rfc8414[RFC 8414] | Relocated from validation
-| JWKS | Signing-key retrieval | https://www.rfc-editor.org/rfc/rfc7517[RFC 7517] | Relocated from validation
+| Discovery | OP metadata (`.well-known/openid-configuration`, RFC 8414 metadata) | https://openid.net/specs/openid-connect-discovery-1_0.html[OIDC Discovery 1.0], https://www.rfc-editor.org/rfc/rfc8414[RFC 8414] | Implemented (validation side)
+| JWKS | Signing-key retrieval | https://www.rfc-editor.org/rfc/rfc7517[RFC 7517] | Implemented (validation side)
 | Token | Token issuance / exchange | https://www.rfc-editor.org/rfc/rfc6749[RFC 6749] | Contract + dispatcher (client-facing)
 | UserInfo | Claims about the authenticated end-user | https://openid.net/specs/openid-connect-core-1_0.html[OIDC Core] | Contract + dispatcher
 | Revocation | Token revocation | https://www.rfc-editor.org/rfc/rfc7009[RFC 7009] | Contract + dispatcher
@@ -37,8 +37,8 @@ retry/backoff and no discovery cache.
 | PAR | Pushed authorization requests | https://www.rfc-editor.org/rfc/rfc9126[RFC 9126] | Contract + dispatcher
 |===
 
-Discovery and JWKS are *relocated existing code* (`wellknown`, `jwks.http`); the remaining
-six are *transport contracts*. The client engine drives token,
+Discovery and JWKS are implemented by the validation-side transport code (`wellknown`,
+`jwks.http`); the remaining six are *transport contracts*. The client engine drives token,
 userinfo, revocation and PAR over its own back channel, builds the end-session redirect on the
 front channel, and implements no introspection flow. All eight have dispatchers in the
 `generators` test artifact. The dispatchers for the six transport contracts are smoke-tested
@@ -225,16 +225,21 @@ never stored and never silently ignored.
   in `build()`, so the fixed text is the first-class message and the entry appears nowhere in the
   cause chain;
 * the client's `ClientConfiguration` refuses each `allowedEgressHosts` entry through `refusal`, naming
-  the entry's zero-based index but never the entry;
+  the entry's zero-based index but never the entry, and reports, compares and prints its list in the
+  canonical form;
 * under Quarkus, `IssuerConfigResolver` turns a refused element of
   `sheriff.token.issuers.<name>.jwks.http.allowed-egress-hosts` into an `IllegalStateException` naming
-  the property key and the bare-host rule, with the fixed text chained as its cause; blank CSV elements
-  are dropped before the rule runs.
+  the property key and the bare-host rule, with the fixed text chained as its cause; on this issuer path
+  blank CSV elements are dropped and the whitespace around an element is trimmed before the rule runs,
+  so `keycloak, dex` admits both hosts;
+* the client path does not trim: an element of `sheriff.client.allowed-egress-hosts` that carries a
+  port or surrounding whitespace fails the client mapping, so `keycloak, dex` fails there, while the
+  configuration reader drops empty CSV elements before the rule runs.
 
-`EgressPolicy.check` is unchanged: a listed host still bypasses the address-range check, matched
-case-insensitively, and a bracketed IPv6 entry matches the bracketed host of an IPv6 URL.
+`EgressPolicy.check` matches a listed host case-insensitively; it bypasses the address-range check,
+and a bare IPv6 entry, stored bracketed, matches the bracketed host of an IPv6 URL.
 
-=== Resilience / DoS bounds (COMMONS-4)
+=== [[resilience_bounds]] Resilience / DoS bounds (COMMONS-4)
 
 Each fetch applies a connect/read timeout, a response-size limit, and bounded
 retry/backoff. No unbounded buffering of response bodies.
@@ -290,7 +295,7 @@ total would exceed the ceiling, so the full body is never materialised first.
 | Factory methods
 | `ofString(Charset, long maxBytes, String boundOrigin)` reads under the fail policy and decodes with the
   given charset; it is the form all three callers use. `ofBytes(long maxBytes, OverLimitPolicy, String
-  boundOrigin)` returns an immutable `BoundedBody` (`bytes()` returns a copy, `truncated()`,
+  boundOrigin)` returns an immutable `BoundedBodyHandler.BoundedBody` (`bytes()` returns a copy, `truncated()`,
   `asString(Charset)`; its `toString` shows the length, never the content).
 
 | Ceiling
@@ -301,7 +306,9 @@ total would exceed the ceiling, so the full body is never materialised first.
 
 | `FAIL` policy — pre-check
 | A response that advertises a `Content-Length` above the ceiling is refused before a byte of its body is
-  read: the subscription is cancelled in `onSubscribe`.
+  read: the subscription is cancelled in `onSubscribe`. A `Content-Length` that is not a valid number
+  cancels the subscription the same way, and the read fails with an `IOException` carrying a fixed
+  message that does not echo the header value.
 
 | `FAIL` policy — streaming
 | A body that crosses the ceiling while streaming — one that lied about its `Content-Length` or advertised
@@ -337,7 +344,51 @@ total would exceed the ceiling, so the full body is never materialised first.
 
 See
 xref:../../adr/0031-Bearer_extraction_scope_challenge_sanitiser_escape_and_bounded_body_reads_are_public_commons_helpers.adoc[ADR-0031]
-for the decision that merged the former validation and client handlers into this one.
+for the decision that made this the one handler of both sides.
+
+==== [[client_exchange_failures]] Malformed framing and exchange failures on the client back channel
+
+The handler's fixed message for a non-numeric `Content-Length` is its own guarantee; whether the
+surrounding HTTP client reaches the handler is the client's behaviour. The JDK HTTP/1.1 client parses
+`Content-Length` itself, after the handler returned and, for a `204` or other no-body reply, before any
+body handler runs. It refuses a value that is not a number with the parser's `NumberFormatException`,
+which carries the raw header value: the `HttpClient.sendAsync` future completes with that exception,
+`HttpClient.send` wraps it in an `IllegalArgumentException`, and from JDK 27 on it sits under a
+`ProtocolException` in the cause chain (the JDK 27 form rests on the JDK 27 leg of the CI build). The
+handler has no hook before that parse, so the mapping belongs to the caller that sends.
+
+The client's discovery, PAR, userinfo and revocation clients send through `BackChannelHttp.send`, the
+token endpoint client through its own send; both wait on `HttpClient.sendAsync` through
+`BackChannelHttp.exchange`:
+
+* *Malformed framing.* `BackChannelHttp.isMalformedFraming` recognises the refusal in each form (the
+  `NumberFormatException` itself, an `IllegalArgumentException` with one in its cause chain, a
+  `ProtocolException` caused by one anywhere in the chain). The call fails with a `TransportException`
+  whose message is the endpoint's failure context and the fixed text `BackChannelHttp.MALFORMED_RESPONSE`,
+  neither chaining the JDK's exception nor echoing its message. The token endpoint reports it as its
+  post-redemption failure when its body handler observed a success status, and as a pre-redemption
+  failure when it never saw the status, as for a `204`.
+* *Cause unwrapping.* Each failure is decided on its cause, unwrapped from the `ExecutionException` of
+  the wait and any nested `CompletionException` or `ExecutionException`, for at most `MAX_CAUSE_DEPTH`
+  levels, so a cyclic or over-deep wrapper chain cannot loop.
+* *Every other failure* reaches the caller as an `IOException` or an `Error`: an `IOException` or `Error`
+  cause is rethrown as reported; a cancelled wait, and a future failed with a wrapped
+  `CancellationException`, is an `IOException` with the fixed text "the HTTP exchange was cancelled";
+  every other cause, checked or runtime, an `IllegalArgumentException` of another cause and a wrapper
+  left at the unwrap bound included, is an `IOException` with the fixed text "the HTTP exchange failed"
+  and no chained cause, because a response-side failure message can carry remote content. The
+  wrapped-cancellation, nested-wrapper, checked-cause and runtime-cause mappings are defensive: no JDK
+  path producing them is known. Each client classifies them through its `IOException` handling, and the
+  token endpoint reports one seen after a recorded success status as its post-redemption failure.
+* *Request-side faults.* An `IllegalArgumentException` thrown synchronously by `HttpClient.sendAsync`,
+  for a request the client refuses before sending, is a request-side fault and reaches the caller as
+  thrown.
+
+The wait has no bound of its own; the request timeout and the size ceiling of
+xref:#resilience_bounds[] bound it. The validation-side discovery and JWKS reads hand the handler to
+cui-http, whose adapter performs the send, so this repository has no send call there to map. A caller
+therefore treats the message of any exception that comes out of an HTTP exchange as remote content and
+sanitises it before logging.
 
 === Caching (COMMONS-8)
 

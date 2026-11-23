@@ -30,8 +30,8 @@ The commons layer:
 * Normalizes inbound IdP error responses and raises typed exceptions.
 * Is rendered to end-callers by the HTTP edges as `application/problem+json`.
 
-The relocated `wellknown` and `jwks.http` code is *in scope* — its egress and TLS paths
-were audited to the requirements below during the move into commons.
+The validation-side `wellknown` and `jwks.http` transport code is *in scope*; its egress and
+TLS paths are held to the requirements below.
 
 == Threat catalog
 
@@ -84,12 +84,10 @@ were audited to the requirements below during the move into commons.
   returns a multi-gigabyte body or trickles bytes to exhaust memory / threads.
 | Connect/read timeouts, response-size limits, and bounded retry/backoff on every fetch;
   no unbounded buffering. The read timeout bounds the wait until the response headers arrive, so a
-  host that never answers is cut off. Whether it also covers the body depends on the JDK: on the client
-  back-channel path it was observed not to on JDK 21 and 25, so a body stalled after the headers keeps the
-  calling thread waiting — an accepted limit; on JDK 27 it was observed to, so such a call ends with the
-  request-timeout failure or with the JDK's own failure for the body it cut short. The validation-side metadata and JWKS fetches use the same JDK client and the
-  same cui-http request timeout, but were not run themselves. On every JDK the body is bounded in size by the response-size limit, and the mitigation relies on that
-  size bound.
+  host that never answers is cut off. Whether it also covers the body depends on the JDK, so a body
+  stalled after the headers can keep the calling thread waiting — an accepted limit; on every JDK the
+  body is bounded in size by the response-size limit, and the mitigation relies on that size bound
+  (xref:specification/transport.adoc#resilience_bounds[Transport spec]).
 | https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4], https://www.rfc-editor.org/rfc/rfc7230[RFC 7230]
 | xref:requirements.adoc#COMMONS-4[COMMONS-4]
 

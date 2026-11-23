@@ -210,8 +210,8 @@ Package prefix: `de.cuioss.sheriff.token.client`.
 |`CachingDiscoveryResolverAdversarialTest`, `CachingDiscoveryResolverFailureHandlingTest`,
 `CachingDiscoveryResolverHookFailureTest`, `CachingDiscoveryResolverRefreshPathTest`,
 `CachingDiscoveryResolverStalePolicyTest`, `CachingDiscoveryResolverTest`,
-`DiscoveryAdversarialTest`, `DiscoveryResolverSizeCapTest`, `DiscoveryResolverTest`,
-`ProviderMetadataTest`
+`DiscoveryAdversarialTest`, `DiscoveryResolverSizeCapTest` (a second top-level class in
+`DiscoveryResolverTest.java`), `DiscoveryResolverTest`, `ProviderMetadataTest`
 
 |`dpop`
 |`DpopProofGeneratorJktGoldenTest`, `DpopProofGeneratorTest`, `JwkPublicMembersTest`,
@@ -402,9 +402,9 @@ Package prefix: `de.cuioss.sheriff.token.client.quarkus`.
 `TokenSheriffClientProducerTest`
 
 |`config`
-|No test class of its own; `ClientConfigMapper` is exercised directly by `ClientConfigMapperContract`
-in `TokenSheriffClientProducerEgressTest`, which sits in the test package
-`de.cuioss.sheriff.token.client.quarkus`.
+|No test class of its own; `ClientConfigMapper` is exercised directly by the nested
+`ClientConfigMapperContract` classes of `TokenSheriffClientProducerEgressTest` and
+`TokenSheriffClientProducerTest` (`quarkus` row).
 |===
 
 [#client-quarkus-deployment]
