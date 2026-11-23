@@ -46,9 +46,10 @@ filter has no example in either consumer: neither uses `SecurityIdentity`.
    call and a redirect for a navigation.
    - Skills: pm-dev-java:java-quarkus, pm-dev-java:java-cdi, pm-dev-java:java-security
    - Persona: implementer
-3. **BFF-6 hook SPIs** as CDI beans with the documented defaults, `SessionViewContributor` included. A
-   contributor's members are added to the session-info view. A contributor can never remove or override
-   the allowlist cap, and an exception in a contributor answers `500` without leaking the session.
+3. **BFF-6 hook SPIs** as CDI beans with the documented defaults. `SessionViewContributor` is the CDI
+   adapter of SESSION-10's framework-neutral contributor SPI (PLAN-07). The allowlist cap, and the rule
+   that a contributor can never widen it, are SESSION-10's and are not re-implemented here. An exception
+   in a contributor answers `500` without leaking the session.
    Also the **BFF-7 answers**, with COMMONS-10 problem bodies.
    - Skills: pm-dev-java:java-quarkus, pm-dev-java:java-cdi, pm-dev-java:javadoc
    - Persona: implementer

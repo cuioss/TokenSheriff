@@ -26,9 +26,15 @@ Create the Quarkus extension pair `token-sheriff-bff-quarkus` (runtime) and
   - Every answer is `Cache-Control: no-store`.
   - A poll NEVER renews the idle deadline.
 
-  The model is API Sheriff's `UserInfoEndpoint` (`oidc.user_info.path`, 650 lines including its
-  allowlist filter and claim projection). The domain part of the view is added through the application
-  hook in PLAN-09. The split follows ADR-0032 question 11.
+  ⛔ **The extension does not implement the view; it exposes it.** The behaviour above is SESSION-10 in
+  `token-sheriff-session` (PLAN-07), one framework-neutral component that API Sheriff's pipeline reuses
+  as well (operator direction: reuse the same aspect). BFF-9 is only its Quarkus edge:
+  - the configured path;
+  - the `sheriff.bff.*` allowlist and default view, mapped onto SESSION-10's configuration;
+  - rendering of the outcome SESSION-10 returns.
+  A second allowlist filter or claim projection inside the extension is a defect. The domain part of the
+  view comes from the application through the PLAN-09 hook, which adapts SESSION-10's contributor SPI to
+  CDI.
 - **BFF-2, cookies.** All are `__Host-`, `HttpOnly` and `Secure`. The pending-login cookie is
   `SameSite=Lax` and taken once. The session cookie's `SameSite` value is configurable, with the
   ADR-0032 default. Any response that sets or clears one of them is `Cache-Control: no-store`, applied
@@ -66,9 +72,9 @@ shipped behaviour; API Sheriff has no Quarkus example to extract from.
      SESSION-6; `404` when the binding cannot destroy on the provider's behalf), step-up start and
      return (over SESSION-8);
    - central `no-store` on every response that sets or clears a cookie;
-   - the BFF-9 session-info endpoint: allowlist and default view from configuration (BFF-8 checks at
-     boot that the default view is a subset of the allowlist), `401`/`403`/`no-store` as above, and
-     only `resolve`, never `recordAccess`.
+   - the BFF-9 session-info endpoint as a thin edge over SESSION-10: the configured path, its allowlist
+     and default view handed to SESSION-10 (whose construction refuses a default view outside the
+     allowlist, so boot fails), and SESSION-10's outcome rendered unchanged.
    - Skills: pm-dev-java:java-quarkus, pm-dev-java:java-cdi, pm-dev-java:java-security, pm-dev-java-cui:cui-logging
    - Persona: implementer
 4. **BFF-3 flow defaults and native registration** in the deployment processor: build steps for the
@@ -78,12 +84,9 @@ shipped behaviour; API Sheriff has no Quarkus example to extract from.
    - Persona: implementer
 5. **Tests.** `QuarkusUnitTest`-style deployment tests for the configuration refusals and the build steps,
    and runtime unit tests for the cookie attributes, the callback page and the `503`/`502` answers. For
-   the session-info endpoint the tests cover:
-   - `401` without a session and a `403` disallowed claim;
-   - the default view, the full view and the native claim types (an array stays an array, a number
-     stays a number);
-   - an empty allowlist disclosing nothing;
-   - a poll leaving the idle deadline unchanged.
+   the session-info endpoint the tests are edge tests only: the configured path is served; `401`, `403`
+   and `no-store` reach the HTTP response unchanged; a misconfigured default view fails boot. SESSION-10's
+   own behaviour is tested in PLAN-07, never re-tested here.
    - Skills: pm-dev-java:junit-core, pm-dev-java:java-quarkus, pm-dev-java-cui:cui-testing
    - Persona: module-tester
 
@@ -116,7 +119,7 @@ shipped behaviour; API Sheriff has no Quarkus example to extract from.
 - OBSERVED: Audit Notary's callback is a meta-refresh page, its full-store answer is `503 TOO_MANY_LOGINS` with `Retry-After: 60`, and the provider failure is `502` — read at `Audit-Notary/audit-notary/src/main/java/de/cuioss/notary/audit/web/AuthResource.java` § lines 89-124 (leaf report).
 - OBSERVED: neither consumer uses `quarkus-oidc` — read at `API-Sheriff/pom.xml` and `Audit-Notary/pom.xml` § dependencies (leaf reports).
 - OBSERVED: API Sheriff's `UserInfoEndpoint` resolves the session without recording access, caps disclosure with an operator allowlist, answers `401` problem JSON (never a redirect) and `403` for a disallowed claim, and sets `no-store` on every answer — read at `API-Sheriff/api-sheriff/src/main/java/de/cuioss/sheriff/gateway/bff/reserved/UserInfoEndpoint.java` § class Javadoc and lines 143, 191; config keys `oidc.user_info.path`, `allowed_claims` and `default_view` at `API-Sheriff/doc/configuration/authentication-and-oidc.adoc` § lines 590-603 (orchestrator read 2026-11-23).
-- HYPOTHESIS: the native-JSON-type claim projection can rest on the validation module's published native JSON claims (ADR-0029) instead of a projection of its own — confirm/refute at `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/domain/token/IdTokenContent.java` § the raw or native claims accessor, against `API-Sheriff/api-sheriff/src/main/java/de/cuioss/sheriff/gateway/bff/reserved/IdTokenClaimProjection.java` (verify-at-outline).
+- HYPOTHESIS: SESSION-10 (PLAN-07) has landed as a framework-neutral component with a configuration and an outcome type the extension can wrap — confirm/refute at `token-sheriff-session/` § the session-info view type (verify-at-outline).
 - HYPOTHESIS: the client deployment module's build steps are generated by `quarkus-extension-processor`, so no handwritten `quarkus-build-steps.list` is needed — confirm/refute at `token-sheriff-quarkus-parent/token-sheriff-client-quarkus-deployment/pom.xml` § `annotationProcessorPaths` (verify-at-outline).
 - Verify-first clause: re-ground against the merged ADR-0032 (questions 1, 4, 9 and 10) and the landed PLAN-03 and PLAN-07.
 

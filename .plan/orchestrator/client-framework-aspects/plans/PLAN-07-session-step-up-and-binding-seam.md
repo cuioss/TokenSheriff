@@ -1,4 +1,4 @@
-# PLAN-07: `token-sheriff-session` — step-up into the session and the binding seam (SESSION-8, SESSION-9)
+# PLAN-07: `token-sheriff-session` — step-up, binding seam, session-info view (SESSION-8, SESSION-9, SESSION-10)
 
 epic: client-framework-aspects
 workstream: WS-03
@@ -22,6 +22,26 @@ Finish `token-sheriff-session` with the two remaining parts of the outline.
   SEPARATE follow-up plan staged after this one lands (about 2,253 lines plus about 3,725 test lines). It
   is never folded into this plan.
 
+- **SESSION-10, the session-info view, which is also the logged-in sentinel.** One framework-neutral
+  component that every consumer reuses, so this aspect is written once: API Sheriff's own pipeline as
+  well as the BFF extension (operator direction, 2026-11-23). The input is a raw `Cookie` header plus
+  the requested claim list. The output is an outcome carrying status, body and headers, which the
+  caller renders at its own edge.
+  - It answers with a curated view of the validated ID-token claims, capped by an operator allowlist and
+    with a default view.
+  - Claims keep their native JSON types. Session metadata is added: `expires_at`, `auth_time`, `acr`.
+  - Without a session the outcome is `401` problem JSON, never a redirect. An explicitly requested claim
+    outside the allowlist is `403`.
+  - Every outcome carries `Cache-Control: no-store`.
+  - The view only `resolve`s the session and never calls `recordAccess`, so a poll keeps no session
+    alive.
+  - A framework-neutral contributor SPI lets the application add domain members. A contributor can never
+    widen the allowlist.
+
+  Extract it from API Sheriff's `bff/reserved/UserInfoEndpoint`, `ClaimAllowlistFilter` and
+  `IdTokenClaimProjection` (650 lines). They are already framework-agnostic, taking a raw `Cookie` header
+  and returning a `UserInfoOutcome`.
+
 SESSION-8 is new design: API Sheriff's step-up is triggered by an upstream challenge and has no pending
 action, and Audit Notary has specified step-up (AUN-AUTH-4, UC-ACC-3) but not built it. Design against
 Audit Notary's specification.
@@ -43,13 +63,29 @@ Audit Notary's specification.
      404.
    - Skills: pm-dev-java:java-core, pm-dev-java:java-null-safety
    - Persona: implementer
-3. **Tests.** Cover:
+3. **SESSION-10 session-info view** as described in the Objective. It covers:
+   - the allowlist filter, whose operator configuration is validated at construction (the default view
+     must be a subset of the allowlist, and an empty allowlist discloses nothing);
+   - the native-JSON claim projection, resting on the validation module's native claims if PLAN-02 and
+     ADR-0029 provide them, never on a re-parse of the raw token;
+   - the session metadata;
+   - the contributor SPI;
+   - the framework-neutral outcome.
+   - Skills: pm-dev-java:java-core, pm-dev-java:java-null-safety, pm-dev-java:javadoc
+   - Persona: implementer
+4. **Tests.** Cover:
    - a step-up with the same subject, a different subject, a replayed transaction, an expired
      transaction, and a logout during the step-up;
-   - binding round-trip, handle re-issue, a malformed cookie header, and the capability flag.
+   - binding round-trip, handle re-issue, a malformed cookie header, and the capability flag;
+   - the session-info view: `401` without a session; `403` for a disallowed claim; the default, explicit
+     and full views; native types (an array stays an array, a number stays a number); an empty
+     allowlist; a contributor that tries to add a disallowed claim; the idle deadline unchanged after
+     repeated views.
    - Skills: pm-dev-java:junit-core, pm-dev-java-cui:cui-testing
    - Persona: module-tester
-4. **Documentation and threat-model entries** for SESSION-8 and SESSION-9, plus test-mapping rows. If
+5. **Documentation and threat-model entries** for SESSION-8, SESSION-9 and SESSION-10, plus test-mapping
+   rows. The threat-model entries for SESSION-10 cover over-disclosure (the allowlist cap) and the view
+   keeping a session alive (the no-renewal rule). If
    ADR-0032 keeps cookie mode in API Sheriff, state that this seam is what keeps it possible.
    - Skills: pm-documents:ref-asciidoc, pm-documents:ref-documentation
    - Persona: documenter
@@ -57,8 +93,8 @@ Audit Notary's specification.
 **Done when:**
 
 - `./mvnw -pl token-sheriff-session -am verify` is green.
-- SESSION-8 and SESSION-9 are covered by tests that fail at the PLAN-06 merge commit.
-- The module documentation lists SESSION-1 to SESSION-9 complete.
+- SESSION-8, SESSION-9 and SESSION-10 are covered by tests that fail at the PLAN-06 merge commit.
+- The module documentation lists SESSION-1 to SESSION-10 complete.
 - The cookie-mode follow-up is either staged by the orchestrator, if ADR-0032 moves cookie mode, or
   recorded as not needed.
 - The pull request's open Sonar read at the head lists zero new-code issues and zero hotspots left to
@@ -80,7 +116,9 @@ Audit Notary's specification.
 - OBSERVED: API Sheriff's step-up is driven by an upstream 401 `insufficient_user_authentication` challenge and replaces the session as an ordinary login — read at `API-Sheriff/api-sheriff/src/main/java/de/cuioss/sheriff/gateway/bff/refresh/StepUpCoordinator.java` § lines 57-64 (leaf report).
 - OBSERVED: Audit Notary specifies step-up with same-`sub` binding but has not built it — read at `Audit-Notary/doc/specification/authentication.adoc` § AUN-AUTH-4 and `Audit-Notary/audit-notary/src/main/java/de/cuioss/notary/audit/config/Action.java` § line 33 (leaf report).
 - OBSERVED: the sealed-cookie mode is 2,253 main lines and 3,725 test lines in API Sheriff's `bff/cookie/` — read at `API-Sheriff/api-sheriff/src/main/java/de/cuioss/sheriff/gateway/bff/cookie/` § `wc -l` (leaf report).
-- Verify-first clause: re-ground against the merged ADR-0032 (questions 5 and 6) and the landed PLAN-05 and PLAN-06 before scoping.
+- OBSERVED: API Sheriff's user-info endpoint is framework-agnostic (a raw `Cookie` header and the raw `claims` parameter in, a `UserInfoOutcome` out), resolves the session without recording access, and caps disclosure with an operator allowlist — read at `API-Sheriff/api-sheriff/src/main/java/de/cuioss/sheriff/gateway/bff/reserved/UserInfoEndpoint.java` § class Javadoc and lines 143, 191 (orchestrator read 2026-11-23).
+- OBSERVED: the operator confirmed this endpoint is the aspect meant, and directed that one implementation be reused by all consumers (2026-11-23).
+- Verify-first clause: re-ground against the merged ADR-0032 (questions 5, 6 and 11) and the landed PLAN-05 and PLAN-06 before scoping.
 
 ## Expected Surface
 

@@ -106,6 +106,14 @@ claims did not hold.
     - PLAN-10 gains the sentinel IT flow.
   - No deliverable count changed, and the expected surfaces are unchanged: every addition falls inside
     paths already declared.
+- 2026-11-23 — The operator confirmed that `UserInfoEndpoint` is the aspect meant, and directed "reuse
+  the same aspect". The view moves down a layer:
+  - SESSION-10 in `token-sheriff-session` (PLAN-07, deliverable 3, now 5 deliverables) is the one
+    framework-neutral implementation, extracted from API Sheriff's already framework-agnostic endpoint.
+  - BFF-9 (PLAN-08) becomes a thin Quarkus edge over it.
+  - `SessionViewContributor` (PLAN-09) becomes the CDI adapter of SESSION-10's contributor SPI.
+  - ADR question 11 is recorded as decided.
+  - Both API Sheriff and Audit Notary reuse the same code.
 
 ## Consumer hand-off notes
 
@@ -126,12 +134,10 @@ Nothing here is staged. Each note goes to the consumer's own repository once the
   - `bff/login/QueryResponseModeAuthorizationRequestBuilder` (178 lines).
   - `bff/logout/LogoutTokenValidator` and `LogoutTokenReplayGuard` (459 lines), replaced by the
     validation module's (VALIDATION-13.4 and 13.5).
-- **API Sheriff, after Part C (only if the gateway adopts the extension's endpoint, which is an open
-  call for API Sheriff):** `bff/reserved/UserInfoEndpoint`, `ClaimAllowlistFilter` and
-  `IdTokenClaimProjection` (650 lines) and their tests could go, replaced by BFF-9. The gateway runs its
-  own pipeline rather than Quarkus endpoints, so it may keep the endpoint and reuse only the
-  framework-neutral parts. The claim projection may move onto the validation module's native JSON claims
-  (ADR-0029); see the PLAN-08 HYPOTHESIS.
+- **API Sheriff, after Part B (PLAN-07):** `bff/reserved/UserInfoEndpoint`, `ClaimAllowlistFilter` and
+  `IdTokenClaimProjection` (650 lines) and their tests are replaced by SESSION-10. The gateway keeps only
+  its reserved-path registration and renders SESSION-10's framework-neutral outcome in its own pipeline.
+  The `oidc.user_info.*` keys map onto SESSION-10's configuration.
 - **Audit Notary, after Part C:** `web/SessionResource` shrinks to a `SessionViewContributor` (rights,
   pseudonym, first-login flag). The polled session view then stops renewing the session.
 - **API Sheriff, later:** move onto `token-sheriff-session` once Part B is released. ADRs 0018, 0043,

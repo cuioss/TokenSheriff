@@ -66,10 +66,13 @@ repository. They are read-only inputs; never edit them.
        - `Cache-Control: no-store`;
        - a poll does NOT renew the idle deadline.
 
-       The addendum §7 left "the session view" entirely in the application. Decide the split. The
-       recommended split puts the generic identity and session view in the extension and adds the domain
-       content (Audit Notary's rights, pseudonym, first-login flag) through an application hook. Also
-       decide whether the anti-CSRF token (question 8) is delivered through this endpoint.
+       The addendum §7 left "the session view" entirely in the application. **The operator has already
+       set the direction (2026-11-23): reuse the same aspect.** The generic identity and session view is
+       ONE framework-neutral component, SESSION-10 in the session module, reused by API Sheriff's
+       pipeline and by the BFF extension's endpoint alike. Domain content (Audit Notary's rights,
+       pseudonym, first-login flag) is added through a contributor hook. The ADR records this decision
+       and its rationale. What it still decides is whether the anti-CSRF token (question 8) is delivered
+       through this view.
    - Skills: pm-documents:ref-asciidoc, pm-documents:ref-documentation
    - Persona: documenter
 2. **Quarkus OIDC comparison.** Write it as a section of the ADR, or as a document the ADR links. It
