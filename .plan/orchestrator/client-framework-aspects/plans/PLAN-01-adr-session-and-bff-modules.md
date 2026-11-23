@@ -56,6 +56,20 @@ repository. They are read-only inputs; never edit them.
        `CLIENT-*`), the documentation sets (`doc/session/`, `doc/bff/`), the log-message identifier
        ranges, and where the BFF threats live (API Sheriff's BFF-20 and BFF-21 move; API Sheriff keeps
        the gateway-specific ones).
+   11. **The session-info endpoint, which is also the logged-in sentinel.** The BFF extension ships a
+       configurable endpoint that the browser client polls to learn whether it is logged in and who the
+       user is. The model is API Sheriff's `UserInfoEndpoint` at `oidc.user_info.path`:
+       - an operator claim allowlist (`allowed_claims`) and a `default_view`;
+       - session metadata (`expires_at`, `auth_time`, `acr`);
+       - claims in their native JSON types;
+       - `401` problem JSON when there is no session, never a redirect;
+       - `Cache-Control: no-store`;
+       - a poll does NOT renew the idle deadline.
+
+       The addendum §7 left "the session view" entirely in the application. Decide the split. The
+       recommended split puts the generic identity and session view in the extension and adds the domain
+       content (Audit Notary's rights, pseudonym, first-login flag) through an application hook. Also
+       decide whether the anti-CSRF token (question 8) is delivered through this endpoint.
    - Skills: pm-documents:ref-asciidoc, pm-documents:ref-documentation
    - Persona: documenter
 2. **Quarkus OIDC comparison.** Write it as a section of the ADR, or as a document the ADR links. It
@@ -73,7 +87,7 @@ repository. They are read-only inputs; never edit them.
 
 **Done when:**
 
-- ADR-0032 is merged on `main`. Each of the ten questions carries a decision, a rationale and its
+- ADR-0032 is merged on `main`. Each of the eleven questions carries a decision, a rationale and its
   rejected alternatives.
 - The comparison cites a Quarkus version.
 - The four scope documents no longer contradict the ADR.
@@ -103,6 +117,9 @@ repository. They are read-only inputs; never edit them.
 - OBSERVED: no Token Sheriff, API Sheriff or Audit Notary document weighs the Quarkus OIDC extension against a BFF of their own; Audit Notary's only mention is about its MCP gateway — read at `Audit-Notary/doc/concepts/local-mcp-gateway.adoc` § line 368 (leaf report).
 - OBSERVED: API Sheriff uses neither `TokenLifecycleManager` nor `TokenStore` — read at `API-Sheriff/api-sheriff/src/main/java` (0 matches, orchestrator grep 2026-11-23).
 - OBSERVED: the consumers diverge on pending-login lifetime (5 vs 10 min), logout revocation (refresh only vs refresh and access), and session cookie (`Lax` vs `Strict`) — read at `API-Sheriff/.../bff/pending/PendingAuthorizationRecord.java` § `FIXED_TTL` and `Audit-Notary/.../security/LoginTransactions.java` § line 45.
+- OBSERVED: API Sheriff serves a curated identity and session view at `oidc.user_info.path`, with an operator allowlist and default view, `401` problem JSON without a session, `no-store`, and native JSON claim types — read at `API-Sheriff/api-sheriff/src/main/java/de/cuioss/sheriff/gateway/bff/reserved/UserInfoEndpoint.java` § class Javadoc and `ClaimAllowlistFilter.java` (orchestrator read 2026-11-23).
+- OBSERVED: polling API Sheriff's user-info path does not keep the session alive — read at `API-Sheriff/doc/user/bff-session.adoc` § line 647; the endpoint calls only `SessionBinding.resolve` — read at `UserInfoEndpoint.java` § lines 143, 191.
+- OBSERVED: Audit Notary's session view `/api/v1/session` returns name, rights, CSRF token and first-login flag, and sits behind a request gate that renews the session on every call — read at `Audit-Notary/audit-notary/src/main/java/de/cuioss/notary/audit/web/SessionResource.java` § `session` and `web/RequestGate.java` § `session()` (orchestrator read; leaf report).
 - HYPOTHESIS: the Quarkus OIDC web-app mode lacks per-source pending-login fairness and a published refresh-disposition rule — confirm/refute at the Quarkus `quarkus-oidc` source for the pinned Quarkus version § `CodeAuthenticationMechanism` (verify-at-outline).
 
 ## Expected Surface

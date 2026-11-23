@@ -20,6 +20,8 @@ The integration tests run against Keycloak in `token-sheriff-quarkus-integration
 - a back-channel logout ending the session;
 - the CSRF refusals;
 - the full pending-login store answering `503`;
+- the session-info sentinel answering `401` before login and the curated view after it, with repeated
+  polls leaving the idle deadline unchanged;
 - one step-up into the same session.
 
 The same flows must pass with the integration-test application built as a native image. The user

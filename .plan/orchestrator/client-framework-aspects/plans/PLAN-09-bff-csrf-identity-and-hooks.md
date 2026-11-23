@@ -24,6 +24,9 @@ Complete the extension's request-side behaviour.
     and are bounded in length.
   - `SessionAugmentor`: values added at login.
   - `StepUpRequirement`: maps a pending action to a step-up address.
+  - `SessionViewContributor`: adds the application's domain members to the BFF-9 session-info view
+    (PLAN-08), for example Audit Notary's rights, pseudonym and first-login flag. The anti-CSRF token is
+    delivered through that view too, if ADR-0032 decides so (questions 8 and 11).
 - **BFF-7, limits and answers.** The CLIENT-31 bounds, `503` with `Retry-After`, `502`, and COMMONS-10
   problem bodies.
 
@@ -43,8 +46,10 @@ filter has no example in either consumer: neither uses `SecurityIdentity`.
    call and a redirect for a navigation.
    - Skills: pm-dev-java:java-quarkus, pm-dev-java:java-cdi, pm-dev-java:java-security
    - Persona: implementer
-3. **BFF-6 hook SPIs** as CDI beans with the documented defaults, and **BFF-7 answers** with COMMONS-10
-   problem bodies.
+3. **BFF-6 hook SPIs** as CDI beans with the documented defaults, `SessionViewContributor` included. A
+   contributor's members are added to the session-info view. A contributor can never remove or override
+   the allowlist cap, and an exception in a contributor answers `500` without leaking the session.
+   Also the **BFF-7 answers**, with COMMONS-10 problem bodies.
    - Skills: pm-dev-java:java-quarkus, pm-dev-java:java-cdi, pm-dev-java:javadoc
    - Persona: implementer
 4. **Tests**, covering:
@@ -56,7 +61,7 @@ filter has no example in either consumer: neither uses `SecurityIdentity`.
      bound) and an overridden policy.
    - Skills: pm-dev-java:junit-core, pm-dev-java:java-quarkus, pm-dev-java-cui:cui-testing
    - Persona: module-tester
-5. **The `doc/bff/` requirements and threat model** (placement per ADR-0032) for BFF-1 to BFF-8, including
+5. **The `doc/bff/` requirements and threat model** (placement per ADR-0032) for BFF-1 to BFF-9, including
    the CSRF threats moved from API Sheriff's BFF catalogue as ADR-0032 decides, plus test-mapping rows.
    - Skills: pm-documents:ref-asciidoc, pm-documents:ref-documentation
    - Persona: documenter

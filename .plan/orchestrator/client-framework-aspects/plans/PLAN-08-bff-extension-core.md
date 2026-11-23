@@ -1,4 +1,4 @@
-# PLAN-08: `token-sheriff-bff-quarkus` — extension pair, endpoints, cookies, flow defaults, configuration (BFF-1, BFF-2, BFF-3, BFF-8)
+# PLAN-08: `token-sheriff-bff-quarkus` — extension pair, endpoints, cookies, flow defaults, configuration (BFF-1, BFF-2, BFF-3, BFF-8, BFF-9)
 
 epic: client-framework-aspects
 workstream: WS-04
@@ -16,6 +16,19 @@ Create the Quarkus extension pair `token-sheriff-bff-quarkus` (runtime) and
 - **BFF-1, endpoints.** Login start, callback, logout, back-channel logout and step-up, under a
   configurable root (default `/auth`). The callback answers with a same-origin page that navigates to
   the checked return address, not with a `302`, so a `SameSite=Strict` session cookie also works.
+- **BFF-9, session-info endpoint (the logged-in sentinel).** The browser client polls one configurable
+  path to learn whether it is logged in and who the user is.
+  - It returns a curated view of the validated ID-token claims, capped by an operator allowlist and with
+    a default view, plus the session metadata `expires_at`, `auth_time` and `acr`.
+  - Claims keep their native JSON types. Raw tokens never appear in it.
+  - Without a session it answers `401` problem JSON, never a redirect. A request for a claim outside the
+    allowlist is answered `403`.
+  - Every answer is `Cache-Control: no-store`.
+  - A poll NEVER renews the idle deadline.
+
+  The model is API Sheriff's `UserInfoEndpoint` (`oidc.user_info.path`, 650 lines including its
+  allowlist filter and claim projection). The domain part of the view is added through the application
+  hook in PLAN-09. The split follows ADR-0032 question 11.
 - **BFF-2, cookies.** All are `__Host-`, `HttpOnly` and `Secure`. The pending-login cookie is
   `SameSite=Lax` and taken once. The session cookie's `SameSite` value is configurable, with the
   ADR-0032 default. Any response that sets or clears one of them is `Cache-Control: no-store`, applied
@@ -52,7 +65,10 @@ shipped behaviour; API Sheriff has no Quarkus example to extract from.
    - callback (a same-origin navigation page), logout (POST, over SESSION-6), back-channel (over
      SESSION-6; `404` when the binding cannot destroy on the provider's behalf), step-up start and
      return (over SESSION-8);
-   - central `no-store` on every response that sets or clears a cookie.
+   - central `no-store` on every response that sets or clears a cookie;
+   - the BFF-9 session-info endpoint: allowlist and default view from configuration (BFF-8 checks at
+     boot that the default view is a subset of the allowlist), `401`/`403`/`no-store` as above, and
+     only `resolve`, never `recordAccess`.
    - Skills: pm-dev-java:java-quarkus, pm-dev-java:java-cdi, pm-dev-java:java-security, pm-dev-java-cui:cui-logging
    - Persona: implementer
 4. **BFF-3 flow defaults and native registration** in the deployment processor: build steps for the
@@ -61,14 +77,20 @@ shipped behaviour; API Sheriff has no Quarkus example to extract from.
    - Skills: pm-dev-java:java-quarkus
    - Persona: implementer
 5. **Tests.** `QuarkusUnitTest`-style deployment tests for the configuration refusals and the build steps,
-   and runtime unit tests for the cookie attributes, the callback page and the `503`/`502` answers.
+   and runtime unit tests for the cookie attributes, the callback page and the `503`/`502` answers. For
+   the session-info endpoint the tests cover:
+   - `401` without a session and a `403` disallowed claim;
+   - the default view, the full view and the native claim types (an array stays an array, a number
+     stays a number);
+   - an empty allowlist disclosing nothing;
+   - a poll leaving the idle deadline unchanged.
    - Skills: pm-dev-java:junit-core, pm-dev-java:java-quarkus, pm-dev-java-cui:cui-testing
    - Persona: module-tester
 
 **Done when:**
 
 - `./mvnw verify` is green across the reactor, with both new modules' JaCoCo gates.
-- BFF-1, BFF-2, BFF-3 and BFF-8 are covered by tests that fail at the PLAN-07 merge commit, where the
+- BFF-1, BFF-2, BFF-3, BFF-8 and BFF-9 are covered by tests that fail at the PLAN-07 merge commit, where the
   extension is absent.
 - `token-sheriff-bom` exports the runtime artifact.
 - `quarkus-bom` still precedes `token-sheriff-bom` in `token-sheriff-quarkus-parent/pom.xml` (holds at
@@ -93,6 +115,8 @@ shipped behaviour; API Sheriff has no Quarkus example to extract from.
 - OBSERVED: the client jar ships its own `reflect-config.json` for the engine's DSL-JSON converters — read at `token-sheriff-client/src/main/resources/META-INF/native-image/de.cuioss.sheriff.token/token-sheriff-client/reflect-config.json` § 8 converter entries (orchestrator grep).
 - OBSERVED: Audit Notary's callback is a meta-refresh page, its full-store answer is `503 TOO_MANY_LOGINS` with `Retry-After: 60`, and the provider failure is `502` — read at `Audit-Notary/audit-notary/src/main/java/de/cuioss/notary/audit/web/AuthResource.java` § lines 89-124 (leaf report).
 - OBSERVED: neither consumer uses `quarkus-oidc` — read at `API-Sheriff/pom.xml` and `Audit-Notary/pom.xml` § dependencies (leaf reports).
+- OBSERVED: API Sheriff's `UserInfoEndpoint` resolves the session without recording access, caps disclosure with an operator allowlist, answers `401` problem JSON (never a redirect) and `403` for a disallowed claim, and sets `no-store` on every answer — read at `API-Sheriff/api-sheriff/src/main/java/de/cuioss/sheriff/gateway/bff/reserved/UserInfoEndpoint.java` § class Javadoc and lines 143, 191; config keys `oidc.user_info.path`, `allowed_claims` and `default_view` at `API-Sheriff/doc/configuration/authentication-and-oidc.adoc` § lines 590-603 (orchestrator read 2026-11-23).
+- HYPOTHESIS: the native-JSON-type claim projection can rest on the validation module's published native JSON claims (ADR-0029) instead of a projection of its own — confirm/refute at `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/domain/token/IdTokenContent.java` § the raw or native claims accessor, against `API-Sheriff/api-sheriff/src/main/java/de/cuioss/sheriff/gateway/bff/reserved/IdTokenClaimProjection.java` (verify-at-outline).
 - HYPOTHESIS: the client deployment module's build steps are generated by `quarkus-extension-processor`, so no handwritten `quarkus-build-steps.list` is needed — confirm/refute at `token-sheriff-quarkus-parent/token-sheriff-client-quarkus-deployment/pom.xml` § `annotationProcessorPaths` (verify-at-outline).
 - Verify-first clause: re-ground against the merged ADR-0032 (questions 1, 4, 9 and 10) and the landed PLAN-03 and PLAN-07.
 

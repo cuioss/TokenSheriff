@@ -89,6 +89,23 @@ claims did not hold.
     (VALIDATION-13.4 and 13.5).
 - 2026-11-23 — Part B was split into three plans and Part C into three, each well under the
   six-deliverable split guard.
+- 2026-11-23 — Operator observation: API Sheriff has a client-specific, configurable endpoint that
+  tells the browser client about the user and acts as a sentinel for whether the user is logged in.
+  - **Verified:** it is `bff/reserved/UserInfoEndpoint` at `oidc.user_info.path`, with
+    `ClaimAllowlistFilter` and `IdTokenClaimProjection`, 650 lines plus tests.
+    - It returns an allowlist-capped claim view in native JSON types, plus `expires_at`, `auth_time`
+      and `acr`.
+    - Without a session it answers `401` problem JSON, never a redirect, and every answer is `no-store`.
+    - Polling it does not renew the idle deadline (`API-Sheriff/doc/user/bff-session.adoc:647`).
+  - Audit Notary's `/api/v1/session` is its domain-laden counterpart (rights, CSRF token, first-login
+    flag). It renews the session on every call.
+  - **Disposition: fold, no new plan.**
+    - PLAN-01 gains ADR question 11, the generic-versus-domain split of the session view.
+    - PLAN-08 gains BFF-9, the session-info endpoint, inside its endpoints deliverable.
+    - PLAN-09 gains the `SessionViewContributor` hook inside its hooks deliverable.
+    - PLAN-10 gains the sentinel IT flow.
+  - No deliverable count changed, and the expected surfaces are unchanged: every addition falls inside
+    paths already declared.
 
 ## Consumer hand-off notes
 
@@ -109,6 +126,14 @@ Nothing here is staged. Each note goes to the consumer's own repository once the
   - `bff/login/QueryResponseModeAuthorizationRequestBuilder` (178 lines).
   - `bff/logout/LogoutTokenValidator` and `LogoutTokenReplayGuard` (459 lines), replaced by the
     validation module's (VALIDATION-13.4 and 13.5).
+- **API Sheriff, after Part C (only if the gateway adopts the extension's endpoint, which is an open
+  call for API Sheriff):** `bff/reserved/UserInfoEndpoint`, `ClaimAllowlistFilter` and
+  `IdTokenClaimProjection` (650 lines) and their tests could go, replaced by BFF-9. The gateway runs its
+  own pipeline rather than Quarkus endpoints, so it may keep the endpoint and reuse only the
+  framework-neutral parts. The claim projection may move onto the validation module's native JSON claims
+  (ADR-0029); see the PLAN-08 HYPOTHESIS.
+- **Audit Notary, after Part C:** `web/SessionResource` shrinks to a `SessionViewContributor` (rights,
+  pseudonym, first-login flag). The polled session view then stops renewing the session.
 - **API Sheriff, later:** move onto `token-sheriff-session` once Part B is released. ADRs 0018, 0043,
   0046, 0058 and 0080 are amended, never deleted. Threats BFF-20 and BFF-21 move to the new threat
   model as the ADR decides.

@@ -20,14 +20,17 @@ integration tests against Keycloak, and proven in native mode.
 - In scope: `token-sheriff-quarkus-parent/token-sheriff-bff-quarkus/` and `-deployment/`, the
   quarkus-parent and bom poms, `token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/`, a
   new `doc/bff/` documentation set.
-- Out of scope: the session lifecycle itself (WS-03); domain authorization, canonical addresses, the
-  session view, first-login gate (stay in the application — addendum §7).
+- Out of scope: the session lifecycle itself (WS-03). Also out of scope, staying in the application
+  (addendum §7): domain authorization, canonical addresses, the DOMAIN members of the session view
+  (added through `SessionViewContributor`), and the first-login gate. The generic session-info view and
+  logged-in sentinel (BFF-9) is IN scope (operator observation of 2026-11-23; split per ADR-0032
+  question 11).
 
 ## Plans
 
 | Plan | Status | Notes |
 |------|--------|-------|
-| PLAN-08-bff-extension-core | staged | scaffold, BFF-1, BFF-2, BFF-3, BFF-8 |
+| PLAN-08-bff-extension-core | staged | scaffold, BFF-1, BFF-2, BFF-3, BFF-8, BFF-9 (session-info sentinel) |
 | PLAN-09-bff-csrf-identity-and-hooks | staged | BFF-4..BFF-7 |
 | PLAN-10-bff-integration-native-and-docs | staged | Keycloak ITs, native, user docs |
 
