@@ -58,6 +58,10 @@ claims did not hold.
   back-channel selector. It can run beside PLAN-01 under scope 2.
 - **PLAN-03, PLAN-04:** each waits for PLAN-01. PLAN-03 needs the pending-login defaults (5 or 10
   minutes; question 9.5); PLAN-04 needs the access-token-at-logout rule (question 9.2).
+- **PLAN-11:** independent of the ADR, like PLAN-02, so it may run before PLAN-01 lands. It shares the
+  flow tests, `requirements.adoc`, the specification documents and the test mapping with PLAN-02 to
+  PLAN-04, so expect the operator overlap question at `next` and run it in sequence with them. It is
+  staged last but is not gated behind Parts B and C.
 - **PLAN-05 to PLAN-07:** the new module `token-sheriff-session/` does not exist yet, so the surface
   reader reports its entries as unresolved. The gate cannot see overlaps between these three inside the
   new module, so they are sequenced by their `Depends on:` lines rather than by the disjointness gate.
@@ -122,7 +126,16 @@ claims did not hold.
     cross-repository build phase fragile.
   - **Accepted cost:** shared versioning means a session or BFF fix forces a validation release.
   - **Rejected alternatives:** a new repository now (`cuioss/session-sheriff`); deferring to the ADR.
-  - **Recorded as** ADR-0032 question 12 (PLAN-01). The mitigations are binding in PLAN-05 (ArchUnit,
+  - **Recorded as** ADR-0032 question 12 (PLAN-01).
+- 2026-11-23 — Native public-client login (Audit Notary's local MCP gateway, §4.3). The gap analysis
+  found the engine has PKCE, `iss`, the endpoint scheme policy, DPoP and rotation, but lacks `none`,
+  loopback, RFC 8707, the device grant and the Client ID Metadata Document.
+  - **Operator chose option A:** stage only RFC 8707 resource indicators now, as PLAN-11 in WS-02.
+    Every client shape benefits from them, the MCP 2026-07-28 revision requires them, and they let one
+    refresh token yield audience-restricted access tokens for several services.
+  - **Rejected:** a native public-client workstream now (B); deferring everything to a separate gateway
+    epic (C).
+  - PLAN-11 has 5 deliverables, under the split guard. The mitigations are binding in PLAN-05 (ArchUnit,
     opt-in artifact) and PLAN-08 (CI scoping, a CI-time measurement).
 
 ## Consumer hand-off notes
@@ -191,9 +204,13 @@ Nothing here is staged. Each note goes to the consumer's own repository once the
     - the RFC 8628 device grant;
     - the Client ID Metadata Document, which is still a draft.
 
-  Pending the operator's decision on whether these become engine seams (a new workstream here, or a
-  separate epic at the gateway's stage 2). Trigger: the operator's answer, or the gateway spike
-  (stage 1) landing.
+  **Operator decision (2026-11-23): option A.**
+  - RFC 8707 `resource` is staged now as PLAN-11.
+  - Parked until the gateway spike: the public client (`none`), the loopback redirect, the device grant
+    and the Client ID Metadata Document.
+
+  Trigger to revisit the parked items: the gateway spike (stage 1) lands, or a second native consumer
+  appears.
 - **Repository split-out triggers** (ADR-0032 question 12). Re-check at every release after the
   session and BFF modules first ship, and at 1.0.
   - Fires when: 3 or more releases changed only session/BFF code; under 20 % of session/BFF PRs touch

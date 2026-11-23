@@ -29,6 +29,7 @@ when CLIENT-31 to CLIENT-35 are implemented, documented, tested and released.
 | PLAN-02-step-up-binding-and-backchannel-selector | staged | CLIENT-34, CLIENT-35 (narrowed to the selector), ID-token groups accessor |
 | PLAN-03-pending-authorization-store | staged | CLIENT-31 |
 | PLAN-04-refresh-disposition-and-logout-step | staged | CLIENT-32, CLIENT-33 |
+| PLAN-11-resource-indicators | staged | RFC 8707 `resource` on every authorization/token request (next free CLIENT id); ADR-independent |
 
 ## Sequencing and Surface Notes
 

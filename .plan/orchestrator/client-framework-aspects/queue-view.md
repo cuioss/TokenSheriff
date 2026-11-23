@@ -4,7 +4,7 @@
 
 ## START HERE
 
-**Resume anchor**: Run /plan-orchestrator next slug=client-framework-aspects: PLAN-01 (ADR-0032, docs-only) and PLAN-02 (step-up binding + back-channel selector) have no dependencies and share no file, so both may be emitted under scope 2. After PLAN-01 lands: run /plan-orchestrator cleanup to re-ground PLAN-03..PLAN-10 against the accepted ADR (retire PLAN-08..10 if Part C is rejected). Ledger not yet on main: run /plan-orchestrator land when convenient.
+**Resume anchor**: Run /plan-orchestrator next slug=client-framework-aspects: PLAN-01 (ADR-0032, docs-only) and PLAN-02 (step-up binding + back-channel selector) have no dependencies and share no file, so both may be emitted under scope 2. PLAN-11 (RFC 8707 resource) is also ADR-independent but overlaps PLAN-02..04 on docs/tests: sequence it after PLAN-02. After PLAN-01 lands: run /plan-orchestrator cleanup to re-ground PLAN-03..PLAN-10 against the accepted ADR (retire PLAN-08..10 if Part C is rejected). Ledger not yet on main: run /plan-orchestrator land when convenient.
 **Phase**: orchestrating
 **Queue** (staged, in order):
 1. PLAN-01 (WS-01)
@@ -17,6 +17,7 @@
 8. PLAN-08 (WS-04)
 9. PLAN-09 (WS-04)
 10. PLAN-10 (WS-04)
+11. PLAN-11 (WS-02)
 
 ## Ordered Queue
 
@@ -32,3 +33,4 @@
 | 8 | PLAN-08 | WS-04 | staged | bom/pom.xml; token-sheriff-quarkus-parent/pom.xml; token-sheriff-quarkus-parent/token-sheriff-bff-quarkus-deployment/; token-sheriff-quarkus-parent/token-sheriff-bff-quarkus/ | plan-marshall |
 | 9 | PLAN-09 | WS-04 | staged | doc/bff/; doc/developer/test-impl-mapping.adoc; token-sheriff-quarkus-parent/token-sheriff-bff-quarkus-deployment/; token-sheriff-quarkus-parent/token-sheriff-bff-quarkus/ | plan-marshall |
 | 10 | PLAN-10 | WS-04 | staged | doc/README.adoc; doc/bff/; token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/ | plan-marshall |
+| 11 | PLAN-11 | WS-02 | staged | doc/client/requirements.adoc; doc/client/specification/retrieval-flow.adoc; doc/client/specification/token-handling.adoc; doc/developer/test-impl-mapping.adoc; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/config/ClientConfiguration.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/AuthorizationRequestBuilder.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/AuthorizationRequestOptions.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/ClientCredentialsFlow.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/ParClient.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/RefreshFlow.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/TokenEndpointClient.java; token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/flow/; token-sheriff-quarkus-parent/token-sheriff-client-quarkus/src/main/java/de/cuioss/sheriff/token/client/quarkus/config/ClientConfigMapper.java; token-sheriff-quarkus-parent/token-sheriff-client-quarkus/src/main/java/de/cuioss/sheriff/token/client/quarkus/config/ClientRuntimeConfig.java | plan-marshall |
