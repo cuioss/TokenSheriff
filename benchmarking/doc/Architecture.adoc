@@ -6,26 +6,21 @@
 :source-highlighter: highlight.js
 
 
-[NOTE]
-====
-This document defines the architecture, responsibilities, and boundaries of the Token-Sheriff benchmark modules. All content has been verified against the actual codebase.
-====
+This document defines the responsibilities and boundaries of the Token-Sheriff benchmark modules and where new code belongs. Profiles, parameters and generated files are documented in the module READMEs.
 
 == Overview
-
-The Token-Sheriff benchmarking infrastructure consists of three specialized modules:
 
 [cols="1,3", options="header"]
 |===
 |Module |Purpose
-|benchmarking-common
-|Shared infrastructure, utilities, and framework for all benchmark types
+|link:../benchmarking-common/README.adoc[benchmarking-common]
+|Shared infrastructure: runner framework, configuration, metrics collection, report and badge generation
 
-|benchmark-core
-|JMH-based micro-benchmarks for direct JWT validation library performance testing
+|link:../benchmark-core/README.adoc[benchmark-core]
+|JMH micro-benchmarks run directly against the JWT validation library
 
-|benchmark-integration-wrk
-|WRK-based HTTP load testing using shell scripts and Docker containers
+|link:../benchmark-integration-wrk/README.adoc[benchmark-integration-wrk]
+|WRK-based HTTP load testing driven by Maven and shell scripts against Docker containers
 |===
 
 == Module Dependency Structure
@@ -66,10 +61,7 @@ The Token-Sheriff benchmarking infrastructure consists of three specialized modu
 
 == benchmarking-common
 
-=== Responsibility
-Foundation framework providing shared utilities, configuration, metrics processing, and report generation for all benchmark types.
-
-=== Key Components
+Foundation framework for all benchmark types. The package layout and a description of every class are in the link:../benchmarking-common/README.adoc[benchmarking-common README].
 
 [cols="2,3", options="header"]
 |===
@@ -88,10 +80,10 @@ Foundation framework providing shared utilities, configuration, metrics processi
 |`BenchmarkMetricsTransformer`, `MetricsJsonExporter`, `MetricsComputer`, `StatisticsCalculator`
 
 |Report Generation
-|`ReportGenerator`, `BadgeGenerator`, `GitHubPagesGenerator`, `ReportDataGenerator`, `HistoricalDataManager`, `TrendDataProcessor`
+|`ReportGenerator`, `ReportDataGenerator`, `BadgeGenerator`, `GitHubPagesGenerator`, `HistoricalDataManager`, `TrendDataProcessor`
 
 |Data Conversion
-|`JmhBenchmarkConverter`, `WrkBenchmarkConverter`, `BenchmarkConverter`, `ReportMetadataFactory`
+|`BenchmarkConverter`, `JmhBenchmarkConverter`, `WrkBenchmarkConverter`, `ReportMetadataFactory`
 
 |HTTP Utilities
 |`HttpClientFactory`
@@ -103,29 +95,9 @@ Foundation framework providing shared utilities, configuration, metrics processi
 |`JsonSerializationHelper`, `BenchmarkingLogMessages`, `OutputDirectoryStructure`
 |===
 
-=== Package Structure
-[source]
-----
-de.cuioss.benchmarking.common/
-├── config/        # Configuration classes
-├── constants/     # Constants
-├── converter/     # Result converters (JMH/WRK → BenchmarkData)
-├── http/          # HTTP client utilities
-├── jfr/           # Java Flight Recorder support
-├── metrics/       # Metrics collection and processing
-├── model/         # Data models (BenchmarkData)
-├── output/        # Output directory management
-├── report/        # Report and badge generation
-├── runner/        # Benchmark runner framework
-└── util/          # General utilities
-----
-
 == benchmark-core
 
-=== Responsibility
-Executes JMH-based micro-benchmarks directly against the JWT validation library without network or container overhead.
-
-=== Key Components
+Runs JMH benchmarks directly against the JWT validation library, without network or container overhead.
 
 [cols="2,3", options="header"]
 |===
@@ -141,55 +113,23 @@ Executes JMH-based micro-benchmarks directly against the JWT validation library 
 |`AbstractBenchmark`, `AbstractJfrBenchmark`, `BenchmarkDelegate`, `CoreValidationDelegate`, `ErrorLoadDelegate`
 
 |Runners
-|`CoreBenchmarkRunner`, `JfrBenchmarkRunner`, `ConcurrencySweepRunner`
+|`CoreBenchmarkRunner`, `JfrBenchmarkRunner` (both extend `AbstractBenchmarkRunner`), `ConcurrencySweepRunner`
 
 |Support Classes
 |`BenchmarkKeyCache`, `MockTokenRepository`, `LibraryMetricsExporter`
 |===
 
-=== Maven Profiles
-
-* `benchmark` - Standard JMH benchmarks (< 10 minutes)
-* `benchmark-jfr` - Benchmarks with Java Flight Recorder profiling
-* `benchmark-concurrency-sweep` - `measureAverageTime` at 1, 10, 50, 100 threads
-* `analyze-jfr` - Analyze an existing JFR recording (`-Djfr.file=...`)
-* `quick` - Reduced iterations for fast testing
-
-=== Configuration
-
-Configured via pom.xml properties:
-
-* `jmh.iterations=5`, `jmh.warmupIterations=3`
-* `jmh.threads=100`, `jmh.time=4s`
-* `jmh.include` - Benchmark class pattern filter
-
 == benchmark-integration-wrk
 
-=== Responsibility
-Performs HTTP-based load testing using WRK tool via shell scripts. Minimal Java code - orchestration handled by Maven and bash scripts.
+Performs HTTP load testing with WRK. Orchestration is done by Maven and shell scripts; the only Java class is `WrkResultPostProcessor`, which converts WRK output to `BenchmarkData`, collects Prometheus metrics for each benchmark window and generates the reports.
 
-=== Architecture
+The Maven build uses scripts from two locations:
 
-**Java Components:** Only 1 class
+* `token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/scripts/` - container lifecycle (`start-integration-container.sh`, `stop-integration-container.sh`) and `dump-keycloak-logs.sh`
+* `src/main/resources/wrk-scripts/` - `pre-benchmark-health-check.sh`, the benchmark scripts (`health_live_benchmark.sh`, `jwt_benchmark.sh`, the ablation and JFR dispatchers) and `fetch_tokens.sh`
 
-* `WrkResultPostProcessor` - Converts WRK output to BenchmarkData format, fetches Prometheus metrics, generates reports
+Container services:
 
-**Shell Script Orchestration:**
-
-Maven pom.xml references scripts from two locations:
-
-* `../../token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/scripts/` - Container lifecycle and monitoring
-* `src/main/resources/wrk-scripts/` - WRK benchmark execution
-
-Key scripts:
-
-* Container lifecycle: `start-integration-container.sh`, `stop-integration-container.sh`
-* Health checks: `pre-benchmark-health-check.sh`
-* Benchmarks: `health_live_benchmark.sh`, `jwt_benchmark.sh`
-* Token fetching: `fetch_tokens.sh`
-* Logging: `dump-keycloak-logs.sh`
-
-**Container Services:**
 [source]
 ----
 Quarkus:     https://localhost:10443
@@ -204,24 +144,30 @@ Prometheus:  http://localhost:9090
   /api/v1/query    - Metrics API
 ----
 
-=== Maven Profiles
+== Data Flow
 
-* `benchmark` - Full lifecycle: build containers, run tests, collect metrics, stop containers
-* `benchmark-jfr` - JFR profiling run via `jfr_benchmark_dispatcher.sh` (200s duration, JFR compose overlay)
-* `quick` - Reduced duration (30s), skips container lifecycle
-* `autoscale` - 8 threads, 200 connections
-* `stress` - 10 threads, 150 connections
-* `max` - 10 threads, 300 connections (tests limits)
+[source]
+----
+Benchmark Execution (JMH or WRK)
+        │
+        ▼
+Converter (JmhBenchmarkConverter / WrkBenchmarkConverter)
+        │
+        ▼
+BenchmarkData (unified model)
+        │
+        ├──> ReportGenerator → HTML pages
+        │      └──> ReportDataGenerator → data/benchmark-data.json,
+        │             history archive, BadgeGenerator → badges/*.json
+        └──> GitHubPagesGenerator → 404.html, robots.txt, sitemap.xml, api/*.json
+        │
+        ▼
+target/benchmark-results/gh-pages-ready/
+----
 
-=== Configuration
+The WRK path additionally collects Prometheus metrics for each benchmark window through `PrometheusMetricsManager`, writes them to `prometheus/` and copies them into `gh-pages-ready/data/`.
 
-Configured via pom.xml properties:
-
-* `wrk.duration=60s`, `wrk.threads=5`, `wrk.connections=50`
-* `wrk.jwt.token_count=100`
-* `skip.container.lifecycle=false`
-
-== Code Placement Decision Tree
+== Code Placement
 
 [source]
 ----
@@ -244,133 +190,13 @@ Does the code generate reports/badges/artifacts?
 │                               └─NO──> benchmarking-common/util/
 ----
 
-== Placement Guidelines
+* **benchmarking-common**: anything used by both library and integration benchmarks - runner and processor framework, metrics collection, report and badge generation, configuration, HTTP clients.
+* **benchmark-core**: JMH `@Benchmark` methods, JFR instrumentation for library tests, library-specific test utilities.
+* **benchmark-integration-wrk**: processing of the WRK output format only. Prefer shell scripts over Java for WRK orchestration (container management, test execution).
 
-=== Place in benchmarking-common when:
+== Design Patterns
 
-* Used by both library and integration benchmarks
-* General framework component (runner, processor)
-* Metrics collection or transformation
-* Report/badge generation
-* Configuration management
-* HTTP client utilities
-
-=== Place in benchmark-core when:
-
-* JMH benchmark methods (`@Benchmark` annotation)
-* JFR instrumentation for library testing
-* Library-specific test utilities
-
-=== Place in benchmark-integration-wrk when:
-
-* Processing WRK output format
-* Rarely needed - most logic is in shell scripts
-
-**Prefer shell scripts over Java** for WRK orchestration (container management, test execution).
-
-== Architecture Patterns
-
-=== Template Method Pattern
-`AbstractBenchmarkRunner` defines benchmark lifecycle:
-
-[source,java]
-----
-public final void runBenchmark() throws IOException, RunnerException {
-    BenchmarkConfiguration config = createConfiguration();
-    validateConfiguration(config);
-    Path outputPath = Path.of(config.resultsDirectory());
-    Files.createDirectories(outputPath);
-    try {
-        prepareBenchmark(config);
-        beforeBenchmark(config);           // pre-benchmark hook
-        Options options = buildCommonOptions(config).build();
-        Collection<RunResult> results = executeBenchmark(options);
-        if (results.isEmpty()) {
-            throw new IllegalStateException("No benchmark results produced");
-        }
-        processResults(results, config);
-        afterBenchmark(results, config);   // post-benchmark hook
-    } finally {
-        cleanup(config);
-    }
-}
-----
-
-Subclasses: `CoreBenchmarkRunner`, `JfrBenchmarkRunner`
-
-=== Builder Pattern
-Configuration uses builders:
-
-[source,java]
-----
-ReportConfiguration.builder()
-    .withBenchmarkType(BenchmarkType.MICRO)
-    .build();
-----
-
-Note: `BenchmarkConfiguration` is a record with a nested `Builder` class. `ReportConfiguration` also uses the builder pattern.
-
-=== Factory Pattern
-
-* `HttpClientFactory` - Creates configured HTTP clients
-
-=== Converter Pattern
-
-Unified data model via converters:
-
-* `JmhBenchmarkConverter` - JMH results → BenchmarkData
-* `WrkBenchmarkConverter` - WRK output → BenchmarkData
-
-== Data Flow
-
-[source]
-----
-Benchmark Execution (JMH or WRK)
-        │
-        ▼
-Converter (JmhBenchmarkConverter / WrkBenchmarkConverter)
-        │
-        ▼
-BenchmarkData (unified model)
-        │
-        ▼
-BenchmarkMetricsTransformer
-        │
-        ├──> BadgeGenerator → JSON badges
-        ├──> ReportGenerator → HTML reports
-        └──> GitHubPagesGenerator → GitHub Pages
-        │
-        ▼
-target/benchmark-results/
-----
-
-== Key Design Principles
-
-=== 1. Unified Data Model
-All benchmark results converted to `BenchmarkData` for consistent processing.
-
-=== 2. Separation of Concerns
-
-* **Common**: Framework and utilities
-* **Library**: Pure library testing (no network)
-* **WRK**: HTTP load testing (minimal Java, mostly scripts)
-
-=== 3. Extensibility
-
-* Add new benchmark types by extending `AbstractBenchmarkRunner`
-* Add new metrics by implementing transformation logic
-* Add new reports by extending generator classes
-
-=== 4. Verification Focus
-All modules build independently. No circular dependencies.
-
-== Conclusion
-
-This architecture provides:
-
-* **Clear separation**: Common framework, library testing, integration testing
-* **Verified implementation**: All classes and structures exist and are accurate
-* **Practical approach**: Shell scripts for WRK, Java for JMH
-* **Unified reporting**: Common data model and report generation
-
-Following these guidelines ensures maintainable and well-organized benchmark infrastructure.
+* **Template method** - `AbstractBenchmarkRunner.runBenchmark()` fixes the lifecycle (validate configuration, `prepareBenchmark`, `beforeBenchmark`, execute, `processResults`, `afterBenchmark`, `cleanup` in a `finally` block) and fails when JMH produces no results. New benchmark types extend this class.
+* **Builder** - `BenchmarkConfiguration` is a record with a nested `Builder`; `ReportConfiguration` is built the same way.
+* **Factory** - `HttpClientFactory` creates the configured HTTP clients.
+* **Converter** - `JmhBenchmarkConverter` and `WrkBenchmarkConverter` map both result formats to the one `BenchmarkData` model, so every report is generated by the same code.

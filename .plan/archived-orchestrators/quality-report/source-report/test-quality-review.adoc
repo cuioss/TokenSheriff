@@ -1,6 +1,7 @@
 = Quality Report: Test Quality Review
-:toc:
+:toc: left
 :toclevels: 3
+:toc-title: Table of Contents
 :sectnums:
 :source-highlighter: highlight.js
 
@@ -309,5 +310,5 @@ counted as a coverage gap when unexercised — and DPoP is the sender-constraini
 client-authentication direction. The "mTLS special case" listed above under client-auth selection
 therefore reads as coverage of the alpha surface's refusal behaviour, not as coverage of a
 production client-authentication route. See
-xref:../adr/0012-mTLS_client_authentication_is_an_alpha_capability_DPoP_is_the_sender-constraining_and_client-authentication_direction.adoc[ADR-0012].
+xref:../../../../doc/adr/0012-mTLS_client_authentication_is_an_alpha_capability_DPoP_is_the_sender-constraining_and_client-authentication_direction.adoc[ADR-0012].
 ====

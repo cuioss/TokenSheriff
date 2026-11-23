@@ -1,13 +1,14 @@
 = ADR-0010: A refresh token the authorization server declares invalid is a third classification state
 :toc: left
-:toclevels: 2
+:toclevels: 3
+:toc-title: Table of Contents
 :sectnums:
+:source-highlighter: highlight.js
 
 // adr-metadata
 // summary: A refused refresh is classified into three states, not two — pre-redemption, credential-rejected, and redeemed — because a credential the authorization server declared invalid is neither a transient fault nor a redemption; an amendment adds a fourth, scope-refused (invalid_scope), which keeps the session and owes no retry
 // tags: oauth, refresh-token, fail-closed, session-lifecycle, client
 // affects: token-sheriff-client
-// supersedes: 5
 // end-adr-metadata
 
 == Status
@@ -16,371 +17,100 @@ Accepted
 
 == Context
 
-ADR-0005 settled the client's response to a refused refresh on a single question: had the
-authorization server already redeemed the presented refresh token when the refusal fired? That
-question partitions the failure space into exactly two regions, and the partition is drawn at the
-transport layer — a success status means the grant was consumed, anything else means it was not.
+This decision supersedes the earlier two-state redemption rule, whose record was removed once its
+content was carried here; its redeemed-branch disposition is carried forward unchanged in the Decision
+below.
 
-The two-state model is correct about the region it was designed for and silently wrong about one
-shape inside the other. Everything short of a success status was treated as one undifferentiated
-"the server never processed this" verdict, on the reasoning that a credential the server never
-looked at cannot have been harmed. For a connection failure, a DNS failure, an SSRF-blocked target,
-and a server-error status the client has no evidence that the server judged the grant, so it keeps
-the stored bundle — the presented token is untouched locally. That is a statement about what the
-client holds, not about the server: a token request is a non-idempotent `POST` (RFC 9110 §9.2.2),
-and a connection failure after the server applied the request, or a server-error status returned
-after redemption, can leave the server having rotated the token while the client never saw the
-response. The preserved token may then no longer be valid at the server.
+The client's response to a refused refresh was decided by one question: had the authorization server
+already redeemed the presented token? That partitions failures at the transport layer into two
+regions — success status means consumed, anything else means not — and treats everything short of a
+success as a transient fault that preserves the session.
 
-It does not hold for a client-error status the server issued *because of the credential itself*.
-RFC 6749 §5.2 gives the authorization server a vocabulary for exactly that, and the code
-`invalid_grant` is the server stating that the credential presented is expired, revoked, or already
-redeemed. Nothing was consumed by that request, so the two-state model classifies it with the
-network faults and the session is preserved — leaving the client holding a credential the server has
-already declared dead. Every subsequent refresh fails identically, and the failure is never
-attributable, because each one classifies as "transient" again.
-
-Two independent observations established that this is a real deployment shape rather than a
-theoretical one. First, an authorization server configured for single-use refresh tokens refuses the
-second presentation of a redeemed token with exactly this status and code — and refuses the rotated
-successor as well, because detecting replay revokes the whole family (RFC 6749 §10.4, OAuth 2.0
-Security BCP §4.14.2). The session is gone at the server while the client still believes it holds a
-working credential. Second, the client engine's own recorded exposure named the same collapse from
-the other direction: on this path the engine cannot tell a burned credential from a transient fault,
-because both surface as the absence of a redemption.
-
-The structural choice point is therefore whether "the server did not redeem" is one state or two.
-Widening the existing quarantine rule to cover every non-success status is not an option — that is
-the over-correction ADR-0005 explicitly rejected, and it destroys healthy sessions on transient
-faults. Leaving the region undifferentiated preserves sessions that are already dead. The failure
-space has three regions and the model had two names for them.
+That is wrong for one shape. RFC 6749 §5.2 `invalid_grant` on a client-error status is the server
+stating that the presented credential is expired, revoked or already redeemed. Nothing was consumed,
+so the two-state model preserved the session, leaving the client holding a credential the server had
+declared dead; every later refresh failed identically and never attributably. This is a real
+deployment shape: a server with single-use refresh tokens refuses a replayed token, and its successor,
+exactly this way (RFC 6749 §10.4, OAuth 2.0 Security BCP §4.14.2). Clearing on every non-success
+status instead destroys healthy sessions on transient faults. The failure space has three regions,
+and the model had two names.
 
 == Decision
 
-A refusal raised inside the token exchange is classified into three mutually exclusive and
-exhaustive states, and the client's session-lifecycle response to it is decided by which state
-applies. (A refreshed ID token refusal, whether the pipeline rejects the token or it is inconsistent
-with the access token, and a binding refusal are not raised inside the exchange; the dispatch below
-does not cover them, see the paragraph that closes this Decision.)
+A refusal raised inside the token exchange is classified into mutually exclusive, exhaustive states,
+and the session-lifecycle response follows the state:
 
-* **Pre-redemption** — the client has no evidence that the authorization server judged the presented
-  credential. A connection failure, a DNS failure, an SSRF-blocked target, or a server-error status.
-  The client preserves the presented refresh token: the session and its stored bundle are left
-  intact. Local preservation is not server-side validity — when the server redeemed the token and
-  the response was then lost, including behind a server-error status, the preserved token may
-  already be rotated at the server, and the next refresh can be refused.
-* **Credential-rejected** — the authorization server judged the presented credential and declared it
-  invalid, without consuming the grant. Nothing was rotated, so no successor exists and no revocation
-  is attempted; but the credential is dead and no retry revives it, so a clear of the store entry
-  and the rotation family is attempted and the caller must re-authenticate (the clear keeps the
-  spare rule ADR-0005 states: a stored bundle whose refresh token is not the refused one is left
-  in place).
-* **Redeemed** — the authorization server consumed the grant before a client-side check refused the
-  result. The disposition is unchanged from ADR-0005: a refusal raised inside the exchange carries
-  what is known about rotation, a burned presented token quarantines the session, revoking a known
-  successor is attempted (RFC 7009, best-effort, and only when the provider advertises a revocation
-  endpoint), and an unparseable success response is presumed rotated, so a clear is attempted
-  without inventing a successor to revoke. The exchange refusals that carry a rotated successor are
-  the freshly issued access token failing client-side validation and, under the opt-in
-  `strictScopeReconciliation`, a broader granted scope; the unparseable response carries none. A refreshed ID token that fails pipeline
-  validation, an inconsistent refreshed ID token and a refused identity or sender-constraint binding
-  are not exchange refusals and carry no such signal: the first is a `TokenValidationException`, the
-  other two are plain `IllegalStateException`s, and the lifecycle manager reads each against whether
-  the exchange rotated, quarantining only when it did.
+* *Pre-redemption* — no evidence the server judged the credential (a connection, DNS or SSRF-blocked
+  failure, a server-error status, any unrecognised client-error). The session and its bundle are kept.
+  Local preservation is not server-side validity: a token request is a non-idempotent `POST` (RFC 9110
+  §9.2.2), so behind a lost response the server may already have rotated the token.
+* *Credential-rejected* — the server judged the credential and declared it invalid without consuming
+  the grant. Nothing rotated, so nothing is revoked, but a clear of the store entry and rotation family
+  is attempted and the caller must re-authenticate.
+* *Redeemed* — the server consumed the grant before a client-side check refused the result. A burned
+  presented token (rotated, or an unparseable success response presumed rotated) quarantines the
+  session: a known successor is revoked best-effort (RFC 7009, only when a revocation endpoint is
+  advertised) and a clear is attempted; a redemption without rotation (RFC 6749 §6) keeps the session
+  and revokes nothing.
 
-**The recognition rule for the middle state is an allow-list of exactly one error code.** The status
-must be a client error (4xx) *and* the response body must parse as an RFC 6749 §5.2 error response
-*and* its `error` member must be exactly `invalid_grant`. Every other shape stays pre-redemption: an
-unparseable body, an absent body, a body carrying no `error` member, a body larger than the
-configured payload bound, an unrecognised code, and any server-error status — including one that
-happens to carry an `invalid_grant` body, because a server reporting its own failure is not making a
-statement about this credential.
+Every clear spares a stored bundle whose refresh token is not the refused one (no recency check; the
+bundle keeps its family); an empty or unreadable store is cleared.
 
-The asymmetry is deliberate and the fail-safe direction is to preserve the session. Reporting a
-transient fault as a dead credential destroys a working session, which is the inversion the
-redemption discriminator exists to prevent; reporting a dead credential as a transient fault merely
-defers the discovery to the next refresh. The allow-list is therefore narrow by construction, and
-widening it is a decision that has to be argued for one code at a time.
+The recognition rule for credential-rejected is an allow-list of exactly one code: a `4xx` status, a
+body that parses as an RFC 6749 §5.2 error response, and `error` exactly `invalid_grant`. Every other
+shape stays pre-redemption, including a `5xx` carrying `invalid_grant`. The fail-safe direction is to
+preserve the session, and widening the list is a decision argued one code at a time. The library's
+own dispatch of a refused exchange ends in a failing `default` arm, so a further state fails loudly
+instead of falling through to the session-preserving default.
 
-**The pre-redemption guarantee survives by construction, not by a guard.** A connection failure, a
-DNS failure, an SSRF-blocked target, or an interrupt throws out of the transport before any response
-object exists, so such a failure can never reach the status check that performs the classification.
-Only a response the server actually produced is ever classified. No defensive test re-establishes
-this; the ordering of the transport code is what establishes it, and preserving that ordering is a
-constraint on any future change to the token-endpoint client.
+=== Amendment: a refresh-token family refusal maps onto the existing states
 
-**The three states are dispatched with a failing default arm.** Callers that handle a refusal
-raised by the exchange classify through the single classification entry point rather than
-enumerating exception types, and dispatch on the
-resulting kind in a switch. That switch is a statement over an enum, which Java does not check for
-exhaustiveness, so a fourth state added later would not be a compile error; the library's own switch
-therefore ends in a `default` arm that throws `IllegalStateException`. A fourth state fails loudly at
-that dispatch site instead of silently falling through to the session-preserving default — which is the failure
-mode that produced this ADR in the first place.
+The family refusal (reuse, or a revoked family) is classified as well, without a new kind: raised
+while feeding a rotation into the family it is *redeemed*, carrying the successor as the revocation
+target; raised when reading the current token of a revoked family it is *credential-rejected*. It never
+maps to pre-redemption.
 
-That switch decides the disposition of a refusal raised inside the token exchange, and only that
-(`handleRefusedExchange`). It is not a single dispatch for every refusal after redemption. A
-refreshed ID token that fails pipeline validation, a refreshed ID token that is inconsistent, and a
-binding check that refuses the apply, are handled in `doRefresh`'s own catches and reach the
-quarantine (`quarantineRejectedRotation`) only when the exchange rotated the refresh token, so they
-revoke nothing when it did not; a replayed token is handled by `revokeReusedFamily`. None of these
-paths passes through the classification entry point or this switch. What all the paths share is the disposition they end in, the best-effort
-revocations (each attempted only when the provider advertises a revocation endpoint) followed by the attempted fail-closed clear (`revokeAndClearFailClosed`, then
-`clearRefusedSession`), not the dispatch that selects it.
+=== Amendment: a refused scope is a fourth classification state
+
+RFC 6749 §5.2 `invalid_scope` on a `4xx` classifies as *scope-refused*, carried by
+`InvalidScopeException`: the server judged the requested scope before applying any grant, so the
+session is kept, nothing is revoked or cleared, and — unlike pre-redemption — no retry is owed and no
+`WARN` is logged, because the same request gets the same answer. The order from least to most the
+server did is pre-redemption, scope-refused, credential-rejected, redeemed. The family refusal never
+maps to scope-refused.
+
+Rejected throughout: clearing on every non-success (destroys healthy sessions); folding
+credential-rejected into redeemed (invents a revocation target); an optional verdict instead of a total
+kind (absence doing two jobs); a wider allow-list (`invalid_client`, `unauthorized_client` and
+`use_dpop_nonce` do not name the presented credential); classifying `invalid_scope` as
+credential-rejected or as pre-redemption.
 
 == Consequences
 
-=== Positive
+* A dead credential is cleared at the first refusal and the reason is attributable; deployments with
+  single-use refresh tokens and family-wide revocation are handled correctly.
+* The set of failures that can clear a session grew by exactly one code, so no new transient fault
+  reaches the clearing path; scope-refused changes no disposition, only the retry obligation.
+* Classification now parses an authorization-server-controlled body, bounded by the payload limit;
+  no part of it reaches a log or an exception message.
+* A server that returns `invalid_grant` for an unrelated reason forces re-authentication; a server
+  that signals a dead credential with another code or status keeps the session — both accepted.
+* The pre-redemption guarantee rests on transport-code ordering (a failed send never produces a
+  response object), not on an assertion.
 
-* A session holding a credential the authorization server has declared invalid has a clear
-  attempted at the first refusal rather than failing identically forever, and the reason is attributable at the moment
-  it happens instead of being lost in an undifferentiated transport failure.
-* Deployments that take the OAuth 2.0 Security BCP posture — single-use refresh tokens with reuse
-  detection and family-wide revocation — are handled correctly. Under the two-state model those were
-  precisely the deployments where the collapse did the most damage, because there the server revokes
-  aggressively and the client preserved aggressively.
-* The narrow allow-list keeps the fail-safe direction intact: the set of failures that can clear a
-  session grew by exactly one recognised code, so no new class of transient fault can reach the
-  clearing path.
-* Dispatch that ends in a failing default arm converts the addition of a fourth state from a silent
-  behavioural regression into a loud failure at the dispatch site, which is the property the two-state
-  model lacked.
-
-=== Negative
-
-* The classification now depends on parsing an authorization-server-controlled response body, where
-  before it depended only on the status line. The parse is bounded by the same payload limit the
-  success path uses and maps a single member, and no part of the body reaches a log appender or an
-  exception message — but a body-dependent decision is inherently a larger surface than a
-  status-dependent one.
-* An authorization server that returns `invalid_grant` for a reason unrelated to the presented
-  refresh token — a misconfigured or non-conforming deployment — forces re-authentication where the
-  two-state model would have preserved the session. This is accepted as the safer failure direction,
-  and it is the same trade ADR-0005 accepted for its own quarantine path.
-* The middle state attempts the clear without revoking anything, so it produces no server-side
-  effect. That is correct — there is no successor, and the presented token is exactly what the server
-  just refused — but it means the client's fail-closed action is purely local on this path.
-
-=== Risks
-
-* A server that signals a dead credential with a code outside the allow-list, or on a status outside
-  4xx, is classified pre-redemption and the session is preserved. This residual gap is deliberate:
-  the alternative is a wider allow-list whose false positives destroy working sessions. Closing it
-  for a specific deployment is a per-code decision, not a widening of the rule.
-* Pre-redemption preserves the stored bundle, but it cannot establish that the preserved refresh
-  token is still valid at the server. A connection failure after the server applied the request, or
-  a server-error status returned after redemption, can leave the client holding a token the server
-  has already rotated; under reuse detection a retry presenting it can be refused and revoke the
-  family. This is accepted as the fail-safe direction: the client cannot tell a lost redemption from
-  a request the server never processed, and preserving the session only defers the discovery to the
-  next refresh, which the credential-rejected state classifies and clears when the server answers
-  it with `invalid_grant`.
-* The pre-redemption guarantee rests on transport-code ordering rather than on an assertion. A future
-  refactor that made a connection failure reach the status check — by synthesising a response object
-  for a failed send, for example — would reintroduce exactly the inversion this ADR forbids, and no
-  test in the classification layer would catch it.
-
-== Alternatives Considered
-
-*Clear the session on every non-success status.* The simplest way to stop preserving dead
-credentials, and the one that needs no body parsing at all. Rejected for the same reason ADR-0005
-rejected it: after a server-error status or a connection failure the client has no evidence that the
-server judged the credential, and in the common case it did not, so clearing there destroys healthy
-sessions on transient and environmental faults. The server may have redeemed the token behind such a
-failure (see Context and Risks), but clearing does not repair that case either; the next refresh
-reveals it. It trades a narrow gap for a much broader one, and it does so in the direction that costs
-users their sessions.
-
-*Keep two states and treat the credential-rejected case as a redemption.* This reuses the existing
-quarantine path with no new state, since both end in a cleared session. Rejected because the two
-dispositions are not the same: a redemption may have produced a successor that must be revoked at the
-authorization server, whereas a rejected credential produced nothing. Folding them together would
-either invent a revocation target the client cannot name, or teach the redemption path to tolerate an
-absent one — and the redemption value's own contract exists precisely to make an absent successor
-mean "nothing to revoke" rather than "state was lost". The two paths also carry different operator
-signals; collapsing them makes a dead credential indistinguishable from a burned one in the logs.
-
-*Return a nullable or optional verdict rather than a total classification value.* The prior shape:
-present means redeemed, absent means not. Extending it would mean adding a second optional, or a
-sentinel, alongside the first. Rejected because absence is then doing two jobs at once — "no
-redemption happened" and "no rejection happened" — and a caller that reads only one of them silently
-gets the old two-state behaviour. A total value with an explicit kind makes every caller state
-which of the three it is handling; the library's own dispatch of a refused exchange makes an unhandled
-kind a visible failure.
-
-*Widen the allow-list to the RFC 6749 §5.2 codes that plausibly indicate a dead credential.* More
-codes recognised means more real rejections caught. Rejected because each additional code is a new
-way for a working session to be destroyed, and the codes differ in what they actually attribute the
-refusal to: `invalid_client` names the client registration, `unauthorized_client` names the grant
-authorisation, `use_dpop_nonce` names a recoverable protocol handshake. Only `invalid_grant` names
-the presented credential. An allow-list of one is not a starting point to be grown by default; it is
-the set of codes that unambiguously make the required statement.
-
-Each rejected alternative either erases a distinction the client needs in order to act correctly —
-between a fault and a judgement, between a judgement and a redemption, between one recognised code
-and a family of loosely related ones — or leaves the distinction expressible but optional to observe.
-The adopted decision makes all three states explicit and total, and the library's own dispatch of a
-refused exchange ends in a failing default arm, so it cannot fall back to the wrong state by omission. A relying party's own
-switch is outside the library; it should end in a failing default arm as well.
-
-== Amendment: a refresh-token family refusal maps onto the existing states
-
-=== Context
-
-The classification entry point was scoped to failures raised by the refresh exchange. The client's
-refresh-token family is a separate primitive: after the exchange succeeds, the caller feeds the
-rotation into it, and it refuses a presented token that is not current (reuse, which revokes the
-family) and every call on a family that is already revoked. That refusal was a plain protocol
-exception with no classification case of its own, so it fell through to pre-redemption, the one state
-whose disposition is to leave the session intact. A relying party that composes the refresh exchange
-and the family in one `try` and routes the failure through the classification entry point, as both
-types' documentation invited, kept a replayed session alive.
-
-=== Decision
-
-The family refusal gets its own type, a subtype of the protocol exception it replaces, and the
-classification entry point covers it. **No fourth kind is added**: the library's own dispatch of
-the three kinds ends in a failing default arm, so a fourth would fail loudly there. The refusal maps onto
-the two existing session-ending kinds by what the authorization server has already done, which is the
-same discriminator this ADR and ADR-0005 decide on:
-
-* **Raised while feeding a rotation into the family** — the authorization server answered and issued
-  the successor before the family refused, so the presented token is redeemed and the successor is a
-  live credential. This is the redeemed state, carrying the successor as the revocation target. A
-  deserialized refusal, whose successor is deliberately not serialized, is redeemed with rotation
-  unknown: still fail-closed, with no token to name.
-* **Raised when reading the current token from a revoked family** — no exchange took place, nothing
-  was redeemed and no successor exists. This is the credential-rejected state: nothing to revoke, but
-  the session must be cleared.
-
-The refusal never maps to pre-redemption. The classification entry point's documented domain is now
-exactly those two sources — the refresh exchange and the family refusal — and nothing else.
-
-=== Alternatives considered
-
-*Map every family refusal to credential-rejected.* It ends the session, which is the property that
-matters most. Rejected for the rotation case because it is factually wrong there: the server did
-redeem the grant and did issue a successor, and credential-rejected asserts there is none. A caller
-dispatching on it would discard a live successor instead of revoking it — the "discarded rather than
-revoked" outcome ADR-0005 chose a redemption-based rule to avoid.
-
-*Add a fourth kind for a revoked family.* The most precise name for the situation. Rejected because
-it breaks the three-way dispatch, at runtime through the failing default arm of the library's own
-switch and silently in any consumer switch that lacks one, for a situation whose dispositions the
-existing kinds already express.
-
-=== Consequences
-
-* A composed caller classifies a family refusal as session-ending, never as a transient fault.
-* The lifecycle manager keeps handling the refusal in its own `catch` of the supertype, which still
-  catches the new subtype, and still never routes it through the classification entry point, so the
-  reuse path (`revokeReusedFamily`) is a separate path from the exchange-refusal dispatch and shares
-  only its disposition. That disposition now includes the redeemed disposition's revocation of the
-  successor: it attempts to revoke **both** the replayed token and the successor the authorization
-  server issued on the refused exchange, in that order, each only when the provider advertises a
-  revocation endpoint. Naming the replayed token first is what triggers
-  family-wide revocation on a server that implements it; naming the successor second is what keeps a server that does not from leaving a live
-  credential behind until it expires. The two revocations are best-effort: a transport failure of one
-  is logged and does not skip the other. An unchecked exception from the first revocation is not
-  caught there: it leaves the loop, so the successor revocation does not run, the client-side clear
-  still runs, and the exception then propagates in place of the refusal. The client-side clear runs whatever the revocations
-  do, and it spares a stored bundle whose refresh token is not the refused one, without checking its
-  recency, so a superseded token stored during an in-flight refresh is spared as well and keeps its
-  family. Otherwise — the store holds the refused token, is empty, or cannot be read — the clear is
-  attempted: it removes the store entry and then the rotation family. A store whose removal throws
-  lets that exception propagate in place of the refusal and leaves both the stored bundle and the
-  family in place.
-
-== Amendment: a refused scope is a fourth classification state
-
-=== Context
-
-RFC 6749 §5.2 gives the authorization server the code `invalid_scope` for a request whose scope is
-invalid, unknown, malformed or exceeds what the resource owner granted. Under the three states a
-client-error status carrying that code is not `invalid_grant`, so it classifies as pre-redemption, the
-state for which the client has no evidence that the server judged anything. That is wrong in one
-respect that matters to a caller: the server did judge the request — its scope — and its answer does
-not depend on network conditions. A caller that reads pre-redemption as "transient, retry later"
-repeats a request that will be refused the same way every time, and cannot tell "the server refused
-the scope I asked for" from an outage. A relying party that drives refresh by scope needs exactly that
-difference: keep the session, answer the user, and neither back off nor warn.
-
-The first amendment above refused a fourth kind for the refresh-token family refusal, because the
-existing kinds already expressed that refusal's dispositions. A refused scope is different: its
-disposition — keep the session, owe no retry — is expressed by none of the three.
-
-=== Decision
-
-The classification gets a fourth kind, **scope-refused** (`SCOPE_REFUSED`), and a typed carrier for
-it, `InvalidScopeException`, a subtype of the transport exception raised by the token-endpoint client.
-
-* **Recognition** is an allow-list of one exact shape, built like the credential-rejected one: a
-  client-error status (4xx) whose RFC 6749 §5.2 body names exactly `invalid_scope`. Any 5xx, even with
-  that code, any other code, and an absent, blank, oversize, unparseable or duplicate-member body keep
-  the plain transport exception and so stay pre-redemption. The token-endpoint client applies the rule
-  to every grant, because every grant shares its request path; the classification entry point maps the
-  carrier to scope-refused ahead of the transport-exception fallback to pre-redemption.
-* **Disposition**: the server judged the requested scope before it applied any grant, so this request
-  consumed nothing and rotated nothing. The session and its stored bundle are kept, nothing is revoked
-  or cleared, no retry back-off is scheduled and no `WARN` is logged, because repeating the request
-  would get the same answer. What the client knows about the presented token is what this refusal
-  says: the server did not redeem it in this request.
-* **Carried state**: the carrier holds the parsed error code and the server's `error_description`
-  after the commons-layer sanitiser neutralised it (ADR-0022), never the raw body. Its message is
-  composed from the observed status and fixed text only.
-* The name follows the RFC code. The redeemed-state carrier for a broader *granted* scope under the
-  opt-in strict reconciliation is a different situation — a client-side refusal after redemption — and
-  keeps its own name and kind.
-
-The three states of the Decision are therefore four, still mutually exclusive and exhaustive, ordered
-from the least to the most the server did with the presented credential: pre-redemption,
-scope-refused, credential-rejected, redeemed. The library's own dispatch of a refused exchange handles
-the fourth kind explicitly and still ends in a failing default arm. The refresh-token family refusal of
-the first amendment never maps to scope-refused.
-
-=== Alternatives considered
-
-*Keep the refusal pre-redemption and expose only the type.* A caller that catches the carrier could
-act on it, and the classification would stay at three kinds. Rejected because callers are directed to
-classify through the single entry point rather than enumerate exception types; a refusal that
-classifies as pre-redemption is retried and handled as transient by every such caller, which is the
-behaviour the distinction exists to stop.
-
-*Classify it as credential-rejected.* It is a judgement by the server, not a fault. Rejected because
-the server judged the scope, not the credential; clearing the session would force re-authentication
-over a request the caller can simply stop making.
-
-*Widen the credential-rejected allow-list to `invalid_scope`.* Rejected for the reason the Decision
-already gives for every code but `invalid_grant`: only that code attributes the refusal to the
-presented credential.
-
-=== Consequences
-
-* A caller can tell a scope refusal from an outage by type and by classification; the session survives
-  and the request is not retried on a back-off.
-* A consumer switch over the kind that lacks a failing default arm silently treats the fourth kind as
-  whatever its fallthrough does. This is the risk the Decision's failing default arm names, and the
-  reason the library's own switch keeps it.
-* The set of responses that change a session's disposition did not grow: scope-refused keeps the
-  session exactly as pre-redemption does and differs only in owing no retry.
+The recognition rules, the typed carriers, the client-authentication refusal and the per-path wiring
+are specified in
+xref:../client/specification/token-handling.adoc#_refresh_refusal_classification[Token handling § Refresh-refusal classification]
+and the *Refresh* row of § Server-side token lifecycle.
 
 == References
 
-* ADR-0005 — the two-state redemption discriminator this decision supersedes; its redeemed-branch
-  disposition is carried forward unchanged
-* ADR-0003 — the class-granularity refresh-path coverage gate, which the classification value and the
-  credential-rejected carrier are added to, and which the amendment's family-refusal type joins
-* ADR-0006 — the subtype-exception rule the amendments' family-refusal and scope-refusal types follow
-* ADR-0022 — the commons-layer sanitiser the scope-refusal carrier applies to `error_description`
-* ADR-0027 — the typed client-authentication refusal, which stays pre-redemption and whose allow-list
-  shares no code with the scope-refused one
-* `token-sheriff-client` refresh path — the token-endpoint client that performs the classification,
-  the refresh flow that exposes it, the lifecycle manager that dispatches on it, and the
-  `Redeemed*` refusal-exception hierarchy that carries the redeemed state
-* `doc/client/threat-model.adoc` — refresh-path threat model, post-redemption quarantine control
-* `doc/client/specification/token-handling.adoc` — refresh-path specification, quarantine vs.
-  preservation disposition
-* https://www.rfc-editor.org/rfc/rfc6749#section-5.2[RFC 6749 §5.2] — the error-response vocabulary
-  the allow-list draws its single code from
-* https://www.rfc-editor.org/rfc/rfc9110#section-9.2.2[RFC 9110 §9.2.2] — idempotent methods; a
-  token request is a `POST`, so a lost response leaves its server-side effect unknown
+* xref:0003-Scope_refresh-path_coverage_gates_by_class_granularity_not_module-wide_threshold.adoc[ADR-0003] — the
+  refresh-path coverage gate the classification types join
+* xref:0006-A_cross-cutting_signal_on_a_public_subclassable_method_rides_subtype_exceptions_never_a_preferred_overload.adoc[ADR-0006] — the
+  subtype-exception rule the carriers follow
+* xref:0022-A_flow_context_is_single-use_and_untrusted_text_is_sanitised_by_one_commons-layer_utility.adoc[ADR-0022] — the
+  sanitiser applied to `error_description`
+* xref:../client/threat-model.adoc[Client threat model] — post-redemption quarantine control
+* https://www.rfc-editor.org/rfc/rfc6749#section-5.2[RFC 6749 §5.2] and
+  https://www.rfc-editor.org/rfc/rfc9110#section-9.2.2[RFC 9110 §9.2.2]

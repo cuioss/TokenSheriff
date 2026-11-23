@@ -338,23 +338,11 @@ After ruling out all framework-level factors, the dominant cost is **CPU saturat
 
 RSA verification is compute-bound (88% of the validation pipeline). With 114 avg threads (JFR) competing for 10 CPU cores at 85% peak utilization, this is **~11:1 thread-to-core oversubscription**. Most threads are waiting for CPU time, not executing.
 
-A JMH concurrency sweep on HotSpot JVM confirms this is **not a native-image issue**:
-
-[cols="1,2,2", options="header"]
-|===
-| Threads | Avg Latency | Multiplier
-
-| 1 | 48µs | 1.0x
-| 10 | 89µs | 1.9x (fits 10 cores — nearly linear)
-| 50 | 556µs | 11.6x (5:1 oversubscription)
-| 100 | 957µs | 20.0x (10:1 oversubscription)
-|===
-
-The 1→10 thread scaling is nearly linear (10 threads on 10 cores). Beyond 10 threads, latency degrades proportionally to oversubscription. The native integration cost of 1,060µs at 50 connections adds ~2x on top of the JVM baseline (556µs) — consistent with HTTP/TLS/Quarkus overhead.
+The JMH concurrency sweep on HotSpot JVM (link:Analysis-03.2026-Micro.adoc#_concurrency_sweep_hotspot_jvm[micro-benchmark analysis]) confirms this is **not a native-image issue**: latency is nearly linear up to 10 threads on 10 cores (48µs → 89µs) and degrades with oversubscription beyond that (556µs at 50 threads). The native integration cost of 1,060µs at 50 connections adds ~2x on top of that JVM baseline, consistent with HTTP/TLS/Quarkus overhead.
 
 === Why CPU% Doesn't Match Latency%
 
-JFR shows the OAuth library at 0.3% of CPU samples, yet the ablation study measures JWT validation at 46.1% of wall-clock time. CPU saturation explains this: JFR samples **on-CPU** time, but with ~11:1 oversubscription most threads are **off-CPU** (waiting to be scheduled) at any given sample point. The wall-clock cost includes both on-CPU and queuing time.
+JFR shows the OAuth library at 0.3% of CPU samples, yet the ablation study measures JWT validation at 46.1% of wall-clock time: JFR samples only on-CPU time, while with ~11:1 oversubscription most threads are waiting to be scheduled. See link:Analysis-03.2026-JFR-Profiling.adoc#_why_cpu_doesnt_match_latency[JFR Profiling Analysis] for the full explanation.
 
 === Implications
 

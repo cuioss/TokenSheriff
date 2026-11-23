@@ -17,6 +17,7 @@
       .group      { font-size: 13px; font-weight: 600; fill: #6e7681; }
       .item       { font-size: 12px; fill: #6e7681; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
       .item-sub   { font-size: 11px; fill: #6e7681; font-style: italic; }
+      .item-sm    { font-size: 11px; fill: #6e7681; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
       .stroke     { stroke: #6e7681; stroke-width: 1.2; fill: none; }
       .arrow      { stroke: #6e7681; stroke-width: 1.5; fill: none; }
       .arrow-fill { fill: #6e7681; }
@@ -30,15 +31,18 @@
   <rect class="stroke" x="30" y="48" width="230" height="336" rx="6" ry="6"/>
   <text x="46" y="98"  class="item" font-weight="700">TokenValidator</text>
   <text x="60" y="122" class="item-sub">routes by token type</text>
-  <text x="60" y="144" class="item-sub">manages IssuerConfigs</text>
+  <text x="60" y="144" class="item-sub">holds one IssuerConfig per issuer</text>
   <text x="60" y="166" class="item-sub">immutable · thread-safe</text>
 
   <!-- ================= COL 2 — PIPELINES ================= -->
   <text x="485" y="32" class="col-header">VALIDATION PIPELINES</text>
   <rect class="stroke" x="370" y="48" width="230" height="336" rx="6" ry="6"/>
-  <text x="386" y="104" class="item" font-weight="700">Access-token pipeline</text>
-  <text x="386" y="148" class="item" font-weight="700">Id-token pipeline</text>
-  <text x="386" y="192" class="item" font-weight="700">Refresh-token pipeline</text>
+  <text x="386" y="98"  class="group">Access token</text>
+  <text x="386" y="116" class="item-sm">AccessTokenValidationPipeline</text>
+  <text x="386" y="150" class="group">ID token</text>
+  <text x="386" y="168" class="item-sm">IdTokenValidationPipeline</text>
+  <text x="386" y="202" class="group">Refresh token</text>
+  <text x="386" y="220" class="item-sm">RefreshTokenValidationPipeline</text>
   <text x="485" y="360" class="col-sub">each runs the ordered validation stages</text>
 
   <!-- ================= COL 3 — SUPPORTING SERVICES ================= -->
@@ -57,7 +61,8 @@
   <text x="740" y="276" class="item">TokenValidatorMonitor</text>
 
   <text x="726" y="316" class="group">Token content</text>
-  <text x="740" y="336" class="item">Access / Id / Refresh</text>
+  <text x="740" y="336" class="item">Access / Id token content</text>
+  <text x="740" y="356" class="item">UnvalidatedRefreshToken</text>
 
   <!-- ================= ARROWS ================= -->
   <line class="arrow" x1="260" y1="150" x2="368" y2="150" marker-end="url(#arrow)"/>

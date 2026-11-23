@@ -51,7 +51,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * with an ambiguous-dependency error, so this test does not start at all.
  * <p>
  * No configuration is supplied: the validation extension keeps booting with an empty issuer namespace
- * (ADR-019), and the client producers are lazy, so the unconfigured client never demands its
+ * ({@code token-sheriff-quarkus-parent/doc/integration/quarkus-integration.adoc} § Startup gating),
+ * and the client producers are lazy, so the unconfigured client never demands its
  * {@code ClientConfiguration} for the lifecycle beans exercised here.
  */
 @Tag("quarkus-boot")

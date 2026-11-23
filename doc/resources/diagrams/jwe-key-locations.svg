@@ -4,7 +4,7 @@
      role="img" aria-labelledby="title desc"
      font-family="ui-sans-serif, -apple-system, system-ui, 'Segoe UI', sans-serif">
   <title id="title">JWE key locations — per-issuer signing vs global decryption</title>
-  <desc  id="desc">Signing keys are per issuer: each issuer's JwksLoader fetches that issuer's public key and signature preferences from its JWKS endpoint. Decryption keys are global: a single JweDecryptionConfig maps kid to the Resource Server's local private keys, set once on the TokenValidator and shared across all issuers.</desc>
+  <desc  id="desc">Signing keys are per issuer: each IssuerConfig has a JwksLoader that fetches that issuer's public keys from its JWKS endpoint, and its own configured SignatureAlgorithmPreferences. Decryption keys are global: a single JweDecryptionConfig maps kid to the Resource Server's local private keys, set once on the TokenValidator and shared across all issuers.</desc>
 
   <defs>
     <style>
@@ -23,14 +23,14 @@
   <text x="210" y="48" class="col-sub">signing keys · fetched from each JWKS</text>
 
   <rect class="stroke" x="40" y="66" width="340" height="72" rx="6" ry="6"/>
-  <text x="58" y="90"  class="name">Issuer A</text>
-  <text x="58" y="112" class="mono">JwksLoader → PubA</text>
-  <text x="58" y="130" class="mono">SignaturePrefs</text>
+  <text x="58" y="90"  class="name">IssuerConfig A</text>
+  <text x="58" y="112" class="mono">JwksLoader → public keys of A</text>
+  <text x="58" y="130" class="mono">SignatureAlgorithmPreferences</text>
 
   <rect class="stroke" x="40" y="154" width="340" height="72" rx="6" ry="6"/>
-  <text x="58" y="178" class="name">Issuer B</text>
-  <text x="58" y="200" class="mono">JwksLoader → PubB</text>
-  <text x="58" y="218" class="mono">SignaturePrefs</text>
+  <text x="58" y="178" class="name">IssuerConfig B</text>
+  <text x="58" y="200" class="mono">JwksLoader → public keys of B</text>
+  <text x="58" y="218" class="mono">SignatureAlgorithmPreferences</text>
 
   <!-- ===== GLOBAL (decryption) ===== -->
   <text x="650" y="30" class="col-header">GLOBAL</text>

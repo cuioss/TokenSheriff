@@ -11,7 +11,7 @@ Documentation for the Token-Sheriff Quarkus extensions. The validation extension
 
 == Quick Links
 
-* **xref:../token-sheriff-quarkus-integration-tests/README.adoc[Integration Tests]** - Comprehensive testing with Docker containers
+* **xref:../token-sheriff-quarkus-integration-tests/README.adoc[Integration Tests]** - End-to-end tests against Docker containers
 * **link:https://github.com/cuioss/cui-llm-rules/tree/main/standards/cdi-quarkus/[CDI Quarkus Standards]** - Development standards and best practices
 
 == Architecture & Implementation
@@ -30,16 +30,13 @@ The Token-Sheriff Quarkus extension provides JWT validation through a modular ar
 
 * **xref:configuration/testing-configuration.adoc[Testing Configuration]** - Test profile setup and token utilities
 * **xref:configuration/native-image-configuration.adoc[Native Image Configuration]** - GraalVM compilation settings
-* **xref:development/devui-implementation.adoc[DevUI Implementation]** - Web components and JSON-RPC services
-* **xref:development/devui-testing.adoc[DevUI Testing]** - Development interface validation
+* **xref:development/devui-implementation.adoc[DevUI Implementation]** - Web components, JSON-RPC services and their Jest / Playwright tests
 * **xref:development/quarkus-test-setup.adoc[Quarkus Test Framework Setup]** - Test framework configuration
 
 == Performance & Optimization
 
-* **xref:performance/jwt-validation-performance.adoc[JWT Validation Performance]** - Performance baselines and metrics
-* **xref:performance/native-optimization-guide.adoc[Native Optimization Guide]** - GraalVM build configuration
-* **xref:performance/graalvm-enterprise-optimization-options.adoc[GraalVM Enterprise Optimization Options]** - Oracle GraalVM optimization flags
-* **xref:performance/jfr-profiling-guide.adoc[JFR Profiling Guide]** - Performance analysis tools
+* **xref:performance/native-optimization-guide.adoc[Native Optimization Guide]** - GraalVM build configuration, JFR profiling and Oracle GraalVM options
+* **link:../../benchmarking/README.adoc[Benchmarking]** - Measured throughput, latency and profiling analyses
 
 == BearerToken CDI Injection
 
@@ -49,4 +46,3 @@ The extension provides CDI injection for validated bearer tokens via the `@Beare
 
 * **xref:../../doc/LogMessages.adoc[Log Messages Reference]** - Complete logging reference
 * **Issues**: Report problems via project issue tracker
-* **Standards**: Follow link:https://github.com/cuioss/cui-llm-rules/tree/main/standards/cdi-quarkus/[CDI Quarkus Standards]

@@ -31,10 +31,7 @@ cd token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests
 
 == Why WRK?
 
-* JMH benchmarks limited to 10-13k req/s due to framework overhead
-* WRK achieves 20k+ req/s with lower latency
-* Better connection pool management and HTTP/1.1 keep-alive
-* Native C implementation with minimal overhead
+An HTTP client driven from JMH saturates on its own overhead before the server does. WRK is a native load generator with connection reuse (HTTP/1.1 keep-alive) and Lua scripting, so the measured limit is the server's.
 
 == Architecture
 
@@ -49,19 +46,21 @@ WRK runs via Docker for multi-architecture support (ARM64 + x86_64):
 
 === Components
 
-* **WRK Scripts** (`src/main/resources/wrk-scripts/`) - Lua scripts for request generation
-* **Java Post-processor** (`WrkResultPostProcessor.java`) - Parses output, fetches metrics, generates reports
-* **Maven Integration** - Lifecycle management via exec-maven-plugin
+* **WRK Scripts** (`src/main/resources/wrk-scripts/`) - shell runners and Lua scripts for request generation
+* **Java Post-processor** (`WrkResultPostProcessor.java`) - parses the WRK output, collects the Prometheus metrics of each benchmark window, generates the reports
+* **Maven Integration** - lifecycle management via exec-maven-plugin
+
+The module boundaries are described in link:../doc/Architecture.adoc[Module Architecture].
 
 === Benchmark Flow
 
-1. Build native Quarkus application (optional with skip flag)
-2. Start Docker containers (optional with skip flag)
-3. Execute WRK benchmarks
-4. Process results and fetch Quarkus metrics
-5. Generate JSON reports
-6. Dump application logs (always)
-7. Stop containers (optional with skip flag)
+1. Build the native integration-test application and its Docker image (skipped with `skip.container.lifecycle=true`)
+2. Start the Docker containers (skipped with `skip.container.lifecycle=true`)
+3. Check that the service, Keycloak and Prometheus are reachable (`pre-benchmark-health-check.sh`)
+4. Run the health, JWT and ablation benchmarks
+5. Process the results: reports, badges and Prometheus metrics (`WrkResultPostProcessor`)
+6. Dump the Keycloak logs
+7. Stop the containers (skipped with `skip.container.lifecycle=true`)
 
 == Configuration
 
@@ -92,46 +91,13 @@ WRK runs via Docker for multi-architecture support (ARM64 + x86_64):
 |`max`
 |Maximum load testing (10 threads, 300 connections)
 |`wrk.threads=10`, `wrk.connections=300`
+
+|`benchmark-jfr`
+|JFR profiling of one benchmark (`-Djfr.benchmark=jwt` by default) against the JFR image; suppresses the standard runs
+|`wrk.duration=200s`, `skip.benchmark=true`, `skip.jfr.benchmark=false`
 |===
 
-==== Load Generation Profiles
-
-The load generation profiles are designed based on performance investigation results:
-
-* **Default (5t/50c)**: Optimal baseline for CI and local development - excellent performance with P90 < 6ms
-* **Autoscale (8t/200c)**: High load for development machines - tests moderate degradation
-* **Stress (10t/150c)**: Moderate stress testing - balanced performance without severe degradation
-* **Max (10t/300c)**: Maximum capacity testing - expect severe JWT validation degradation (P90 ~46ms)
-
-==== Environment-Specific Recommendations
-
-[cols="2,2,2,3", options="header"]
-|===
-|Environment
-|CPU Cores
-|Recommended Profile
-|Expected Performance
-
-|GitHub Actions
-|2-4 vCPU
-|Default (50 connections)
-|Health: 37K ops/s (P90 2.5ms), JWT: 16K ops/s (P90 5.8ms)
-
-|Local Development (typical)
-|8-10 cores
-|`-Pstress` (150 connections)
-|Health: 50K ops/s (P90 7ms), JWT: 17K ops/s (P90 23ms)
-
-|Local Development (high-end)
-|10+ cores
-|`-Pautoscale` (200 connections)
-|Health: 50K ops/s (P90 9ms), JWT: 17K ops/s (P90 31ms)
-
-|Stress Testing
-|10+ cores
-|`-Pmax` (300 connections)
-|Health: 46K ops/s (P90 15ms), JWT: 16K ops/s (P90 46ms - degraded)
-|===
+The default (5 threads, 50 connections) is the recommended profile for CI and regular runs: it gave the peak throughput for every endpoint in the link:../doc/Analysis-03.2026-Integration.adoc#_connection_sweep_50_300_connections[connection sweep], and latency rises steadily with more connections. Use `stress`, `autoscale` and `max` for capacity testing only.
 
 Example usage:
 [source,bash]
@@ -193,21 +159,26 @@ The `skip.container.lifecycle` property optimizes benchmark iteration:
 
 == Benchmarks
 
-=== Health Check Benchmark
+[cols="2,2,3", options="header"]
+|===
+|Benchmark
+|Endpoint
+|Purpose
 
-* **Endpoint**: `/q/health/live`
-* **Script**: `health_live_check.lua`
-* **Purpose**: Baseline performance without authentication
-* **Expected** (150 connections, stress profile): 70,000+ req/s, P50 <2ms latency
-* **Measured**: 88,700 req/s, P50 1.25ms (see link:../doc/Analysis-03.2026-Integration.adoc[Integration Analysis])
+|Health check (`health_live_benchmark.sh`, `health_live_check.lua`)
+|`GET /q/health/live`
+|Baseline without authentication
 
-=== JWT Validation Benchmark
+|JWT validation (`jwt_benchmark.sh`, `jwt_benchmark.lua`)
+|`POST /jwt/validate`
+|Full JWT validation with cache; tokens are fetched from Keycloak before the run (`wrk.jwt.token_count`, default 100)
 
-* **Endpoint**: `/jwt/validate`
-* **Script**: `jwt_benchmark.lua`
-* **Purpose**: Real JWT processing performance with cache
-* **Expected** (150 connections, stress profile): 20,000+ req/s, P50 <10ms latency
-* **Measured**: 23,800 req/s, P50 5.49ms (see link:../doc/Analysis-03.2026-Integration.adoc[Integration Analysis])
+|Ablation (`ablation_benchmark_dispatcher.sh`)
+|`/mock-jwt/baseline`, `/mock-jwt/header-only`, `/mock-jwt/validate`, `/mock-jwt/direct-validation`
+|Isolate the cost of each processing layer, see link:../doc/Analysis-03.2026-Latency-Decomposition.adoc[Latency Decomposition]
+|===
+
+Measured results are in the link:../doc/Analysis-03.2026-Integration.adoc[Integration Benchmark Analysis (March 2026)].
 
 == Output
 
@@ -224,14 +195,14 @@ Results in `target/benchmark-results/`:
 |`wrk/wrk-jwt-results.txt`
 |Raw WRK output for JWT endpoint
 
-|`gh-pages-ready/benchmark-data.json`
-|Unified benchmark report (HTML reports generated alongside)
+|`wrk/wrk-ablation-results.txt`
+|Raw WRK output of the ablation benchmarks
 
-|`prometheus/healthCheck-metrics.json`
-|Prometheus metrics captured during health benchmark
+|`gh-pages-ready/`
+|Reports, badges, `data/benchmark-data.json` and API files, see link:../README.adoc#_generated_structure[Generated Structure]
 
-|`prometheus/jwtValidation-metrics.json`
-|Prometheus metrics captured during JWT benchmark
+|`prometheus/{benchmarkName}-server-metrics.json`
+|Prometheus metrics of one benchmark window (`healthLiveCheck`, `jwtValidation`, ...), format in link:../doc/benchmark-metrics.adoc[Benchmark Metrics System]; copied to `gh-pages-ready/data/`
 
 |`quarkus.log`
 |Application logs from benchmark run (written by Quarkus file logging)
@@ -240,82 +211,19 @@ Results in `target/benchmark-results/`:
 |Keycloak container logs dumped after benchmarks
 |===
 
-=== JSON Report Format
-
-[source,json]
-----
-{
-  "timestamp": "2025-01-22T10:30:00Z",
-  "benchmarkType": "wrk-integration",
-  "serviceUrl": "https://localhost:10443",
-  "performance": {
-    "requests_per_second": 24184.90,
-    "latency_avg_ms": 0.88,
-    "total_requests": 365242,
-    "duration_seconds": 15.10,
-    "errors": 0
-  },
-  "systemMetrics": {
-    // Quarkus metrics data
-  }
-}
-----
-
-== Performance Analysis
-
-=== View Results
+== Viewing Results
 
 [source,bash]
 ----
-# Check raw WRK output
-cat target/benchmark-results/wrk/wrk-health-live-results.txt
-cat target/benchmark-results/wrk/wrk-jwt-results.txt
+# Serve the reports locally (http://localhost:8080), from the repository root
+benchmarking/scripts/serve-reports.sh wrk
 
-# Analyze unified benchmark report
-jq '.benchmarks' target/benchmark-results/gh-pages-ready/benchmark-data.json
-
-# Check Prometheus metrics
-jq '.' target/benchmark-results/prometheus/healthCheck-metrics.json
-jq '.' target/benchmark-results/prometheus/jwtValidation-metrics.json
-
-# View application logs
+# Or read the files directly, from this module's directory
+cd benchmarking/benchmark-integration-wrk
+jq '.benchmarks' target/benchmark-results/gh-pages-ready/data/benchmark-data.json
+jq '.' target/benchmark-results/prometheus/jwtValidation-server-metrics.json
 cat target/benchmark-results/quarkus.log
 ----
-
-=== Performance Tuning
-
-.Optimal Settings (Based on Performance Investigation)
-[NOTE]
-====
-
-* **Threads**: 5 (balanced for typical systems)
-* **Connections**: 50 (optimal performance without degradation)
-* **Duration**:
-  - Quick mode: 30s (fast iteration)
-  - Default: 60s (balanced results)
-
-* **Timeout**: 2s (local testing)
-
-**Performance Profile at 50 Connections:**
-
-* Health endpoint: P90 2.5ms, 37K ops/s
-* JWT validation: P90 5.8ms, 16K ops/s, CPU 75%
-====
-
-.Performance Degradation at High Load
-[WARNING]
-====
-JWT validation becomes CPU-bound at high connection counts:
-
-* **100 connections**: P90 15ms, CPU 87% - degradation begins
-* **150 connections**: P90 23ms, CPU 82% - moderate stress
-* **200 connections**: P90 31ms, CPU 82% - severe degradation
-* **300 connections**: P90 46ms, CPU 81% - critical degradation
-
-Health checks scale better but also degrade at 300 connections (P90 15ms vs 2.5ms at 50 connections).
-
-**Recommendation**: Use default (50 connections) for CI/CD and regular testing. Use stress/max profiles only for capacity planning.
-====
 
 == Development
 
@@ -363,10 +271,11 @@ explains why the `test` goal is not used in this reactor.
 </execution>
 ----
 
-The shell script should use `docker compose run --rm wrk` to execute WRK inside the Docker network
-(see `health_live_benchmark.sh` and `jwt_benchmark.sh` for reference implementations).
-
-3. Add post-processing execution for results
+The shell script uses `docker compose run --rm wrk` to execute WRK inside the Docker network and
+prints the `=== BENCHMARK METADATA ===` header (`benchmark_name`, `start_time`) and the `end_time`
+footer (see `health_live_benchmark.sh` for the reference implementation). `WrkResultPostProcessor`
+processes every `wrk/*-results.txt` file; it needs no further configuration, and it attaches the
+Prometheus metrics by the embedded `benchmark_name`.
 
 == Troubleshooting
 
@@ -386,13 +295,13 @@ The shell script should use `docker compose run --rm wrk` to execute WRK inside 
 |Port conflict or Docker issue
 |Check ports 10443, 1443 are free
 
-|Missing Keycloak URL error
-|System property not set
-|Fixed in pom.xml, update module
+|Timeout errors or a failing `pre-benchmark-health-check.sh`
+|Service, Keycloak or Prometheus not ready
+|Check `quarkus.log` and the dumped Keycloak logs
 
-|Timeout errors
-|Service not ready
-|Increase warmup time or check logs
+|No Prometheus metrics files
+|Prometheus not reachable at `http://localhost:9090`
+|Check the Prometheus container; the health check fails and the build stops before the benchmark runs
 |===
 
 === Debug Mode
@@ -412,7 +321,7 @@ curl -k https://localhost:1443/realms/benchmark
 
 == CI/CD Integration
 
-See link:../../.github/workflows/benchmark.yml[GitHub Actions Benchmark Workflow] for automated benchmark execution and performance regression detection.
+The link:../../.github/workflows/benchmark.yml[GitHub Actions Benchmark Workflow] runs this module with the default profile; the pipeline is described in link:../doc/workflow.adoc[Benchmark Workflow].
 
 == Related Documentation
 

@@ -56,14 +56,14 @@ NOTE: Requirement IDs are stable identifiers referenced across documentation and
 [#VALIDATION-1]
 === VALIDATION-1: Token Parsing and Validation
 
-The library must provide robust token parsing and validation capabilities in accordance with https://datatracker.ietf.org/doc/html/rfc7519[RFC 7519 - JSON Web Token (JWT)] (May 2015).
+The library must parse and validate tokens in accordance with https://datatracker.ietf.org/doc/html/rfc7519[RFC 7519 - JSON Web Token (JWT)].
 
 _See specifications: xref:architecture.adoc[Architecture] and xref:security-reference.adoc[Security Reference]_
 
 [#VALIDATION-1.1]
 ==== VALIDATION-1.1: Token Structure
 
-The library must support standard JWT token structure with header, payload, and signature as defined in RFC 7519 (May 2015).
+The library must support standard JWT token structure with header, payload, and signature as defined in RFC 7519.
 
 _See specification: xref:architecture.adoc#token-types[Token Architecture and Types]_
 
@@ -72,7 +72,7 @@ image::../resources/diagrams/jwt-token-structure.svg["JWT token structure — he
 [#VALIDATION-1.2]
 ==== VALIDATION-1.2: Token Types
 
-The library must support different token types as defined in https://datatracker.ietf.org/doc/html/rfc6749[RFC 6749 - OAuth 2.0] (October 2012) and https://openid.net/specs/openid-connect-core-1_0.html[OpenID Connect Core 1.0] (November 2014):
+The library must support different token types as defined in https://datatracker.ietf.org/doc/html/rfc6749[RFC 6749 - OAuth 2.0] and https://openid.net/specs/openid-connect-core-1_0.html[OpenID Connect Core 1.0]:
 
 * Access tokens
 * ID tokens
@@ -86,7 +86,7 @@ _See specification: xref:architecture.adoc#token-types[Token Architecture and Ty
 
 The library must validate token signatures using cryptographic algorithms as specified in https://datatracker.ietf.org/doc/html/rfc7518[RFC 7518 - JSON Web Algorithms (JWA)].
 
-For security reasons, only the following signature algorithms shall be supported (in accordance with https://datatracker.ietf.org/doc/html/rfc8725[RFC 8725 - JSON Web Token Best Current Practices] (February 2020) and https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-131Ar2.pdf[NIST SP 800-131A] (March 2019)):
+For security reasons, only the following signature algorithms shall be supported (in accordance with https://datatracker.ietf.org/doc/html/rfc8725[RFC 8725 - JSON Web Token Best Current Practices] and https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-131Ar2.pdf[NIST SP 800-131A]):
 
 * ES512 (ECDSA using P-521 and SHA-512)
 * ES384 (ECDSA using P-384 and SHA-384)
@@ -99,13 +99,13 @@ For security reasons, only the following signature algorithms shall be supported
 * RS384 (RSASSA-PKCS1-v1_5 with SHA-384)
 * RS256 (RSASSA-PKCS1-v1_5 with SHA-256)
 
-NOTE: ECDSA, EdDSA, and RSASSA-PSS algorithms are preferred over RSASSA-PKCS1-v1_5 (RS*). While RS* algorithms remain supported for broad interoperability, RSASSA-PSS (PS*) is recommended by https://www.rfc-editor.org/rfc/rfc8017.html#section-8[RFC 8017] (2016) as the successor scheme. EdDSA (Ed25519) is listed as a supported algorithm in the https://openid.net/specs/fapi-2_0-security-profile.html[FAPI 2.0 Security Profile] and is defined in https://datatracker.ietf.org/doc/html/rfc8037[RFC 8037 - CFRG Elliptic Curve Signatures in JOSE]. The default algorithm catalog is `JwsAlgorithm`; its declaration order is informational only: acceptance is by membership in the supported set, and the token's own header names the algorithm.
+NOTE: ECDSA, EdDSA, and RSASSA-PSS algorithms are preferred over RSASSA-PKCS1-v1_5 (RS*). While RS* algorithms remain supported for broad interoperability, RSASSA-PSS (PS*) is recommended by https://www.rfc-editor.org/rfc/rfc8017.html#section-8[RFC 8017] as the successor scheme. EdDSA (Ed25519) is listed as a supported algorithm in the https://openid.net/specs/fapi-2_0-security-profile.html[FAPI 2.0 Security Profile] and is defined in https://datatracker.ietf.org/doc/html/rfc8037[RFC 8037 - CFRG Elliptic Curve Signatures in JOSE]. The default algorithm catalog is `JwsAlgorithm`; its declaration order is informational only: acceptance is by membership in the supported set, and the token's own header names the algorithm.
 
 The following algorithms shall NOT be supported due to security concerns:
 
-* HS256, HS384, HS512 (HMAC with SHA-2) - Vulnerable to https://auth0.com/blog/critical-vulnerabilities-in-json-web-token-libraries/[key confusion attacks] (2015) when used in combination with RSA public keys
+* HS256, HS384, HS512 (HMAC with SHA-2) - Vulnerable to https://auth0.com/blog/critical-vulnerabilities-in-json-web-token-libraries/[key confusion attacks] when used in combination with RSA public keys
 * "none" algorithm - Explicitly forbidden by https://datatracker.ietf.org/doc/html/rfc8725#section-3.1[RFC 8725 Section 3.1 - Perform Algorithm Verification] and https://cwe.mitre.org/data/definitions/347.html[CWE-347: Improper Verification of Cryptographic Signature]
-* RSA based algorithms with keys shorter than 2048 bits - Not compliant with https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-131Ar2.pdf[NIST SP 800-131A] (2019)
+* RSA based algorithms with keys shorter than 2048 bits - Not compliant with https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-131Ar2.pdf[NIST SP 800-131A]
 
 Additional security considerations:
 
@@ -118,7 +118,7 @@ _See specifications: xref:architecture.adoc#token-validation-pipeline[Token Vali
 [#VALIDATION-1.4]
 ==== VALIDATION-1.4: Token Decryption
 
-The library supports decryption of encrypted JWT tokens (JWE) as defined in https://datatracker.ietf.org/doc/html/rfc7516[RFC 7516 - JSON Web Encryption (JWE)] (May 2015). JWE decryption is transparent — the pipeline detects 5-part JWE tokens, decrypts them using locally-configured private keys, and validates the inner JWS through the existing pipeline unchanged.
+The library supports decryption of encrypted JWT tokens (JWE) as defined in https://datatracker.ietf.org/doc/html/rfc7516[RFC 7516 - JSON Web Encryption (JWE)]. JWE decryption is transparent — the pipeline detects 5-part JWE tokens, decrypts them using locally-configured private keys, and validates the inner JWS through the existing pipeline unchanged.
 
 Supported key management algorithms: RSA-OAEP, RSA-OAEP-256, ECDH-ES. Supported content encryption algorithms: A128GCM, A256GCM, A128CBC-HS256, A256CBC-HS512. RSA1_5 is explicitly rejected due to Bleichenbacher's padding oracle attack.
 
@@ -196,16 +196,7 @@ An explicit `issuer-identifier` is the default and recommended form for every is
 ====
 Enforcement: issuer configuration (`IssuerConfig`) and the Quarkus `IssuerConfigResolver` require an explicit `issuer-identifier` for every enabled issuer. The configured identifier stays authoritative.
 
-For an enabled `IssuerConfig` that loads its keys through `well-known-url` discovery, the following guarantees hold:
-
-* The configured `issuer-identifier` is always compared with the `issuer` advertised by the OpenID Connect discovery document.
-* A mismatch is a hard failure: no keys are loaded, the `ISSUER_MISMATCH` security event is counted, the `jwks_uri` of the discovery document is never fetched, and every token for that issuer is rejected.
-* A discovery document that advertises a `jwks_uri` but no `issuer` is a terminal rejection as well: no keys are loaded, the `ISSUER_MISMATCH` security event is counted once, the `jwks_uri` of the discovery document is never fetched, and every token for that issuer is rejected. A document missing both `issuer` and `jwks_uri` is an unusable response and stays retryable.
-* The identifier is configured once, on `IssuerConfig`. It need not be repeated on `HttpJwksLoaderConfig`: `IssuerConfig` propagates it into the loader configuration when it is built.
-* An identifier set on `HttpJwksLoaderConfig` that differs from the `IssuerConfig` identifier is a build error: building the `IssuerConfig` fails instead of choosing one of the two values.
-* A pre-built loader of type `WELL_KNOWN` passed via `jwksLoader(...)` must carry the same identifier as the `IssuerConfig`; a missing or differing identifier is a build error.
-
-Standalone use of `HttpJwksLoaderConfig` and `HttpJwksLoader` without `IssuerConfig` stays supported. In that case the identifier may be omitted for well-known discovery, and no comparison with the advertised issuer takes place.
+For `well-known-url` discovery the configured identifier is always compared with the advertised `issuer`; a mismatch, or a document with a `jwks_uri` but no `issuer`, is a terminal rejection that loads no keys. Propagation into `HttpJwksLoaderConfig`, the build errors for a differing identifier and standalone loader use are specified in xref:architecture.adoc#oidc-discovery[OIDC Discovery].
 ====
 
 _See specification: xref:architecture.adoc#multi-issuer[Multi-Issuer Support]_
@@ -227,7 +218,7 @@ _See specification: xref:architecture.adoc#multi-issuer[Multi-Issuer Support]_
 [#VALIDATION-4]
 === VALIDATION-4: Key Management
 
-The library must support public key management for token validation in accordance with https://datatracker.ietf.org/doc/html/rfc7517[RFC 7517 - JSON Web Key (JWK)] (May 2015).
+The library must support public key management for token validation in accordance with https://datatracker.ietf.org/doc/html/rfc7517[RFC 7517 - JSON Web Key (JWK)].
 
 _See specifications: xref:architecture.adoc#jwks-integration[Key Management] and xref:security-reference.adoc#security-controls[Security Reference]_
 
@@ -235,7 +226,7 @@ _See specifications: xref:architecture.adoc#jwks-integration[Key Management] and
 [#VALIDATION-4.1]
 ==== VALIDATION-4.1: JWKS Endpoint Support
 
-Support fetching public keys from JWKS endpoints as defined in https://datatracker.ietf.org/doc/html/rfc7517#section-5[RFC 7517 Section 5 - JWK Set Format] (May 2015).
+Support fetching public keys from JWKS endpoints as defined in https://datatracker.ietf.org/doc/html/rfc7517#section-5[RFC 7517 Section 5 - JWK Set Format].
 
 _See specifications: xref:architecture.adoc#jwks-integration[JwksLoader]_
 
@@ -347,7 +338,7 @@ _See specification: xref:architecture.adoc#multi-issuer[Configuration]_
 [#VALIDATION-7]
 === VALIDATION-7: Logging
 
-Implement comprehensive logging for troubleshooting and auditing, following the https://owasp.org/www-project-proactive-controls/v4/en/c9-security-logging-and-monitoring[OWASP Proactive Controls C9: Implement Security Logging and Monitoring] guidelines.
+Implement logging for troubleshooting and auditing, following the https://owasp.org/www-project-proactive-controls/v4/en/c9-security-logging-and-monitoring[OWASP Proactive Controls C9: Implement Security Logging and Monitoring] guidelines.
 
 _See specifications: xref:architecture.adoc#securityeventcounter[SecurityEventCounter] and xref:security-reference.adoc#security-events-monitoring[Security Events]_
 
@@ -377,7 +368,7 @@ _See specification: xref:architecture.adoc[Architecture]_
 [#VALIDATION-7.3]
 ==== VALIDATION-7.3: Security Events
 
-Log security-relevant events as recommended by https://datatracker.ietf.org/doc/html/rfc8417[RFC 8417 - Security Event Token (SET)] (July 2018):
+Log security-relevant events as recommended by https://datatracker.ietf.org/doc/html/rfc8417[RFC 8417 - Security Event Token (SET)]:
 
 * Token validation failures
 * Key rotation events
@@ -408,23 +399,22 @@ Implement safe parsing practices to prevent security vulnerabilities such as:
 * JSON parsing attacks
 * Injection attacks
 * Deserialization vulnerabilities
-For example, vulnerabilities could include issues like entity expansion in XML parsers (if applicable to the JSON parser's underlying mechanisms or if XML is also processed), or object injection if deserializing into complex type hierarchies without proper validation.
 
-Refer to https://owasp.org/www-project-top-ten/[OWASP Top 10] (2021) for common vulnerabilities, particularly A8:2021-Software and Data Integrity Failures.
+Refer to https://owasp.org/www-project-top-ten/[OWASP Top 10], particularly A8:2021-Software and Data Integrity Failures.
 
 _See specification: xref:security-reference.adoc#safe-parsing[Safe Parsing]_
 
 [#VALIDATION-8.3]
 ==== VALIDATION-8.3: Secure Communication
 
-Support secure communication for key retrieval using TLS 1.2 or higher as recommended by https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-52r2.pdf[NIST SP 800-52 Rev. 2] (2019).
+Support secure communication for key retrieval using TLS 1.2 or higher as recommended by https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-52r2.pdf[NIST SP 800-52 Rev. 2].
 
 _See specification: xref:security-reference.adoc#secure-communication[Secure Communication]_
 
 [#VALIDATION-8.4]
 ==== VALIDATION-8.4: Claims Validation
 
-Validate token claims according to RFC 7519 (May 2015) and OpenID Connect Core 1.0 (November 2014), including:
+Validate token claims according to RFC 7519 and OpenID Connect Core 1.0, including:
 
 * Expiration time (exp)
 * Not before time (nbf)
@@ -443,7 +433,7 @@ _See specification: xref:security-reference.adoc#cryptographic-agility[Cryptogra
 [#VALIDATION-8.6]
 ==== VALIDATION-8.6: Token Type Header Validation (RFC 9068)
 
-The library must support optional per-issuer validation of the JWT `typ` header parameter as defined in https://datatracker.ietf.org/doc/html/rfc9068[RFC 9068 - JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens] (October 2021).
+The library must support optional per-issuer validation of the JWT `typ` header parameter as defined in https://datatracker.ietf.org/doc/html/rfc9068[RFC 9068 - JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens].
 
 * When `expected-token-type` is configured for an issuer, tokens with a missing or mismatched `typ` header are rejected
 * When not configured (default), no token type validation is performed
@@ -455,7 +445,7 @@ _See specification: xref:architecture.adoc#token-validation-pipeline[Token Valid
 [#VALIDATION-8.7]
 ==== VALIDATION-8.7: DPoP Sender-Constrained Tokens (RFC 9449)
 
-The library must support optional per-issuer validation of DPoP (Demonstrating Proof of Possession) sender-constrained tokens as defined in https://datatracker.ietf.org/doc/html/rfc9449[RFC 9449 - OAuth 2.0 Demonstrating Proof of Possession (DPoP)] (September 2023).
+The library must support optional per-issuer validation of DPoP (Demonstrating Proof of Possession) sender-constrained tokens as defined in https://datatracker.ietf.org/doc/html/rfc9449[RFC 9449 - OAuth 2.0 Demonstrating Proof of Possession (DPoP)].
 
 * When `dpop.enabled=true` for an issuer, tokens with a `cnf.jkt` claim are validated against the DPoP proof JWT from the `DPoP` HTTP header
 * When `dpop.required=true`, tokens without a `cnf.jkt` claim are rejected
@@ -473,7 +463,7 @@ _See specification: xref:security-reference.adoc[Security Reference]_
 [#VALIDATION-12.1]
 ==== VALIDATION-12.1: Security Testing
 
-The library must undergo comprehensive security testing according to https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html[OWASP JWT Security Cheat Sheet for Java] (2023).
+The library must undergo security testing according to https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html[OWASP JWT Security Cheat Sheet for Java].
 
 Key security tests must include:
 
@@ -488,7 +478,7 @@ _See specifications: xref:security-reference.adoc[Security Reference]_
 [#VALIDATION-12.2]
 ==== VALIDATION-12.2: Unit Testing
 
-The library must have comprehensive unit tests with at least 80% code coverage, including:
+The library must have unit tests with at least 80% code coverage, including:
 
 * Token parsing tests
 * Token validation tests
@@ -549,7 +539,7 @@ _See specification: xref:security-reference.adoc[Security Reference]_
 [#VALIDATION-13]
 === VALIDATION-13: Public Validation Seams and Back-Channel Logout
 
-The library must offer consumers the narrow entries they need to build on token validation without reaching into its internals, and must validate the logout tokens of https://openid.net/specs/openid-connect-backchannel-1_0.html[OpenID Connect Back-Channel Logout 1.0] (September 2022).
+The library must offer consumers the narrow entries they need to build on token validation without reaching into its internals, and must validate the logout tokens of https://openid.net/specs/openid-connect-backchannel-1_0.html[OpenID Connect Back-Channel Logout 1.0].
 
 _See specifications: xref:architecture.adoc#token-validator-seams[TokenValidator Public Seams], xref:architecture.adoc#logout-package[Logout Token Validation] and xref:../adr/0029-TokenValidator_publishes_signature-only_verification_native_JSON_claims_and_a_non-fetching_issuer_status_view.adoc[ADR-0029]_
 
@@ -678,7 +668,7 @@ _See specification: xref:../adr/0031-Bearer_extraction_scope_challenge_sanitiser
 [#VALIDATION-9]
 === VALIDATION-9: Performance
 
-Performance requirements are verified through comprehensive benchmarking:
+Performance requirements are verified through benchmarking:
 
 * **Micro-benchmarks** (JMH): Library-level performance testing
 * **Integration benchmarks** (WRK): End-to-end HTTP performance testing

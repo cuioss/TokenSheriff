@@ -134,7 +134,7 @@ When `sheriff.token.token.header=Cookie`, the token is extracted from the named 
 |MP-JWT Feature |Rationale
 
 |`@RolesAllowed` annotation
-|Token-Sheriff uses `@BearerAuth` which provides superior multi-dimensional authorization (scopes AND roles AND groups). The standard `@RolesAllowed` only checks one dimension.
+|Token-Sheriff uses `@BearerAuth`, which checks scopes, roles and groups together. The standard `@RolesAllowed` only checks roles.
 
 |`@Claim` CDI qualifier injection
 |Token-Sheriff's programmatic `getClaimOption(ClaimName)` with custom `ClaimMapper` pipeline provides type-safe, extensible claim access. `@Claim` injection is less flexible for custom claim types and multi-issuer scenarios.
@@ -146,10 +146,10 @@ When `sheriff.token.token.header=Cookie`, the token is extracted from the named 
 |`sheriff.token.*` is the established convention. Token-Sheriff's per-issuer configuration model (`sheriff.token.issuers.<name>.*`) has no equivalent in the single-issuer `mp.jwt.*` namespace.
 
 |`ClaimValue<T>` (MP-JWT version)
-|Token-Sheriff's `ClaimValue` with `ClaimMapper` pipeline (e.g., `ScopeMapper`, `KeycloakDefaultRolesMapper`) is more powerful. MP-JWT's `ClaimValue` is a simple typed wrapper.
+|Token-Sheriff's `ClaimValue` is produced by a `ClaimMapper` pipeline (e.g., `ScopeMapper`, `KeycloakDefaultRolesMapper`) that maps custom claim shapes. MP-JWT's `ClaimValue` is a simple typed wrapper.
 
 |Single-issuer model
-|Token-Sheriff's multi-issuer `IssuerConfigCache` with per-issuer JWKS loading, algorithm constraints, and claim validation is a core differentiator. MP-JWT assumes one issuer per application.
+|Token-Sheriff's multi-issuer `IssuerConfigCache` with per-issuer JWKS loading, algorithm constraints, and claim validation has no MP-JWT equivalent. MP-JWT assumes one issuer per application.
 |===
 
 == [[_tokensheriff_advantages_beyond_mp_jwt]]Token-Sheriff Advantages Beyond MP-JWT

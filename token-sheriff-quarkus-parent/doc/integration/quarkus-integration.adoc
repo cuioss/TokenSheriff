@@ -47,6 +47,74 @@ sheriff.token.issuers.keycloak.issuer-identifier=https://keycloak.example.com/au
 sheriff.token.issuers.keycloak.jwks.http.url=https://keycloak.example.com/auth/realms/master/protocol/openid-connect/certs
 ----
 
+[[issuer-discovery]]
+=== Issuer discovery
+
+The extension has no fixed issuer list. `IssuerConfigResolver` discovers issuer names as the union of two scans:
+
+* *Dotted scan* — every property under `sheriff.token.issuers.`; the segment after the prefix is the issuer name (`sheriff.token.issuers.keycloak.enabled` names `keycloak`).
+* *Environment scan* — every property name starting with `SHERIFF_TOKEN_ISSUERS_` that ends in one of the anchor suffixes `_ENABLED` or `_DPOP_ENABLED`, the environment form of the leaf keys `enabled` and `dpop.enabled` taken from the issuer property templates. The longest anchor that leaves a non-empty remainder is stripped (for `SHERIFF_TOKEN_ISSUERS__DPOP_ENABLED` the issuer name is `_dpop`), and the remainder is lower-cased to the issuer name. Every key of that issuer is then looked up in dotted form (`sheriff.token.issuers.my_idp.enabled`), which the environment config source resolves through its own name mangling.
+
+Dotted names come first, in encounter order; a candidate whose environment form equals that of an earlier name is skipped, so an issuer configured both ways is reported once. The same union feeds issuer resolution and the enabled-issuer probe of xref:#startup-gating[startup gating], so the two cannot disagree. Discovery enables nothing: an issuer is enabled only by an explicit `enabled=true`.
+
+Limits of the environment form: a reconstructed name is lower case with underscores (`MY_IDP` becomes `my_idp`, never `my-idp`), and logs and metrics use that form; an issuer whose name ends in `dpop` (`SHERIFF_TOKEN_ISSUERS_MY_DPOP_ENABLED` reads as issuer `my` with `dpop.enabled`) must be configured in dotted form; an environment-only issuer that sets neither anchor is not discovered.
+
+[[configuration-validation]]
+=== Configuration validation
+
+A property that is set but cannot take effect fails startup with an `IllegalStateException` that names the property and the fix (xref:../../../doc/adr/0026-Orphaned_or_unresolvable_extension_configuration_fails_startup_instead_of_being_ignored.adoc[ADR-0026]). The checks:
+
+[cols="1,3", options="header"]
+|===
+|Resolver |Rejected configuration
+
+|`IssuerConfigResolver` (each enabled issuer)
+|A `dpop.*` sub-property (`dpop.required`, `dpop.proof-max-age-seconds`, `dpop.nonce-cache-size`, `dpop.nonce-cache-ttl-seconds`) while `dpop.enabled` is not `true`; an HTTP JWKS URL or well-known URL without an explicit `issuer-identifier`; `jwks.http.unknown-kid-refresh-window-seconds` or `jwks.http.initial-load-retry` on an issuer that does not load its keys over HTTP.
+
+|`JweDecryptionConfigResolver`
+|An ancillary property without its key source: the decryption key id without a single key or keystore; the keystore password, key alias or key password without a keystore; the default key id without multi-key entries; algorithm preferences or the maximum encrypted token size without any key source. This check runs before the "not configured" decision. Also: a `decryption-keys.{kid}` entry without `.path`; a keystore without a key alias; a default key id that names none of the loaded keys; any key-loading failure of an explicitly configured JWE setup.
+
+|`ClientConfigMapper.validateDiscoveryCache` (client extension, startup observer of `TokenSheriffClientProducer`)
+|A `sheriff.client.discovery-cache.*` property while `enabled` is not `true`; an enabled cache without `ttl`; a value that does not parse as a duration or breaks a rule of `CachingDiscoveryResolver.checkSettings`; an injection point for `CachingDiscoveryResolver` while the cache is not enabled.
+|===
+
+The validation-side checks run while the `TokenValidator` is built, which with an enabled issuer happens at startup (xref:#startup-gating[]). An application that supplies its own `@Alternative` `TokenValidator` does not get that startup build: an orphaned property then fails only when some bean first dereferences another product of the producer (the issuer configurations, the parser configuration or the `SecurityEventCounter`), and never if nothing does (pinned by `AlternativeValidatorOrphanedPropertyTest`). Not covered: a misspelt property name (it is unknown, not orphaned), JWE multi-key entries given only as environment variables (treated as "JWE not configured"), and stray `dpop.*` settings of a disabled issuer.
+
+== Validator lifecycle
+
+[[startup-gating]]
+=== Startup gating
+
+A runtime `StartupEvent` observer (`TokenValidatorStartupInitializer`) forces the property-configured `TokenValidator` at boot exactly when the enabled-issuer probe finds at least one enabled issuer in the extension's namespace; any resolution or builder failure then aborts boot. With no enabled issuer — an unconfigured namespace, or one left empty because the application supplies its own validator — the observer does nothing and the application boots as before. The probe is pure Config and is the same probe xref:#observability-bean-resolution[observability] uses, so startup and observability share one definition of "configured". The observer is registered as an unremovable bean, because nothing injects it. Test fixtures that enable an issuer therefore need a valid key source.
+
+An application that supplies its own validator *and* enables an issuer in the extension's namespace still gets the extension's validator built at boot, and an unqualified own validator then makes the lookup ambiguous.
+
+[[observability-bean-resolution]]
+=== Observability bean resolution
+
+The health checks, the metrics collector and the DevUI service observe the CDI `TokenValidator` actually in use, resolved by `ObservedValidatorResolver`, never the extension's own property-derived issuer state:
+
+. A cheap, non-instantiating enabled-issuer probe runs first. When the extension's own namespace has an enabled issuer, the extension's own produced validator is observed.
+. Otherwise every `TokenValidator` bean of any qualifier is enumerated with an `@Any` lookup that excludes the extension's own producer bean by its bean metadata, without invoking it. Exactly one remaining candidate is observed as an external validator; more than one is ambiguous and treated like none.
+. With no validator, the beans degrade instead of failing: liveness reports `UP` with a `status` marker (`not configured`), the readiness probe reports `UP` with `checkedEndpoints=0`, scheduled metrics work is a no-op, and DevUI renders "not configured".
+
+For an external validator, observability reads only its public contract (`TokenValidator#getIssuerStatuses()`); it never reaches past it, so per-source configuration detail of a foreign validator is not available. Reporting the real loader status of an external validator in the readiness probe is opt-in (`sheriff.token.health.jwks.report-external-validator`), see xref:health-checks.adoc[Health Checks].
+
+[[validator-disposal]]
+=== Closing the validator
+
+`TokenValidator.close()` closes the JWKS loaders of its enabled issuer configs (see the validation xref:../../../doc/validation/architecture.adoc#_tokenvalidator[architecture]). The CDI producer `TokenValidatorProducer` closes the validator it created when the producer is destroyed, at most once and without propagating a close failure into the container shutdown; that one call releases every loader and its background refresh.
+
+[[client-extension-beans]]
+== Client extension beans
+
+`TokenSheriffClientProducer` (`token-sheriff-client-quarkus`) produces the client engine as CDI beans. Two of them are replaceable defaults, produced `@ApplicationScoped @DefaultBean`:
+
+* `TokenStore` — an `InMemoryTokenStore`, correct for a single instance; a multi-instance deployment needs a shared store of its own.
+* `RefreshScheduler` — with its default lead window.
+
+An application bean of either type that is unqualified or annotated only with `@Named` replaces the default, and `TokenLifecycleManager` is wired with it. A bean with a custom qualifier does *not* replace the default and is silently not used by the lifecycle manager. Every other engine bean (token-endpoint client, discovery resolver, flows) is a plain producer and is not a supported extension point. `DefaultBeanReplacementTest` pins the replacement rule.
+
 == DevUI Integration
 
 In development mode (`@BuildStep(onlyIf = IsDevelopment.class)`):

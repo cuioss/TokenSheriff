@@ -242,7 +242,7 @@ client models and uses (`authorization_endpoint`, `token_endpoint`, `userinfo_en
 `allowInsecureHttp` does not relax this: the flag exists for local setups (an `http` issuer, or an
 `https` issuer reached through an `http` `backChannelOrigin`), not for a scheme downgrade inside an
 HTTPS document
-(xref:../doc/adr/0028-Discovery_refuses_a_non-https_endpoint_advertised_by_an_https_issuer_regardless_of_allowInsecureHttp.adoc[ADR-0028]).
+(xref:../doc/commons/specification/transport.adoc#discovery_endpoint_schemes[Transport § Advertised endpoint schemes]).
 An advertised field outside that set is not read and is not checked. A discovery
 response whose `Content-Type` is not `application/json` (parameters such as `charset` are allowed),
 that carries no `Content-Type`, or that carries a second, conflicting `Content-Type` line, is refused

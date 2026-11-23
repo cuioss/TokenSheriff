@@ -18,124 +18,44 @@ Accepted
 
 == Context
 
-The validation extension reads its settings from flat properties. Many of them only take effect together
-with another property: the `dpop.*` settings of an issuer only matter when `dpop.enabled` is `true`; a
-keystore password only matters when a keystore path is set; a JWE default key id only matters when it
-names one of the configured keys.
-
-A resolver that reads only the properties it needs ignores the others. The result is a configuration
-that looks complete and is not. An operator who sets `dpop.required=true` but forgets `dpop.enabled`
-believes DPoP is enforced while no proof is checked. An operator who sets algorithm preferences for JWE
-but no decryption key believes encrypted tokens are restricted while JWE is not configured at all. A
-default key id with a typo silently falls back to another key. In each case the mistake is a security
-setting that never applies, and nothing reports it.
-
-The structural choice point is what a resolver does with a property that has no effect: ignore it, warn,
-or refuse the configuration.
+The extensions read flat properties, and many take effect only together with another one: `dpop.*`
+only with `dpop.enabled=true`, a keystore password only with a keystore path, a JWE default key id only
+when it names a configured key. A resolver that reads only what it needs ignores the rest, and the
+configuration looks complete while a security setting never applies — `dpop.required=true` without
+`dpop.enabled` enforces no proof, JWE algorithm preferences without a key leave JWE unconfigured, a
+mistyped default key id silently falls back to another key. Nothing reports it.
 
 == Decision
 
-A property that is set but cannot take effect is a configuration error, and the resolver throws an
-`IllegalStateException` that names the property and states the fix.
+A property that is set but cannot take effect is a configuration error: the resolver throws an
+`IllegalStateException` that names the property and states the fix. The validation-side checks run
+while the `TokenValidator` is built, which with an enabled issuer happens at startup; the client
+extension's discovery-cache check runs from a startup observer. A configuration with no property of a
+feature at all stays a valid "not configured".
 
-Issuer configuration (`IssuerConfigResolver`), for each enabled issuer:
-
-* a `dpop.*` sub-property — `dpop.required`, `dpop.proof-max-age-seconds`, `dpop.nonce-cache-size`,
-  `dpop.nonce-cache-ttl-seconds` — set while `dpop.enabled` is not `true` is rejected;
-* an HTTP JWKS URL or well-known discovery URL without an explicit `issuer-identifier` is rejected.
-
-JWE decryption configuration (`JweDecryptionConfigResolver`):
-
-* an ancillary property set without the key source it belongs to is rejected: the decryption key id
-  without a single key or keystore; the keystore password, key alias or key password without a keystore;
-  the default key id without multi-key entries; the algorithm preferences or the maximum encrypted token
-  size without any key source. The check runs before the "not configured" decision, so a configuration
-  that consists only of ancillary properties fails instead of disabling JWE;
-* a `decryption-keys.{kid}` entry without a `.path` value, including the bare `decryption-keys.{kid}`
-  form, is rejected;
-* a keystore without a key alias is rejected;
-* a default key id that names none of the loaded keys is rejected, instead of falling back to the first
-  key;
-* any key-loading failure of an explicitly configured JWE setup is rethrown as one error stating that JWE
-  is configured but could not be loaded.
-
-The errors are raised while the `TokenValidator` is built. With an enabled issuer that build runs at
-startup (ADR-0019), so the application does not start with a configuration that would silently ignore a
-setting. An application that supplies its own `@Alternative` `TokenValidator` is not covered by this
-guarantee: the validator in use is not built by the extension's producer, so the extension's own startup
-build, which runs these checks, does not happen for it. Unless a startup bean of its own triggers the
-checks (see below), such an application starts with an orphaned property in place. The extension's
-observability beans do not report it either: with the alternative enabled the observability resolver
-observes the alternative as an external validator and never builds the extension's producer. The checks
-run, and the orphaned property fails with its error, when some bean first dereferences one of the
-producer's other products — the produced issuer configurations, parser configuration or
-`SecurityEventCounter` — because that dereference initializes the producer. That point is at startup only
-if a bean that runs at startup does the dereference; otherwise it comes later, at the first dereference.
-An application that never does so never sees the error. `AlternativeValidatorOrphanedPropertyTest` pins this behaviour. A configuration with no JWE
-property at all is not an error; JWE then stays unconfigured.
-
-The client extension's discovery-cache check (`ClientConfigMapper.validateDiscoveryCache`, run from a
-startup observer of `TokenSheriffClientProducer`) applies the same rule: a
-`sheriff.client.discovery-cache.*` property set while `sheriff.client.discovery-cache.enabled` is not
-`true`, an enabled cache without a `ttl`, a value that does not parse as a duration or breaks a rule of
-`CachingDiscoveryResolver.checkSettings`, and an injection point for `CachingDiscoveryResolver` while
-the cache is not enabled each fail the start with an `IllegalStateException` naming the property.
+Rejected: ignoring the property (the operator relied on exactly that one); a startup warning (easy to
+miss, and the application runs with a setting believed active); inferring the missing switch (turns a
+mistake into a configuration nobody wrote).
 
 == Consequences
 
-=== Positive
+* For the validator the extension builds, and for the client discovery cache, a security setting either
+  applies or stops the application, and the error names the remedy.
+* Configurations that used to start now fail, including harmless leftovers such as `dpop.*` values after
+  DPoP was switched off.
+* Each dependent property must be listed in its check; a misspelt name is unknown, not orphaned, and is
+  not reported. An application-supplied `@Alternative` `TokenValidator` is not covered at startup,
+  because the extension's own build does not run for it.
 
-* For the validator the default producer builds, a security setting either applies or stops the
-  application. No such configuration can appear to enforce DPoP or restrict JWE while doing neither.
-  The guarantee covers the checks above and does not extend to an application-supplied `@Alternative`
-  `TokenValidator`; for such an application the extension's startup build does not run the checks, so
-  an orphaned property fails startup only if a bean that runs at startup dereferences one of the
-  producer's products.
-* The error names the property and the remedy, so the fix does not require reading the resolver.
-* A typo in a key id is found at startup rather than by the first token encrypted for the intended key.
-
-=== Negative
-
-* Configurations that used to start now fail, including ones where the stray property was harmless,
-  such as a `dpop.*` value left behind after DPoP was deliberately switched off.
-* Each property that depends on another has to be listed in the check. A new dependent property that is
-  not added is ignored again.
-
-=== Risks
-
-* The checks cover the properties the resolvers know about. A misspelt property name is not orphaned; it
-  is simply unknown, and it is not reported by these checks.
-* JWE multi-key entries given only as environment variables are not discovered, so a configuration made
-  up solely of such entries is treated as "JWE not configured" rather than rejected.
-* The `dpop.*` check runs only for enabled issuers. Stray settings of a disabled issuer are not reported.
-
-== Alternatives Considered
-
-**Ignore the property.** The resolver reads what it needs and nothing else. It was rejected because the
-ignored property is exactly the one the operator relied on, and the system gives no sign that it does not
-apply.
-
-**Log a warning and continue.** The application starts and the warning reports the stray property. It
-was rejected because a warning at startup is easy to miss, and the application then runs with a security
-setting the operator believes is active. For an unresolvable default key id there is no sensible way to
-continue at all, only a guess at which key was meant.
-
-**Infer the missing switch.** A `dpop.*` property would enable DPoP; a keystore password without a
-keystore would be dropped. It was rejected because inferring a security switch from a side property
-turns a mistake into a configuration the operator never wrote, and the inference cannot be right in both
-directions: the operator may have meant to disable DPoP and forgotten the leftovers.
-
-The rejected options share one flaw. Each lets the application run with a configuration whose meaning
-differs from what was written, without stopping to say so.
+The individual checks, the `@Alternative` behaviour and the known gaps are specified in
+xref:../../token-sheriff-quarkus-parent/doc/integration/quarkus-integration.adoc#configuration-validation[Quarkus integration § Configuration validation];
+the startup build it relies on in
+xref:../../token-sheriff-quarkus-parent/doc/integration/quarkus-integration.adoc#startup-gating[§ Startup gating],
+and the issuers it applies to in
+xref:../../token-sheriff-quarkus-parent/doc/integration/quarkus-integration.adoc#issuer-discovery[§ Issuer discovery].
 
 == References
 
-* ADR-0019 — eager validator startup, which makes a configuration error fail the boot.
-* ADR-0023 — how issuer names are discovered, which determines which issuers these checks apply to.
 * `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/java/de/cuioss/sheriff/token/quarkus/config/IssuerConfigResolver.java`
-  — the orphaned `dpop.*` check and the required issuer identifier.
 * `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/src/main/java/de/cuioss/sheriff/token/quarkus/jwe/JweDecryptionConfigResolver.java`
-  — the orphaned JWE property checks, the multi-key path check and the default key id check.
 * `token-sheriff-quarkus-parent/token-sheriff-client-quarkus/src/main/java/de/cuioss/sheriff/token/client/quarkus/config/ClientConfigMapper.java`
-  — the discovery-cache orphan, missing-TTL and value checks, and the enabled-cache requirement the
-  deployment injection check of `TokenSheriffClientProcessor` records.

@@ -131,7 +131,7 @@ quarkus.native.debug.enabled=false
 quarkus.native.enable-reports=true
 ----
 
-JFR support is compiled into the native executable only when the build enables it. The Quarkus way is the build-time property `quarkus.native.monitoring=jfr`; passing `--enable-monitoring=jfr` to `native-image` as an additional build argument enables it as well. The integration-test module does not set the property in `application.properties`; its `jfr` Maven profile sets it. Of the module's predefined profile-based builds, only the one with `-Pjfr` therefore produces a JFR-capable executable. See xref:../performance/jfr-profiling-guide.adoc[JFR Profiling Guide] for building and using the JFR image.
+JFR support is compiled into the native executable only when the build enables it. The Quarkus way is the build-time property `quarkus.native.monitoring=jfr`; passing `--enable-monitoring=jfr` to `native-image` as an additional build argument enables it as well. The integration-test module does not set the property in `application.properties`; its `jfr` Maven profile sets it. Of the module's predefined profile-based builds, only the one with `-Pjfr` therefore produces a JFR-capable executable. See xref:../performance/native-optimization-guide.adoc#_jfr_monitoring_dual_image_maven_profiles[Native Optimization Guide § JFR Monitoring] for building and using the JFR image.
 
 == Production Configuration Examples
 
@@ -141,7 +141,6 @@ JFR support is compiled into the native executable only when the build enables i
 ----
 quarkus.native.container-build=true
 quarkus.native.additional-build-args=-O2,--gc=serial,--enable-url-protocols=https,--enable-http,--enable-https
-quarkus.native.monitoring=jfr
 quarkus.native.native-image-xmx=8g
 quarkus.native.container-runtime-options=-m=4g
 quarkus.native.resources.includes=**/*.p12,**/*.crt,**/*.key,**/*.json
@@ -185,8 +184,7 @@ quarkus.native.container-runtime-options=-m=64m
 
 **Validation Checklist**:
 
-* Native image size: 96-104MB (distroless: 104MB, JFR/UBI: 96MB)
-* Startup time: <1 second
+* Image size and startup time: see the recorded figures in xref:../performance/native-optimization-guide.adoc#_runtime_verification[Native Optimization Guide § Runtime Verification]
 * Reflection classes: registered automatically from the metadata shipped in the `token-sheriff-validation` jar
 * Security services: All enabled for JWT support
 

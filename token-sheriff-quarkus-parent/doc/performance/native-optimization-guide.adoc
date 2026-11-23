@@ -7,7 +7,14 @@
 
 == Purpose
 
-Technical configuration for optimizing Quarkus native images for JWT validation workloads -- compiler settings, runtime parameters, and build optimizations for production deployment.
+Technical configuration for optimizing Quarkus native images for JWT validation workloads -- compiler settings, runtime parameters, JFR profiling, and build optimizations for production deployment.
+
+Measured performance (throughput, latency, latency decomposition, the CPU-saturation root cause and the
+microbenchmark pipeline breakdown) is recorded in the benchmarking analyses, not here:
+link:../../../benchmarking/doc/Analysis-03.2026-Integration.adoc[Integration Analysis],
+link:../../../benchmarking/doc/Analysis-03.2026-Latency-Decomposition.adoc[Latency Decomposition],
+link:../../../benchmarking/doc/Analysis-03.2026-Micro.adoc[Microbenchmark Analysis] and
+link:../../../benchmarking/doc/Analysis-03.2026-JFR-Profiling.adoc[JFR Profiling Analysis].
 
 == Build Configuration
 
@@ -21,11 +28,13 @@ quarkus.native.additional-build-args=--enable-url-protocols=https,--enable-http,
 
 `quarkus.native.monitoring` is not set in `application.properties`. The `jfr` Maven profile of the integration-test module sets it, see xref:#_jfr_monitoring_dual_image_maven_profiles[].
 
+`--enable-all-security-services` was removed in GraalVM 25; all security services are enabled by default, and this project does not use the flag.
+
 === GraalVM/Mandrel 25 Features
 
 * **JCMD Support**: Native images support `jcmd` for runtime diagnostics
 * **WP-SCCP**: Whole-Program Sparse Conditional Constant Propagation (default)
-* **ML Profile Inference**: 1-3% performance boost via GraalNN
+* **ML Profile Inference**: XGBoost-based static profiler, enabled with `-O2` and `-O3` in both Community Edition (Mandrel) and Oracle GraalVM; 1-3% gain
 * **New JFR Events**: `jdk.ObjectAllocationSample` for memory profiling
 
 [source,properties]
@@ -39,14 +48,7 @@ The Token-Sheriff Quarkus deployment automatically registers types for reflectio
 
 === Garbage Collection
 
-[source,bash]
-----
-# Serial GC is the default for native images and optimal for JWT validation workloads.
-# No additional build args needed.
-
-# G1GC: Oracle GraalVM only, Linux only
-native-image --gc=G1 YourApp
-----
+Serial GC is the default for native images and performs well for JWT validation workloads; no additional build arguments are needed. G1 is available only with Oracle GraalVM on Linux (see xref:#oracle_graalvm_options[]).
 
 == Runtime Configuration
 
@@ -67,10 +69,12 @@ public class JwtValidationEndpoint { }
 [#_jfr_monitoring_dual_image_maven_profiles]
 === JFR Monitoring (Dual-Image Maven Profiles)
 
-`jfr` is the only predefined project profile that compiles JFR support into the native executable. The production build carries none.
+JFR support is compiled into a native executable only when the build sets the build-time property `quarkus.native.monitoring=jfr`. `jfr` is the only predefined project profile that sets it; the `integration-tests` and `multi-idp-tests` profiles do not, so the production executable carries no JFR support.
 
 [source,xml]
 ----
+<!-- token-sheriff-quarkus-integration-tests/pom.xml -->
+
 <!-- Production build (distroless) -->
 <profile>
     <id>integration-tests</id>
@@ -90,6 +94,73 @@ public class JwtValidationEndpoint { }
     </properties>
 </profile>
 ----
+
+Each image has its own Dockerfile; both copy the pre-built native executable:
+
+[source,dockerfile]
+----
+# Dockerfile.native.distroless (Production)
+FROM quay.io/quarkus/quarkus-distroless-image:2.0
+COPY --chmod=0755 token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/target/*-runner /app/application
+----
+
+[source,dockerfile]
+----
+# Dockerfile.native.jfr (Profiling)
+FROM quay.io/quarkus/ubi9-quarkus-micro-image:2.0
+COPY --chmod=0755 token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/target/*-runner /app/application
+RUN mkdir -p /tmp/jfr-output && chmod 777 /tmp/jfr-output
+ENTRYPOINT ["/app/application", "-XX:+FlightRecorder", \
+  "-XX:StartFlightRecording=filename=/tmp/jfr-output/jwt-profile.jfr,dumponexit=true,duration=240s,settings=profile"]
+----
+
+The JFR compose override mounts the output directory, which a read-only container needs:
+
+[source,yaml]
+----
+# docker-compose.jfr.yml
+services:
+  token-sheriff-integration-tests:
+    volumes:
+      - ./target/jfr-output:/tmp/jfr-output:rw
+----
+
+==== Recording and analysis
+
+[source,bash]
+----
+# Runtime control through jcmd (requires --enable-monitoring=jcmd,jfr)
+jcmd <pid> JFR.start duration=60s filename=profile.jfr
+jcmd <pid> JFR.check
+jcmd <pid> JFR.dump filename=profile.jfr
+jcmd <pid> JFR.stop
+
+# Start-up recording: fixed duration, or continuous with rotation
+./application -XX:StartFlightRecording=duration=60s,filename=jwt-profile.jfr,settings=profile
+./application -XX:StartFlightRecording=duration=0,filename=jwt-profile-%t.jfr,maxsize=100M,maxage=1h
+
+# Investigation workflow: start with JFR, load, stop (triggers the dump), analyse
+docker compose -f docker-compose.yml -f docker-compose.jfr.yml up -d
+wrk -t4 -c50 -d60s --latency -s benchmarking/benchmark-integration-wrk/src/main/resources/wrk-scripts/jwt_benchmark.lua https://localhost:10443/jwt/validate
+docker compose down
+jfr summary target/jfr-output/jwt-profile.jfr
+jfr print --events ExecutionSample target/jfr-output/jwt-profile.jfr
+----
+
+[cols="2,3", options="header"]
+|===
+| Event | Purpose
+
+| `jdk.ExecutionSample` | CPU profiling hotspots
+| `jdk.ObjectAllocationSample` | Memory allocation (new in GraalVM 25)
+| `jdk.ThreadPark` | Thread blocking analysis
+| `jdk.GarbageCollection` | GC pause analysis
+| `jdk.SocketRead` / `jdk.SocketWrite` | Network I/O profiling
+|===
+
+JFR CPU sampling under load under-represents JWT validation: with the CPU saturated, most threads are off-CPU at a sample point, so the samples do not match the wall-clock latency split. See link:../../../benchmarking/doc/Analysis-03.2026-JFR-Profiling.adoc#_why_cpu_doesnt_match_latency[CPU/latency mismatch analysis] and link:../../../benchmarking/doc/JFR-Instrumentation.adoc[JFR Instrumentation].
+
+JFR with `settings=profile` adds recording overhead and a recording buffer; no overhead figure is measured in this project, so measure it on the target workload before relying on a number.
 
 == Complete Configuration Examples
 
@@ -111,6 +182,26 @@ quarkus.native.resources.includes=**/*.p12,**/*.crt,**/*.key
 quarkus.native.additional-build-args=-O2,--enable-monitoring=jfr,heapdump
 ----
 
+[#oracle_graalvm_options]
+== Oracle GraalVM options
+
+Token-Sheriff targets GraalVM Community Edition (Mandrel). The following options require Oracle GraalVM and its licensing; the gains quoted are Oracle's estimates and *have not been verified* with this project's workload.
+
+[cols="1,2,2", options="header"]
+|===
+| Option | Build argument | Oracle's claimed effect (unverified)
+
+| Profile-guided optimization
+| `--pgo-instrument`, run a representative workload, then `--pgo=default.iprof -O3`
+| +15-20% throughput, 10-15% smaller binary
+
+| G1 garbage collector
+| `--gc=G1` (Linux only)
+| +5-10%; more consistent latency for memory-intensive workloads
+|===
+
+The Jipher JCE provider is not bundled with Oracle GraalVM 25 and must be downloaded separately; it matters only for FIPS 140-2 compliance, not for performance. Oracle GraalVM is therefore worth its licensing for FIPS compliance or an existing Oracle GraalVM deployment, not for the incremental gain on this workload.
+
 == Build Commands
 
 [source,bash]
@@ -129,9 +220,10 @@ cd token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests
 docker compose -f docker-compose.yml -f docker-compose.jfr.yml up -d
 ----
 
+[#_runtime_verification]
 == Runtime Verification
 
-**Key Performance Indicators** (March 2026):
+**Key Performance Indicators** (March 2026 record):
 
 * **Distroless Production Image**: ~104MB, 0.172s startup
 * **UBI-based Profiling Image**: ~187MB, ~0.2s startup
@@ -148,5 +240,7 @@ curl -k https://localhost:10443/q/health/ready
 * **Missing Reflection**: Ensure token-sheriff-validation is built before native image
 * **Memory Issues**: Increase native-image-xmx to 8g or higher
 * **Performance Issues**: Verify virtual threads enabled; check GC configuration; validate container resource limits
+* **JFR file not created**: Ensure the volume mount exists and is writable, and that the container did not stop before the dump; create `target/jfr-output` before starting
+* **JFR recording too small**: Use `settings=profile`, a duration of at least 60s, and keep load on during the recording
 
 **Regression Thresholds**: >10% throughput loss, >20% latency increase, >50% memory increase.

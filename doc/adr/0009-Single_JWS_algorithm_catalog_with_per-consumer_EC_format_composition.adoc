@@ -1,7 +1,9 @@
 = ADR-0009: Single JWS algorithm catalog with per-consumer EC format composition
 :toc: left
-:toclevels: 2
+:toclevels: 3
+:toc-title: Table of Contents
 :sectnums:
+:source-highlighter: highlight.js
 
 // adr-metadata
 // Progressive-disclosure metadata block (see manage-adr SKILL.md → "ADR Template
@@ -19,138 +21,40 @@ Accepted
 
 == Context
 
-A JWS signing algorithm is not one fact but a small cluster of them: the key type it
-requires, the digest it uses, the name `java.security.Signature` knows it by, and —
-for the PSS family — a mask-generation function and salt length. Every component that
-signs, verifies, or decides whether an algorithm is acceptable needs some subset of
-that cluster.
-
-Stated independently at each such site, the cluster is a duplicated catalog. The
-duplication has a specific and unpleasant failure mode: the copies are not checked
-against each other by anything. A compiler cannot object that one site's digest for an
-algorithm disagrees with another's, because each site is internally consistent. Adding
-an algorithm requires a synchronized edit across every site, and omitting one produces
-a misleading runtime error rather than a build failure. Worse, a single mistyped digest
-string is invisible — it selects a different, real algorithm, and only a test that
-exercises that specific algorithm end to end will notice.
-
-This is a structural choice point rather than a tidiness question, because the
-duplicated facts govern signature verification and sender-constrained proof generation.
-A silent disagreement between two copies is a security-relevant defect, not a
-maintenance inconvenience.
-
-A single catalog is the obvious answer, and it raises a second question the first does
-not settle. One of the facts is genuinely not single-valued: the JCA name for the EC
-family depends on the caller's wire format. JOSE encodes an ECDSA signature as a fixed
-width `R || S` pair (P1363); `java.security.Signature` speaks DER by default and offers
-the P1363 form under a separate algorithm name. A component that signs for a JOSE
-payload and one that verifies a DER signature need different names for the same JWS
-algorithm. A catalog that stores one string per algorithm must therefore either be
-wrong for one of them, or must not store that string at all.
+A JWS algorithm is a cluster of facts — key type, digest, JCA signature name, PSS parameters — that
+every signing, verifying or accepting component needs part of. Stated at each site, the copies are not
+checked against each other: a mistyped digest selects a different real algorithm and only an
+end-to-end test of that algorithm notices. Because these facts govern signature verification and DPoP
+proof generation, a silent disagreement is a security defect. One of the facts is not single-valued:
+the EC JCA name depends on the wire format (JOSE uses `R || S`, `java.security.Signature` defaults to
+DER).
 
 == Decision
 
-Signing-algorithm facts are defined once, in a `JwsAlgorithm` catalog in the core
-validation module, and every consumer *that signs or verifies a signature* derives from
-it — including consumers in the client module, across the module boundary. The catalog
-is the sole definition of key type, digest, and, where the value is genuinely
-single-valued, the JCA signature algorithm name and PSS parameters.
+Signing-algorithm facts are defined once, in the `JwsAlgorithm` catalog of the validation module, and
+every consumer *that signs or verifies* derives from it, across the module boundary. Two deliberate
+exceptions: for EC the catalog supplies no JCA name and each consumer composes the name its wire
+format needs; and JWK *admission* — which key material a JWKS may offer — keeps its own list, so adding
+a signing algorithm never silently widens accepted remote key material. Test inputs are derived from
+the catalog only where that widens coverage, and a verification oracle never derives its expectation
+from it.
 
-The scope of that claim is deliberately the signing path, and the boundary is
-load-bearing. JWK *admission* — which key material a JWKS endpoint may offer — is a
-separate question from which algorithms this system will sign or verify with, and it is
-governed by its own independent list. Coupling the two would mean that adding a signing
-algorithm silently widened what key material is accepted from a remote endpoint, which
-is a security-relevant change no one asked for. A consumer that decides admission is
-therefore *not* a derived consumer of this catalog, and must not be made one on the
-grounds that both lists name algorithms.
-
-The EC family is a deliberate and permanent exception. For EC entries the catalog
-exposes only the single-valued facts and does *not* supply a JCA signature algorithm
-name. Each consumer composes the name its own wire format requires at its own call
-site. The catalog therefore does not fully determine JCA behaviour for EC, and this is
-the intended shape rather than an omission.
-
-Where a test's inputs can be derived from the catalog, they are — but derivation is
-permitted only where it widens coverage. Where deriving a test's cases from the catalog
-would drop a case the hand-written suite covered (typically a negative case for a value
-deliberately outside the catalog), the explicit case is kept alongside the derived
-source. Verification oracles in tests are exempt from derivation entirely: a test that
-verifies a signature must compute its expectation independently of the catalog the
-production code used, or the assertion is tautological.
+Rejected: per-site copies (silent disagreement); one EC JCA name (silently changes one consumer); deriving
+every test input from the catalog (drops negative cases and makes oracles tautological).
 
 == Consequences
 
-=== Positive
+* One edit updates every signing consumer, and the remaining per-consumer decisions (EC format, JWK
+  admission) are conspicuous.
+* A wrong catalog entry now reaches the whole signing path at once, so each entry's values are pinned
+  explicitly.
+* The EC carve-out invites a well-meant "completion"; both composing call sites state the reason.
 
-One edit updates every signing consumer. The signature-algorithm preference list and the
-signing paths are coupled by construction rather than by separately-maintained lists
-that happen to agree. Adding an algorithm is a single change with a single place to get
-wrong, and signing consumers that fail to handle it fail visibly rather than diverging
-quietly.
-
-Two per-consumer decisions remain, and both are deliberate rather than residual: the EC
-wire format, and JWK admission. Each is now the *only* place its consumer states an
-algorithm fact of its own, which makes both conspicuous and reviewable rather than lost
-among several hand-maintained copies.
-
-=== Negative
-
-The blast radius of a wrong entry is now the whole signing path. Previously a mistake in
-one copy affected one site; now it reaches every signing consumer simultaneously. The
-catalog's correctness is therefore load-bearing in a way no individual copy was, and it
-warrants assertions that pin each entry's values explicitly rather than deriving them
-from the catalog under test.
-
-A maintainer must know that the catalog is deliberately incomplete for EC. Someone who
-reads it as a total description of JCA behaviour, and "completes" it by collapsing the
-EC name to one string, would ship a behaviour change with the appearance of a cleanup.
-
-=== Risks
-
-The EC carve-out is a standing invitation to a well-intentioned refactor. Mitigation is
-that both composing call sites state the reason locally, and the catalog does not offer
-a field that would make the collapse look natural.
-
-Language constraints can force the catalog's internal shape. Constants referenced from
-enum constant arguments cannot live as fields of the same enum — the reference is an
-illegal forward reference — so shared literal values are held in a nested private type.
-That shape is a consequence of the language, not a design preference, and should not be
-"simplified" back.
-
-== Alternatives Considered
-
-*Keep the facts stated independently at each consuming site.* This is the shape the
-decision replaces. Its appeal is locality: each site reads completely on its own, and a
-mistake is contained. Its cost is that nothing structurally prevents the copies from
-disagreeing, and the disagreement is silent — a wrong digest names a different real
-algorithm rather than failing to compile. Rejected because the facts are
-security-relevant and the failure mode is invisible.
-
-*Collapse the EC JCA name to a single catalog value.* This would make the catalog a
-total description and remove the per-consumer composition step. Rejected because the
-two consumers genuinely require different wire formats for the same algorithm; forcing
-one value would silently change one consumer's behaviour. The uniformity gained would
-be cosmetic and the change would be mis-read as deduplication.
-
-*Derive every test input from the catalog.* This maximises the single-source property
-and removes the remaining hand-written case lists. Rejected in two places. Where the
-catalog does not contain a value the test needs — a negative case for a rejected or
-off-catalog algorithm — derivation deletes coverage rather than adding it. Where the
-test verifies a signature the production code produced, deriving its expectation from
-the same catalog makes the assertion agree with itself by construction, so it can no
-longer fail for the reason it exists.
-
-The alternatives fall into one class: each trades an accurate model of the domain for a
-more uniform one. The domain is not uniform — one algorithm fact is caller-dependent,
-and one class of test input is deliberately outside the catalog — so the uniformity is
-available only by asserting something untrue.
+The catalog's shape, the EC composition and the test rules are maintained in
+xref:../validation/architecture.adoc#jws-algorithm-catalog[Validation Architecture § JWS Algorithm Catalog].
 
 == References
 
-* `token-sheriff-validation` — `de.cuioss.sheriff.token.validation.security.JwsAlgorithm`,
-  the catalog itself, and `RejectedAlgorithms`, the companion single definition of the
-  algorithms that must never be accepted.
-* xref:../client/specification/test-strategy.adoc#_signal_integrity[Signal integrity] — the
-  project practice that governs the derivation rule stated above, including the requirement
-  that a check be shown to discriminate before its verdict is trusted.
+* `de.cuioss.sheriff.token.validation.security.JwsAlgorithm` and `RejectedAlgorithms`
+* xref:../client/specification/test-strategy.adoc#_signal_integrity[Signal integrity] — the derivation
+  rule and the requirement that a check be shown to discriminate

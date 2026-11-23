@@ -18,405 +18,66 @@ Accepted
 
 == Context
 
-Four pieces of HTTP-edge logic existed as private or duplicated code:
-
-* **Bearer extraction.** `BearerTokenProducer` read the `Authorization` field with a private method that
-  accepted only the exact prefix `"Bearer "`. A gateway built on the library, such as API Sheriff, needs the
-  same extraction and had to copy it.
-* **The `insufficient_scope` challenge.** `BearerTokenResponseFactory` built the RFC 6750 §3.1
-  `WWW-Authenticate` value with a private method that escaped a quote inside a scope name. The client's
-  `InsufficientScopeChallengeParser` refuses such a scope after unquoting, because RFC 6749 §3.3 does not
-  allow a quote in a `scope-token`, so the producer could emit a challenge its own sibling parser rejects.
-* **A printable-ASCII rendering of untrusted text.** Some sinks must not carry any non-ASCII character at
-  all. `ErrorTextSanitizer` (ADR-0022) escapes only the unsafe characters and keeps every other non-ASCII
-  character, so such a sink would need a second sanitiser.
-* **Bounded response-body reads.** The validation module bounded its discovery and JWKS reads with the
-  package-private `BoundedBodyHandlers`; the client bounded its back-channel reads with its own
-  `BoundedContentBodyHandler`. The two implemented one security control twice and differed in eight
-  observable ways (see the table below), the client handler had no `Content-Length` pre-check and no test
-  class, and neither offered the keep-the-prefix mode a gateway needs for a capped upstream body.
-
-The structural choice points are where the shared helpers live, how strictly they apply the RFCs, and
-whether the two body handlers become one.
+Four pieces of HTTP-edge logic existed as private or duplicated code. The Quarkus producer extracted
+`Bearer` credentials with a private exact-prefix match that a gateway had to copy. It built the
+`insufficient_scope` challenge by escaping a quote inside a scope name — a challenge the client's own
+parser then refused, because RFC 6749 §3.3 allows no quote in a `scope-token`. Some sinks must carry no
+non-ASCII character, which the one commons sanitiser did not offer. And the validation module and the
+client each had their own bounded response-body handler, which differed in eight observable ways
+(the client's had no `Content-Length` pre-check and no test class), while a gateway needed a
+keep-the-prefix mode neither offered.
 
 == Decision
 
 The four helpers become public, framework-neutral classes in the commons layer of
 `token-sheriff-validation`, and the Quarkus producer and the client adopt them:
+`commons.http.BearerCredentials`, `commons.http.BearerChallenge`,
+`ErrorTextSanitizer.escapeNonPrintableAscii` (a third form of the one sanitiser of
+xref:0022-A_flow_context_is_single-use_and_untrusted_text_is_sanitised_by_one_commons-layer_utility.adoc[ADR-0022]),
+and `commons.transport.BoundedBodyHandler` with a `FAIL` or `TRUNCATE` policy, replacing both former
+handlers.
 
-* **`commons.http.BearerCredentials`** extracts RFC 6750 §2.1 credentials from an `Authorization` value and
-  reports exactly one of `ABSENT`, `MALFORMED` or `PRESENT`. `BearerTokenProducer` maps `ABSENT` to the
-  existing no-token path (the cookie fallback included), `MALFORMED` to `INVALID_REQUEST` and `PRESENT` to
-  validation.
-* **`commons.http.BearerChallenge`** builds the `insufficient_scope` challenge as a string and never decides
-  a status code. `BearerTokenResponseFactory` builds its scope challenge through it and keeps answering 401.
-* **`ErrorTextSanitizer.escapeNonPrintableAscii(String, int, String)`** is a third form of the one
-  commons-layer sanitiser of ADR-0022.
-* **`commons.transport.BoundedBodyHandler`** is the one bounded body handler, with an `OverLimitPolicy` of
-  `FAIL` or `TRUNCATE`. `JwksHttpContentConverter`, `WellKnownConfigurationConverter` and
-  `BackChannelHttp.bodyHandler()` use it; `BoundedBodyHandlers` and `BoundedContentBodyHandler` are deleted.
+The helpers apply the RFCs strictly: the scheme name matches case-insensitively (RFC 9110 §11.1),
+credentials that break RFC 6750 §2.1 are malformed, and a scope name outside the `scope-token` grammar is
+refused rather than escaped. The shared body handler keeps the validation module's behaviour and failure
+message; each difference of the old handlers was pinned by a named test before they were removed.
 
-=== Operator decisions
+Amendment: the scopes of every `@BearerAuth` and `@BearerToken` are checked when the application is
+built, through the same challenge builder the producer uses, merged per bean class as the interceptor
+merges them at run time (xref:0024-The_bearer-token_interceptor_reads_its_class-level_binding_from_the_bean_class_not_the_ArC_subclass.adoc[ADR-0024]).
+Two limits are accepted by the operator: an interface default method is checked on its own, and an
+override of a generic base method is found by name and parameter types only. A set the check misses is
+answered 500 on the request path. The `error_description` grammar stays the RFC 9110 quoted string, and
+both helpers bound their own work on hostile input.
 
-The open design questions were settled as follows:
-
-[cols="1,3",options="header"]
-|===
-|Question |Decision
-
-|OD-1: Does the extractor match the scheme name exactly or case-insensitively?
-|Case-insensitively, as RFC 9110 §11.1 prescribes for authentication schemes, and the producer adopts it.
-`bearer`, `BEARER` and `bEaReR` name the `Bearer` scheme.
-
-|OD-2: How is whitespace around and inside the credentials handled?
-|The field value is trimmed of SP and HTAB (RFC 9110 §5.5). The scheme must be followed by one or more SP
-(RFC 6750 §2.1 `1*SP`); a tab after the scheme does not separate it, so such a value carries no `Bearer`
-credentials. An empty or whitespace-only token, and a token holding SP, HTAB or a control character (CR, LF,
-NUL and the other C0 controls, DEL, C1), are `MALFORMED`.
-
-|OD-3: Are scope names outside the `scope-token` grammar escaped or refused?
-|Refused with `IllegalArgumentException`. `realm` and `error_description` are written as RFC 9110 §5.6.4
-quoted strings that escape `"` and `\`, and refuse CR, LF, NUL, the other C0 controls and DEL. The
-producer's `insufficient_privileges` header escapes the backslash as well as the quote.
-
-|OD-4: What shape does the printable-ASCII form take?
-|`escapeNonPrintableAscii(String value, int maxLength, String truncationMarker)`: every character outside
-U+0020 to U+007E, and the backslash itself, is written as an upper-case backslash-`u` four-digit escape;
-`maxLength` counts source characters before escaping; `null` in gives `null` out; a negative `maxLength`
-is refused.
-
-|OD-5: Do the validation and client body handlers become one?
-|Yes. The shared handler keeps the validation module's behaviour and failure message; every difference of
-the two old handlers is pinned by a named test before either is removed.
-
-|OD-6: Where do the helpers live?
-|The Bearer helpers in a new package `de.cuioss.sheriff.token.commons.http`. The bounded handler stays in
-`commons.transport`, where the transport specification places it and where its validation callers live.
-|===
-
-=== Rationale for OD-5
-
-One handler means one implementation of a security control instead of two that had already drifted apart.
-The client gains the `Content-Length` pre-check the validation handler already had, so an over-advertised
-back-channel response fails before a byte of it is read. The truncate policy gives a gateway a capped,
-explicitly signalled read of an upstream body — the mode API Sheriff's `CappedByteArrayBodySubscriber`
-implements on its own — without a third copy of the counting logic.
-
-=== Pinned differences of the two old handlers
-
-Each row is asserted by a named case in `BoundedBodyHandlerTest` or `BoundedBodyHandlerTruncateTest`.
-
-[cols="1,3,3,4",options="header"]
-|===
-|# |Validation `BoundedBodyHandlers` |Client `BoundedContentBodyHandler` |Shared `BoundedBodyHandler`
-
-|1
-|`long` ceiling
-|`int` ceiling
-|`long` ceiling, accepted from 0 to `MAX_CEILING` (`Integer.MAX_VALUE - 8`, the largest array the result can
-hold)
-
-|2
-|negative ceiling not checked
-|negative ceiling refused
-|a negative ceiling and a ceiling above `MAX_CEILING` refused with `IllegalArgumentException`
-
-|3
-|`Content-Length` pre-check, subscription cancelled in `onSubscribe`
-|no pre-check
-|pre-check under `FAIL`; under `TRUNCATE` an over-advertised body is read up to the ceiling
-
-|4
-|chunks after the failure ignored, buffered chunks kept
-|buffer reset on failure, later chunks not checked
-|buffered bytes released at the first crossing, and later chunks ignored
-
-|5
-|charset parameter
-|fixed UTF-8
-|`ofString(Charset, long, String)` keeps the parameter; the client passes UTF-8
-
-|6
-|no null checks
-|`charset` and `boundOrigin` checked
-|`charset`, `policy` and `boundOrigin` checked with `requireNonNull`
-
-|7
-|`Response body exceeds maximum allowed size of N bytes (origin)`
-|`response body exceeds the maximum allowed size of N bytes (origin)`
-|the validation message, byte for byte
-
-|8
-|package-private factory class
-|public class in `client.internal`
-|one `public final` class in `commons.transport`
-|===
-
-=== Changed default behaviour
-
-Each change below alters what an existing deployment observes:
-
-* **OD-1** — a lower-case or mixed-case scheme (`bearer abc`, `BEARER abc`) is now a presented token. Before,
-  it was treated as no token at all.
-* **OD-2** — leading and trailing whitespace of the `Authorization` value is now ignored, and several spaces
-  between the scheme and the token are accepted. A tab after the
-  scheme is not `Bearer` credentials, so it is treated as no token (the cookie fallback applies when
-  configured). A token holding an internal space or a control character is now answered 400
-  `INVALID_REQUEST` and the cookie is not consulted; before, it reached the validator and was answered 401
-  `PARSING_ERROR`.
-* **OD-3** — a required scope of a `@BearerAuth` or `@BearerToken` whose name is outside the `scope-token`
-  grammar, a merged required-scope set of more than 64 distinct scopes, or a set whose challenge would be
-  longer than 8192 characters, now fails the deployment: the
-  extension checks every annotation at build time and names the declaring class and member (see the
-  amendment below). Before, such a name was escaped into the header. A direct call of the challenge builder
-  with such a scope set is still refused with `IllegalArgumentException`. A
-  backslash in a role or group name of the `insufficient_privileges` header is now written as `\\`. The
-  `QuoteEscaping` expectations of `BearerTokenResponseFactoryTest` changed accordingly: a scope name holding
-  `"` is refused, scope names holding a backslash, a space or a non-ASCII letter are refused, and a backslash
-  in a role or group is escaped.
-* **Quoted blank cookie** — when the token is read from a cookie, a quoted cookie value holding only
-  whitespace (for example `Bearer="   "`) is now treated as no token. Before, the quotes were stripped and
-  the remaining blank value passed the emptiness check.
-* **Scope order** — the scopes of the challenge are now written in sorted order, with duplicates collapsed,
-  independent of the iteration order of the required-scope set. For scope names inside the grammar the
-  challenge is otherwise byte-identical to the previous one.
-* **OD-5** — the client's back-channel reads now refuse a response whose `Content-Length` exceeds the
-  ceiling before reading its body. The client's over-limit message is now the validation form
-  (`Response body exceeds maximum allowed size of N bytes (origin)`); the lower-case client form is retired.
-  On the validation path, a negative ceiling or one above `MAX_CEILING` is refused when the handler is
-  created; `ParserConfig` already refuses non-positive sizes, so no configuration reaches that refusal.
-* **Client body buffer** — the client's back-channel reads no longer collect the body in a
-  `ByteArrayOutputStream`; they keep it in the shared handler's one doubling array, so their memory bound is
-  the one COMMONS-17 states for every bounded read.
-* **Malformed `Content-Length` on the client** — a back-channel response whose `Content-Length` is not a
-  number fails the client call with a `TransportException` carrying the endpoint's failure context and the
-  fixed text `BackChannelHttp.MALFORMED_RESPONSE`, never with the JDK exception whose message carries the
-  raw header value. The JDK parses that header after the body handler returned, and for a `204` or other
-  no-body reply before any body handler runs. The token endpoint reports the failure as its post-redemption
-  `RedeemedResponseException` when its body handler observed a success status, and as a pre-redemption
-  failure when it never saw the status, as for a `204`. An `IllegalArgumentException` the JDK throws
-  synchronously from `HttpClient.sendAsync`, for a request it refuses before sending, is a request-side fault
-  and reaches the caller as thrown.
-* **Logout freshness window** — `LogoutTokenValidator`'s builder refuses a freshness window longer than
-  `LogoutTokenValidator.MAX_FRESHNESS_WINDOW` (100 years); ADR-0029 records that bound in its amendment
-  "`iat` / `exp` reading and the freshness window are bounded".
-* **Unchanged unknown-`kid` fetch** — an unknown-`kid` fetch that returns the installed key set unchanged is
-  logged at DEBUG instead of through the `UNKNOWN_KID_REFRESH_DISCARDED` warning; ADR-0030 records it under
-  Risks.
-* **Health-check loader failure** — when the JWKS readiness probe fails to read an issuer's loader status, its
-  `ERROR_CHECKING_JWKS_LOADER` warning carries the issuer and the exception message through
-  `ErrorTextSanitizer` (ADR-0022) and no longer attaches the exception, so no stack trace is logged.
+Rejected: keeping the helpers private (the copies had already diverged); exact scheme matching (refuses
+conforming clients); escaping an out-of-grammar scope (a conforming parser rejects the whole challenge);
+two aligned body handlers (the client already depends on the commons layer, and copies drift again).
 
 == Consequences
 
-=== Positive
+* Every HTTP edge extracts credentials, builds the challenge and bounds a read with one implementation,
+  and the producer's challenge is always one the client parser accepts.
+* Several defaults changed on upgrade: a lower- or mixed-case scheme is now a presented token; a token
+  with an internal space or control character is answered 400 `INVALID_REQUEST`; an out-of-grammar scope,
+  more than 64 scopes, or a challenge over 8192 characters fails the deployment; the client's back-channel
+  reads refuse an over-advertised `Content-Length` before reading and use the validation failure message.
+* The public API of the validation module grew by three classes and one method; a `TRUNCATE` caller must
+  read `BoundedBody.truncated()`.
 
-* A gateway or a second HTTP edge extracts credentials and builds the challenge with the library's own
-  classes instead of copying them, so a fix reaches every edge at once.
-* The challenge the producer emits is always one the client parser accepts: the bounds of 64 scope tokens and
-  8192 characters match the parser's, and a round-trip test drives builder output through the parser.
-* A caller-supplied value can neither split the challenge header nor add a parameter to it.
-* A sink that must stay printable ASCII uses the one sanitiser, so ADR-0022's single definition of unsafe
-  characters still holds.
-* One bounded body handler serves both modules; the client gains the pre-check and a test class, and a
-  gateway gains the truncate policy.
-
-=== Negative
-
-* The itemised default changes can turn a request a deployment answered before into a different answer: a
-  lower-case scheme is now validated, and a token with an internal space is now a 400.
-* A scope name outside the grammar, a merged set of more than 64 scopes, or a set whose challenge exceeds
-  8192 characters, now fails the deployment instead of producing a header; an application that declared
-  such a set must change it before it builds.
-* The public API of the validation module grows by three classes and one method.
-
-=== Risks
-
-* The extractor checks the characters the RFC rules refuse, not the full `b64token` grammar; a token that
-  passes extraction is still judged by the token validation pipeline.
-* `TRUNCATE` hands the caller a prefix of the body. A caller that forgets to read
-  `BoundedBody.truncated()` processes an incomplete body as if it were complete.
-
-== Alternatives Considered
-
-**Keep the helpers private and let each edge copy them.** It costs nothing in API surface. It was rejected
-because the copies had already diverged: the producer and the client parser disagreed on which scope names a
-challenge may carry, and the two body handlers on whether a `Content-Length` is checked.
-
-**Match the scheme exactly, as before.** It keeps the old behaviour for lower-case schemes. It was rejected
-because RFC 9110 §11.1 makes the scheme name case-insensitive, so a conforming client sending `bearer` was
-refused for no reason the RFC supports.
-
-**Escape a scope name outside the grammar.** It keeps the old producer output. It was rejected because the
-escaped name is not a `scope-token` after unquoting, so a conforming parser rejects the whole challenge.
-
-**Keep two body handlers and align them.** It avoids a cross-module dependency on one class. It was rejected
-because the client already depends on the validation module's commons layer (ADR-0001), so sharing costs no
-new dependency, and two aligned copies drift again.
-
-The rejected options share one flaw: each keeps an HTTP-edge security rule in more than one place, where the
-places have already been shown to disagree.
-
-== Amendment: an invalid annotation scope fails the deployment, and the helpers bound their own work
-
-=== Context
-
-The decision above refuses a scope name outside the `scope-token` grammar when the challenge is built. For
-the Quarkus producer that point is the first request that misses a required scope: nothing checked the
-`requiredScopes` of `@BearerAuth` and `@BearerToken` earlier, so a misconfigured annotation surfaced as an
-unhandled `IllegalArgumentException` on the request path instead of a startup failure. Two further points
-were left open. The decision did not say whether `error_description` keeps the RFC 9110 quoted-string
-grammar or moves to the narrower RFC 6750 §3 character set. And the helpers refused hostile input only at
-the end of their work: the challenge builder kept every distinct scope and scanned and copied a `realm` or
-`error_description` of any length before `build()` refused it, and the body handler kept one array per
-received buffer, and its own read of an unparsable `Content-Length` threw a `NumberFormatException`.
-
-=== Decision
-
-* **Annotation scopes are checked at deployment.** A build step of the validation extension reads the
-  combined Jandex index and collects the required scopes of every `@BearerAuth` on a class and on a method
-  and of every `@BearerToken` injection point. A method-level `@BearerAuth` is checked once per bean class
-  that runs the method, merged with that bean class's own class-level `@BearerAuth`, as ADR-0024 merges them
-  at run time: the interceptor reads the class-level annotation from the bean class, and `@BearerAuth` is
-  not `@Inherited`, so an inherited method is merged with the subclass's annotation, never with the
-  declaring class's. Only a bean class is merged: an interface, an abstract class, a class declaring
-  `@Vetoed` and a class in a package whose `package-info` declares `@Vetoed` are no bean classes, the
-  package veto being read from the index as ArC reads it, so a class ArC registers is never skipped. Each
-  set is checked by building the challenge the producer sends, through the one
-  public method `BearerTokenResponseFactory.insufficientScopeChallenge(Collection)` that the producer uses
-  as well, so the rule is the builder's own and the length bound is checked with the realm and the
-  `error_description` included. Three rules are enforced: every name is a `scope-token`, a set holds at
-  most 64 distinct scopes, and the challenge is at most 8192 characters long. A refusal fails the build
-  with an error that names the declaring class and member — for a merged method also the bean class whose
-  annotation was merged — and the reason; a class-level set refused on its own is reported at the class
-  only, never as a scope its methods declare. The scope value is rendered through `ErrorTextSanitizer`
-  (ADR-0022), not echoed raw. A direct call of the producer's challenge build with such a set is still
-  refused with `IllegalArgumentException`.
-* **Known limits of the deployment check, accepted by the operator.** Two cases are not covered. A
-  method-level `@BearerAuth` on an interface default method is checked on its own, although ArC intercepts
-  the default method and the interceptor merges its scopes with the class-level `@BearerAuth` of the
-  implementing bean class, so a merged set over the bounds passes the deployment. And an override is found by
-  name and parameter types only, so a concrete-typed override of a generic base method is not recognised:
-  the base method's scopes are merged into a subclass whose override carries no `@BearerAuth`, and a
-  deployment that is valid at run time may be refused. Closing either case would need the deployment check
-  to model ArC's interception and Java's bridge-method resolution in full; the operator chose to accept both
-  as documented limits instead.
-* **A set the check misses gets a defined response on the request path.** `BearerTokenResult.createErrorResponse()`
-  — which the interceptor and a `@BearerToken` caller both use — catches the builder's
-  `IllegalArgumentException` and answers 500 (Internal Server Error) with a generic body, the usual cache
-  headers and no `WWW-Authenticate` header, because the cause is a server-side misconfiguration that no
-  client can step up from. It logs `TokenSheriff_Q-201` once per such response at ERROR, naming the scope
-  count, the sorted scopes and the refusal reason, each through `ErrorTextSanitizer` (ADR-0022); no token is
-  logged. The package-private `createResponse` path keeps refusing with `IllegalArgumentException`, so the
-  `QuoteEscaping` expectations of `BearerTokenResponseFactoryTest` are unchanged, and a valid set is still
-  answered with the 401 `insufficient_scope` challenge.
-* **OD-D: the `error_description` grammar is kept.** `realm` and `error_description` stay RFC 9110 §5.6.4
-  quoted strings that escape `"` and `\` and refuse CR, LF, NUL, the other C0 controls and DEL. The builder's
-  output is unchanged, and the round trip of builder and client parser stays pinned by test.
-* **The builder bounds its own work.** It holds at most `MAX_SCOPE_TOKENS + 1` distinct scopes, still
-  checking every further name against the grammar, and scans at most `MAX_LENGTH` characters of a `realm`
-  or `error_description`; `build()` refuses an over-long `realm`, `error_description` or space-joined scope
-  text before copying it, the scope text's length being computed without joining it. The refusal point and
-  its messages stay at `build()`.
-* **The body handler bounds its own work.** The bytes read so far are kept in one array that grows by
-  doubling, so the object count grows with the logarithm of the body size, not with the number of buffers.
-  The array never exceeds the ceiling and is at most twice the bytes received, or the first allocation
-  (1024 bytes, or the ceiling when that is smaller) when that is larger. During a growth step the old and
-  the new array are both live, so the memory held while streaming peaks below twice the ceiling plus the
-  buffers of the delivery in flight; this is the one memory bound of the handler, stated identically in
-  COMMONS-17 and the transport specification. A capacity test pins the retained array's capacity after each
-  delivery; the transient peak while a growth step copies is a property of the allocation logic.
-  The byte ceiling on the assembled body and the `OverLimitPolicy` behaviour are those stated above. The cost of the
-  decision is that the worst-case streaming peak of a read of a remote response is about twice what one
-  array of the ceiling costs. Under `FAIL`, when the handler observes a `Content-Length`
-  that is not a valid number, it cancels the subscription without requesting a byte and fails the body
-  future with an `IOException` carrying a fixed message that does not echo the header value. That guarantee
-  is the handler's own; whether the surrounding client reaches the handler, and whether it parses the header
-  itself first, is the client's behaviour (see COMMONS-17). The JDK client parses `Content-Length` itself,
-  after the body handler returned and, for a `204` or other no-body reply, before any body handler runs;
-  it refuses a value that is not a number with a `NumberFormatException` that carries the raw value, which
-  `HttpClient.send` wraps in an `IllegalArgumentException` and which from JDK 27 on sits under a
-  `ProtocolException` in the cause chain. The JDK 27 form rests on the JDK 27 leg of the CI build. The
-  handler has no hook before that parse, so the fixed failure is delivered by the sending caller:
-  `BackChannelHttp.send`, through which the client's discovery, PAR, userinfo and revocation clients send,
-  and the token endpoint client's own send both wait on `HttpClient.sendAsync` through
-  `BackChannelHttp.exchange`. `exchange` decides each failure of the exchange on its cause, unwrapped from
-  the `ExecutionException` of the wait and from any nested `CompletionException` or `ExecutionException`
-  below it within a bounded number of levels, and maps a failure that
-  `BackChannelHttp.isMalformedFraming` recognises in any of those forms to a `TransportException` with a
-  fixed text, without chaining it. Every other failure of the exchange reaches the caller as an
-  `IOException` or an `Error`: an `IOException` or `Error` cause as the client reported it; a cancelled
-  wait, and a future failed with a wrapped `CancellationException`, as an `IOException` with the fixed text
-  "the HTTP exchange was cancelled"; every other cause, checked or runtime, an `IllegalArgumentException` of
-  another cause and a wrapper left over at the unwrap bound included, as an `IOException` with the fixed
-  text "the HTTP exchange failed" and no chained cause. The wrapped-cancellation, nested-wrapper,
-  checked-cause and runtime-cause mappings are defensive, no JDK path producing any of them being known from
-  reading the client; each endpoint
-  client classifies them through its `IOException` handling, and the token endpoint reports one seen after a
-  recorded success status as its post-redemption failure. Request-side and response-side faults are told
-  apart by the documented `HttpClient.sendAsync` contract: a request the client refuses is thrown
-  synchronously and reaches the caller as thrown, so it is never reported as a malformed response, while a
-  response failure completes the future exceptionally. For a `204` or other no-body reply the token endpoint
-  never observes the status, so it reports the failure as a pre-redemption `TransportException`. The request
-  timeout, which cui-http 3.2's `HttpHandler.requestBuilder()` sets to the configured read timeout through
-  `HttpRequest.Builder.timeout`, bounds the wait until the response headers arrive; the connect timeout,
-  which `HttpHandler` sets on the `HttpClient` it builds, bounds establishing the connection, and cui-http
-  sets no other timeout. Whether the request timeout also bounds the body read depends on the JDK: on JDK 21
-  and 25 it was observed not to, so a server that sends the headers and then stalls the body
-  keeps the calling thread waiting; on JDK 27 it was observed to, so such a call ends with the
-  request-timeout failure or with the JDK's own failure for the body it cut short. On every JDK the body read is bounded in size by the `BoundedBodyHandler` ceiling
-  the endpoint client was constructed with, and that size bound is what the decision relies on. The validation-side
-  discovery and JWKS reads hand the handler to cui-http, whose adapter performs the send, so no mapping is
-  made for them here.
-
-=== Consequences
-
-* A misconfigured required scope is found when the application is built, with the member that declares it,
-  in every case the check covers. This matches the fail-at-startup stance of ADR-0019 and ADR-0026. The two
-  accepted limits of the check fail differently. A merged set over the bounds on an interface default method
-  passes the deployment, reaches a request, is answered with a 500 and is logged as `TokenSheriff_Q-201`
-  instead of escaping as an unhandled exception. The request-time answer applies to a set the challenge
-  builder rejects when a missing-scope violation reaches `BearerTokenResult.createErrorResponse()` without
-  the deployment check having refused it: a set that passes
-  the deployment, and a set supplied programmatically through the public
-  `BearerTokenProducer.getBearerTokenResult`, which no deployment check sees. A request that carries no token
-  is answered 401 without a scope challenge, so such a set does not produce the 500 there. A concrete-typed override of a generic base method can instead make the check refuse a
-  deployment that is valid at run time: that refusal happens when the application is built, never reaches a
-  request, and so has no 500 response.
-* The challenge builder retains at most `MAX_SCOPE_TOKENS + 1` distinct scope names and scans at most
-  `MAX_LENGTH` characters of a `realm` or an `error_description`; `build()` refuses an over-long value before
-  copying it, so the output is written only from values of at most `MAX_LENGTH` characters each. The bound is
-  not one on the builder's input work or on the text it holds: `scope()` checks every character of the name
-  it is given and `scopes()` visits every name supplied, so that work grows with the input, and the up to 65
-  retained names are the caller's own strings, of any length, held until `build()` refuses them for their
-  joined length. The body handler's byte bound is the one COMMONS-17 states, its object count grows with
-  the logarithm of the body size rather than with the buffer count, and the price of the one growable array is a streaming peak below twice the ceiling
-  plus the buffers of the delivery in flight while a growth step copies it.
-* A control character in a `realm` or `error_description` past `MAX_LENGTH` characters is not reported by
-  the setter; the value is refused by `build()` for its length instead.
-* The client's own parse of a malformed `Content-Length` can still surface its own exception: the JDK
-  HTTP/1.1 client (observed on JDK 25) parses the header itself after the handler returned, so the caller of
-  `HttpClient.send` receives the JDK's `IllegalArgumentException` (cause `NumberFormatException`) carrying
-  the raw header value, not the handler's fixed message. The client's back-channel turns that exception
-  into a `TransportException` with a fixed text, so a caller of the client's endpoint clients never sees the
-  raw value; on the validation-side reads the send is cui-http's, and what reaches their caller is cui-http's
-  handling of that exception. A caller treats the message of any exception out of an HTTP exchange as remote
-  content and sanitises it before logging.
+The helper contracts are specified in
+xref:../commons/architecture.adoc#public_helpers[Commons Architecture § Public HTTP-edge helpers], the
+escape form in
+xref:../commons/specification/error-model.adoc#printable_ascii_escape[Error model § Printable-ASCII escape form],
+and the bounded body read in
+xref:../commons/specification/transport.adoc#bounded_response_body[Transport specification § Bounded response body].
 
 == References
 
-* ADR-0001 — the commons base layer that every module may depend on.
-* ADR-0022 — the one commons-layer sanitiser that the printable-ASCII form extends.
-* xref:../validation/requirements.adoc#VALIDATION-14[VALIDATION-14] — the Bearer extractor and challenge
-  builder.
-* xref:../commons/requirements.adoc#COMMONS-16[COMMONS-16] and
-  xref:../commons/requirements.adoc#COMMONS-17[COMMONS-17] — the printable-ASCII form and the bounded body
-  handler.
-* xref:../commons/specification/transport.adoc#bounded_response_body[Transport specification] — the
-  bounded response body.
-* `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/commons/http/BearerCredentials.java` and
-  `BearerChallenge.java` — the Bearer helpers.
-* `token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/commons/transport/BoundedBodyHandler.java`
-  — the shared handler.
+* xref:0001-Validation_and_Client_Module_Split_with_a_Commons_Base_Layer.adoc[ADR-0001] — the commons base
+  layer
+* xref:../validation/requirements.adoc#VALIDATION-14[VALIDATION-14],
+  xref:../commons/requirements.adoc#COMMONS-16[COMMONS-16] and
+  xref:../commons/requirements.adoc#COMMONS-17[COMMONS-17]
 * `token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/flow/InsufficientScopeChallengeRoundTripTest.java`
-  — the builder and parser round trip.
+  — the builder and parser round trip

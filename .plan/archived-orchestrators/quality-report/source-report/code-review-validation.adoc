@@ -1,6 +1,7 @@
 = Quality Report: Code Review — token-sheriff-validation
-:toc:
+:toc: left
 :toclevels: 3
+:toc-title: Table of Contents
 :sectnums:
 :source-highlighter: highlight.js
 

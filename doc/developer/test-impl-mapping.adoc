@@ -210,8 +210,8 @@ Package prefix: `de.cuioss.sheriff.token.client`.
 |`CachingDiscoveryResolverAdversarialTest`, `CachingDiscoveryResolverFailureHandlingTest`,
 `CachingDiscoveryResolverHookFailureTest`, `CachingDiscoveryResolverRefreshPathTest`,
 `CachingDiscoveryResolverStalePolicyTest`, `CachingDiscoveryResolverTest`,
-`DiscoveryAdversarialTest`, `DiscoveryResolverSizeCapTest`, `DiscoveryResolverTest`,
-`ProviderMetadataTest`
+`DiscoveryAdversarialTest`, `DiscoveryResolverSizeCapTest` (a second top-level class in
+`DiscoveryResolverTest.java`), `DiscoveryResolverTest`, `ProviderMetadataTest`
 
 |`dpop`
 |`DpopProofGeneratorJktGoldenTest`, `DpopProofGeneratorTest`, `JwkPublicMembersTest`,
@@ -402,9 +402,9 @@ Package prefix: `de.cuioss.sheriff.token.client.quarkus`.
 `TokenSheriffClientProducerTest`
 
 |`config`
-|No test class of its own; `ClientConfigMapper` is exercised directly by `ClientConfigMapperContract`
-in `TokenSheriffClientProducerEgressTest`, which sits in the test package
-`de.cuioss.sheriff.token.client.quarkus`.
+|No test class of its own; `ClientConfigMapper` is exercised directly by the nested
+`ClientConfigMapperContract` classes of `TokenSheriffClientProducerEgressTest` and
+`TokenSheriffClientProducerTest` (`quarkus` row).
 |===
 
 [#client-quarkus-deployment]
@@ -463,6 +463,48 @@ These tests check the code base as a whole rather than one package.
 |token-sheriff-validation-quarkus
 |`SurefireForkGroupGuardTest` (test package `quarkus.architecture`)
 |===
+
+[#refresh-path-coverage-gate]
+=== Refresh-path coverage gate
+
+`token-sheriff-client/pom.xml` binds the `refresh-path-coverage-check` execution: a JaCoCo `check` rule
+with element `CLASS`, scoped by an explicit `<includes>` list to the classes that own the refresh path,
+with floors `BRANCH >= 0.80` and `INSTRUCTION >= 0.90`
+(xref:../adr/0003-Scope_refresh-path_coverage_gates_by_class_granularity_not_module-wide_threshold.adoc[ADR-0003]).
+It sits in the module's always-active `<build><plugins>`, because the CI lane is an externally owned
+reusable workflow that cannot pass a profile flag. The `<includes>` list is the authoritative set of
+guarded classes and is maintained by hand, in dotted FQCN form (a nested class is `Outer.Inner`, never
+`Outer$Inner`).
+
+An include entry that matches no class makes the rule evaluate zero classes and report success
+(JaCoCo's `BundleChecker` invokes no limit), so a green build is no evidence the rule is bound.
+`RefreshPathCoverageGuardTest` fails the build on both drift directions: an *inert* entry (a listed
+FQCN that binds to no class) and a *missing* sibling (a refresh-path class absent from the list). The
+missing-sibling leg demands a class only when its package is a guarded package *and* its first
+camel-case word is one the list already uses; a refresh-path class failing either condition must be
+added by hand.
+
+The gate complements the other two coverage instruments: the opt-in `-Pcoverage` `BUNDLE` gate
+inherited from `cui-java-parent` (module-wide baseline, local only) and the SonarCloud new-code gate
+(changed lines only, blind to coverage removed from existing lines). See
+xref:../client/specification/test-strategy.adoc[Client test strategy] § Coverage gates.
+
+[#integration-test-skip-binding]
+=== Integration-test skip binding
+
+A module's Failsafe tier is switched off by binding its own skip property to `skipTests` in the POM
+`<properties>` — `<ownSkipProperty>${skipTests}</ownSkipProperty>` — with an explicit literal default
+`<skipTests>false</skipTests>`; never in the Failsafe `<configuration>` block. A `<properties>` default
+yields to a command-line `-D` of the same key, a `<configuration>` value does not, and some Failsafe
+versions do not treat their skip property as an alias of `skipTests`. The binding keeps three lanes
+correct:
+
+* `-DskipTests`: the module's own flag interpolates to the same value, the integration-test JVM never
+  starts and writes no coverage data, so a downstream coverage gate sees honestly absent data.
+* An explicit `-D` of the module's own skip property: wins over the property default, so the
+  integration tier alone can be forced on or off; the gate is then graded on unit coverage only.
+* Neither flag: both properties keep their literal defaults, the tier runs and every coverage gate is
+  enforced.
 
 [#integration-tests]
 == Integration-test specifications

@@ -30,7 +30,7 @@ They are not declared by this module.
 * Development-time debugging interface for JWT validation
 * JSON-RPC services for interactive token analysis
 * Web components for JWT configuration inspection
-* See xref:../doc/development/devui-implementation.adoc[DevUI Implementation Documentation] for comprehensive technical details
+* See xref:../doc/development/devui-implementation.adoc[DevUI Implementation Documentation] for the technical details
 
 === Extension Architecture
 
@@ -103,38 +103,10 @@ metadata and the `--initialize-at-run-time` setting for `HttpJwksLoader` come fr
 
 For detailed configuration, reflection classes, and testing information, see xref:../doc/configuration/native-image-configuration.adoc[Native Image Configuration].
 
-== Best Practices
-
-* Use development mode to debug JWT validation issues
-* Leverage DevUI components for configuration verification
-* Monitor validation status through provided health checks
-* Test native image builds with representative JWT configurations
-
-== Technical Details
-
-=== Thread Safety
-
-* All deployment processors are thread-safe
-* DevUI services handle concurrent requests appropriately
-* Build items are immutable and safe for parallel processing
-
-=== Performance Characteristics
-
-* Minimal runtime overhead - most processing occurs at build time
-* DevUI components only active in development mode
-* Efficient reflection registration reduces startup time
-
-=== Dependencies
-
-* Requires Quarkus 3.x framework
-* Integrates with Quarkus security, health, and DevUI modules
-* Compatible with GraalVM native image compilation
-
 == Related Documentation
 
 * xref:../token-sheriff-validation-quarkus/README.adoc[Runtime Module Documentation]
 * xref:../doc/integration/quarkus-integration.adoc[Quarkus Integration Architecture]
-* xref:../doc/development/devui-implementation.adoc[DevUI Implementation Documentation]
-* xref:../doc/development/devui-testing.adoc[DevUI Testing Guide]
+* xref:../doc/development/devui-implementation.adoc[DevUI Implementation Documentation] (including its xref:../doc/development/devui-implementation.adoc#testing[Jest and Playwright tests])
 * xref:../doc/configuration/native-image-configuration.adoc[Native Image Configuration]
 * xref:../../doc/validation/architecture.adoc[Architecture Reference]

@@ -6,53 +6,53 @@
 :source-highlighter: highlight.js
 
 
+The JFR-instrumented library benchmarks in `benchmark-core` record custom JFR events per validation and per second, so latency variance can be analysed after a run. JFR profiling of the native integration image is covered in link:../../token-sheriff-quarkus-parent/doc/performance/native-optimization-guide.adoc#_jfr_monitoring_dual_image_maven_profiles[Native Optimization Guide, JFR Monitoring].
+
 == Quick Start
 
 [source,bash]
 ----
-# Run JFR-instrumented benchmarks (from project root)
+# Run the JFR-instrumented benchmarks (from the project root)
 ./mvnw verify -Pbenchmark-jfr -pl benchmarking/benchmark-core
 
-# Analyze variance using Maven (use absolute path)
+# Analyse the recording (the exec plugin needs an absolute path)
 ./mvnw verify -Panalyze-jfr -pl benchmarking/benchmark-core \
   -Djfr.file="$(pwd)/benchmarking/benchmark-core/target/benchmark-jfr-results/jfr-benchmark.jfr"
 ----
 
-== What's Measured
+== JFR Events
 
-=== Operation Events
+The events are defined in `benchmarking/benchmarking-common/src/main/java/de/cuioss/benchmarking/common/jfr/`: `OperationEvent`, `OperationStatisticsEvent` and `BenchmarkPhaseEvent` (benchmark lifecycle phases). `JfrInstrumentation` is the central recorder and statistics aggregator; it records latencies in an HdrHistogram (3 significant digits) and emits the statistics event once per second.
 
-Individual operation metrics captured per validation:
+=== de.cuioss.benchmark.Operation
 
-* `benchmarkName` - Name of the benchmark method
-* `operationType` - Type of operation (e.g., "validation")
-* `threadName` - Thread executing the operation
-* `duration` - Auto-captured timing (Event begin/end)
-* `payloadSize` - Token size in bytes
-* `metadataKey` / `metadataValue` - Custom metadata (e.g., issuer)
-* `success` - Operation result (true/false)
-* `errorType` - Type of error if operation failed
-* `concurrentOperations` - Number of concurrent operations at execution time
+One event per operation. Category `["Benchmark", "Performance"]`.
 
-=== Statistics (1-second intervals)
+* `benchmarkName` - benchmark method name
+* `operationType` - operation type (e.g. "validation")
+* `threadName` - thread executing the operation
+* `duration` - captured from event begin/end
+* `payloadSize` - token size in bytes (DataAmount)
+* `metadataKey` / `metadataValue` - custom metadata (e.g. issuer)
+* `success` - operation result
+* `errorType` - error classification if the operation failed
+* `concurrentOperations` - concurrent operations at execution time
 
-Periodic statistics events aggregated over 1-second windows:
+=== de.cuioss.benchmark.OperationStatistics
 
-* `benchmarkName` - Benchmark name
-* `operationType` - Operation type
-* `sampleCount` - Number of operations in window
-* `successCount` / `errorCount` - Success/failure counts
-* `meanLatency` - Mean operation latency
-* `p50Latency`, `p95Latency`, `p99Latency` - Latency percentiles
-* `maxLatency` - Maximum observed latency
-* `standardDeviation` - Standard deviation of latencies
-* `variance` - Variance (nanoseconds²)
-* `coefficientOfVariation` - CV as percentage
-* `concurrentThreads` - Active threads during period
+Periodic snapshot over a 1-second window. Category `["Benchmark", "Performance", "Statistics"]`, period `1 s`.
+
+* `benchmarkName`, `operationType`
+* `sampleCount` - operations in the window
+* `successCount` / `errorCount`
+* `meanLatency`, `p50Latency`, `p95Latency`, `p99Latency`, `maxLatency`, `standardDeviation` (Timespan)
+* `variance` (ns²)
+* `coefficientOfVariation` - CV as a percentage
+* `concurrentThreads` - active threads in the window
 
 == Variance Interpretation
 
-Coefficient of Variation (CV) indicates performance consistency:
+The coefficient of variation (CV) indicates performance consistency:
 
 [cols="1,2,2", options="header"]
 |===
@@ -71,197 +71,59 @@ Coefficient of Variation (CV) indicates performance consistency:
 |Lock contention, GC
 |===
 
-== JFR Events
-
-=== de.cuioss.benchmark.Operation
-
-Individual operation timing event with metadata.
-
-**Event Type:** `de.cuioss.benchmark.Operation`
-
-**Category:** `["Benchmark", "Performance"]`
-
-**Key Fields:**
-
-* `operationType` - Operation type identifier
-* `benchmarkName` - Benchmark method name
-* `duration` - Auto-captured operation timing
-* `payloadSize` - Payload size in bytes (DataAmount)
-* `success` - Whether operation succeeded
-* `concurrentOperations` - Concurrent operation count
-* `metadataKey` / `metadataValue` - Custom metadata pairs
-* `errorType` - Error classification if failed
-
-=== de.cuioss.benchmark.OperationStatistics
-
-Periodic performance snapshot (emitted every 1 second).
-
-**Event Type:** `de.cuioss.benchmark.OperationStatistics`
-
-**Category:** `["Benchmark", "Performance", "Statistics"]`
-
-**Period:** `1 s`
-
-**Key Fields:**
-
-* `benchmarkName` - Benchmark identifier
-* `operationType` - Operation type
-* `sampleCount` - Operations in window
-* `successCount` / `errorCount` - Success/failure counts
-* `meanLatency` - Mean latency (Timespan)
-* `p50Latency`, `p95Latency`, `p99Latency` - Percentile latencies (Timespan)
-* `maxLatency` - Maximum latency (Timespan)
-* `standardDeviation` - Latency standard deviation (Timespan)
-* `variance` - Variance (ns²)
-* `coefficientOfVariation` - CV percentage
-* `concurrentThreads` - Active thread count
-
 == Analysis Tools
+
+=== Variance Analyzer (`analyze-jfr` profile)
+
+The `analyze-jfr` profile of `benchmark-core` runs `de.cuioss.benchmarking.common.jfr.JfrVarianceAnalyzer` in the `verify` phase on the file given by `-Djfr.file` (absolute path; a relative path fails with `FileNotFoundException`). It reports:
+
+* total operations with the success/failure breakdown
+* latency percentiles (P50, P95, P99, Max) in μs
+* variance, standard deviation and CV
+* maximum concurrent operations observed
+* CV statistics over time (average, min, max)
 
 === JFR Command-Line Tools
 
 [source,bash]
 ----
-# Navigate to benchmark-core directory first
 cd benchmarking/benchmark-core
 
-# View benchmark operation events
 jfr print --events de.cuioss.benchmark.Operation target/benchmark-jfr-results/jfr-benchmark.jfr
-
-# View statistics events
 jfr print --events de.cuioss.benchmark.OperationStatistics target/benchmark-jfr-results/jfr-benchmark.jfr
 
-# Export all benchmark events to JSON (quote wildcard to prevent shell expansion)
+# Export all benchmark events to JSON (quote the wildcard)
 jfr print --json --events 'de.cuioss.benchmark.*' target/benchmark-jfr-results/jfr-benchmark.jfr > events.json
-
-# Filter by specific event categories
-jfr print --categories "Benchmark,Performance" target/benchmark-jfr-results/jfr-benchmark.jfr
 ----
 
-=== JDK Mission Control (JMC)
+=== JDK Mission Control
 
-1. Open JDK Mission Control
-2. `File > Open File...`
-3. Select `target/benchmark-jfr-results/jfr-benchmark.jfr`
-4. In the Event Browser, filter: `de.cuioss.benchmark.*`
-5. View charts and analyze latency distributions
-
-=== Custom Variance Analyzer (Maven)
-
-[source,bash]
-----
-# Analyze JFR recording using Maven (from project root - requires absolute path)
-./mvnw verify -Panalyze-jfr -pl benchmarking/benchmark-core \
-  -Djfr.file="$(pwd)/benchmarking/benchmark-core/target/benchmark-jfr-results/jfr-benchmark.jfr"
-
-# Analyze a different JFR file (use absolute path)
-./mvnw verify -Panalyze-jfr -pl benchmarking/benchmark-core \
-  -Djfr.file=/absolute/path/to/custom-recording.jfr
-----
-
-**Maven Profile:** `analyze-jfr`
-
-**Main Class:** `de.cuioss.benchmarking.common.jfr.JfrVarianceAnalyzer`
-
-**Output includes:**
-
-* Total operations (success/failure breakdown)
-* Latency percentiles (P50, P95, P99, Max) in μs
-* Variance metrics (variance, standard deviation, CV)
-* Maximum concurrent operations observed
-* CV statistics over time (average, min, max)
+Open `target/benchmark-jfr-results/jfr-benchmark.jfr` and filter the Event Browser on `de.cuioss.benchmark.*`.
 
 == Configuration
 
-=== Maven Profiles
+The `benchmark-jfr` profile runs `de.cuioss.sheriff.token.validation.benchmark.JfrBenchmarkRunner`, which selects the benchmarks in the `...benchmark.jfr.benchmarks` package (`CoreJfrBenchmark`, `ErrorJfrBenchmark`, `MixedJfrBenchmark`) and starts the forked JVM with `-XX:StartFlightRecording=...,settings=profile`. Its defaults:
 
-==== benchmark-jfr Profile
+* 1 fork, 16 threads
+* 5 warmup iterations of 3 s, 5 measurement iterations of 5 s
+* output directory `target/benchmark-jfr-results/`
 
-Runs JFR-instrumented benchmarks with flight recording enabled.
-
-**Profile ID:** `benchmark-jfr`
-
-**Configuration:**
-
-* Activates benchmarks (`skip.benchmark=false`)
-* Sets benchmark runner to `de.cuioss.sheriff.token.validation.benchmark.JfrBenchmarkRunner`
-* Adds JVM arguments for JFR recording
-
-**Default JFR settings** (from JfrBenchmarkRunner):
-
-* Forks: 1
-* Warmup iterations: 5 (3 seconds each)
-* Measurement iterations: 5 (5 seconds each)
-* Threads: 16
-* Output: `target/benchmark-jfr-results/jfr-benchmark.jfr`
-* JFR profile: `profile` (balanced overhead/detail)
-
-==== analyze-jfr Profile
-
-Analyzes JFR recordings to extract variance metrics.
-
-**Profile ID:** `analyze-jfr`
-
-**Configuration:**
-
-* Main class: `de.cuioss.benchmarking.common.jfr.JfrVarianceAnalyzer`
-* Phase: `verify`
-* Requires parameter: `-Djfr.file=<path-to-jfr-file>`
-
-**Usage:**
-
-[source,bash]
-----
-./mvnw verify -Panalyze-jfr -pl benchmarking/benchmark-core \
-  -Djfr.file=target/benchmark-jfr-results/jfr-benchmark.jfr
-----
-
-=== Custom JMH Parameters
-
-Override benchmark parameters via system properties:
+The JMH system properties of the link:../benchmark-core/README.adoc[benchmark-core README] (`jmh.iterations`, `jmh.threads`, `jmh.time`, ...) override these values, for example for a quick run:
 
 [source,bash]
 ----
 ./mvnw verify -Pbenchmark-jfr -pl benchmarking/benchmark-core \
-  -Djmh.iterations=10 \
-  -Djmh.threads=32 \
-  -Djmh.time=10s \
-  -Djmh.warmupIterations=3 \
-  -Djmh.warmupTime=2s
-----
-
-**Available properties** (from `benchmark-core/pom.xml`):
-
-* `jmh.iterations` - Number of measurement iterations
-* `jmh.warmupIterations` - Number of warmup iterations
-* `jmh.forks` - Number of JVM forks
-* `jmh.threads` - Thread count for concurrent benchmarks
-* `jmh.time` - Measurement time per iteration
-* `jmh.warmupTime` - Warmup time per iteration
-* `jmh.include` - Regex pattern for benchmark selection
-
-=== Example: Quick Run with Fewer Iterations
-
-[source,bash]
-----
-./mvnw verify -Pbenchmark-jfr -pl benchmarking/benchmark-core \
-  -Djmh.iterations=2 \
-  -Djmh.warmupIterations=1 \
-  -Djmh.time=3s
+  -Djmh.iterations=2 -Djmh.warmupIterations=1 -Djmh.time=3s
 ----
 
 == Output Files
 
-After running with `-Pbenchmark-jfr`, you'll find:
-
 [source]
 ----
-benchmarking/benchmark-core/target/
-├── benchmark-jfr-results/
-│   ├── jfr-benchmark.jfr          # JFR recording file
-│   └── micro-result.json          # JMH benchmark results (JSON)
-├── classes/                        # Compiled benchmark classes
-└── dependency/                     # Runtime dependencies for analyzer
+benchmarking/benchmark-core/target/benchmark-jfr-results/
+├── jfr-benchmark.jfr     # JFR recording
+├── micro-result.json     # JMH results (JSON)
+└── gh-pages-ready/       # Reports, see the benchmark-core README
 ----
 
 == Troubleshooting
@@ -273,78 +135,24 @@ benchmarking/benchmark-core/target/
 |**No JFR file created**
 a|
 
-* Verify Java 21+ is used
-* Check Maven output for `-XX:StartFlightRecording` argument
-* Ensure `target/benchmark-jfr-results/` directory is created
-* Check for JVM errors in console output
+* Check the Maven output for the `-XX:StartFlightRecording` argument and for JVM errors
+* Check that the run used `-Pbenchmark-jfr`
 
 |**Analyzer fails with ClassNotFoundException**
 a|
 
-* Run `./mvnw clean install -pl benchmarking/benchmarking-common` first
-* Ensure benchmark-core module is built: `./mvnw package -pl benchmarking/benchmark-core`
-* Verify correct profile usage: `-Panalyze-jfr`
+* Build the modules first: `./mvnw clean install -pl benchmarking/benchmarking-common,benchmarking/benchmark-core`
 
-|**High JFR overhead affecting results**
+|**JFR file not found or unreadable**
 a|
 
-* Use lighter JFR settings: `-XX:StartFlightRecording=...,settings=default` (instead of `profile`)
-* Reduce statistics period in `JfrInstrumentation.java`
-* Run longer iterations to amortize overhead
+* Pass an absolute path to `-Djfr.file`
+* Verify the file: `jfr summary <file>`; a run killed mid-recording leaves an incomplete file
+* Create and analyse the recording with the same Java major version
 
-|**Analysis errors reading JFR file**
+|**JFR overhead affects the results**
 a|
 
-* Verify file integrity: `jfr summary <file>`
-* Check file size (should be > 0 bytes)
-* Ensure benchmark completed (not killed mid-run)
-* Verify Java version compatibility (created and analyzed with same major version)
-
-|**Wrong analyzer Maven profile**
-a|
-
-* Use: `./mvnw verify -Panalyze-jfr -pl benchmarking/benchmark-core`
-* Provide JFR file path: `-Djfr.file=target/benchmark-jfr-results/jfr-benchmark.jfr`
-* The analyzer main class is in the `benchmarking-common` module
-
-|**JFR file not found**
-a|
-
-* Verify file exists: `ls -la benchmarking/benchmark-core/target/benchmark-jfr-results/`
-* **IMPORTANT**: Maven exec plugin requires absolute paths - use `$(pwd)/benchmarking/...` or full path
-* Relative paths will fail with `FileNotFoundException`
-* Check benchmark actually ran with `-Pbenchmark-jfr` profile
+* Switch the recording in `JfrBenchmarkRunner` from `settings=profile` to `settings=default`
+* Compare against a run without JFR (`-Pbenchmark`)
 |===
-
-== Best Practices
-
-1. **Establish baseline first**: Run standard benchmarks (`-Pbenchmark`) before JFR to understand baseline performance
-2. **Run multiple recordings**: Execute 3-5 runs and compare variance patterns for statistical validity
-3. **Analyze variance over time**: Look for CV patterns across periodic statistics events
-4. **Correlate with system events**: Use JMC to overlay GC events, thread activity, and I/O with operation variance
-5. **Use appropriate thread counts**: Match `jmh.threads` to your target production concurrency
-6. **Monitor overhead**: Compare JFR vs non-JFR runs; typical overhead should be < 5-10%
-7. **Archive recordings**: Save `.jfr` files with git commit SHA for reproducible analysis
-
-== Implementation Details
-
-JFR instrumentation is implemented in:
-
-* **Event definitions**: `benchmarking/benchmarking-common/src/main/java/de/cuioss/benchmarking/common/jfr/`
-  - `OperationEvent.java` - Individual operation events
-  - `OperationStatisticsEvent.java` - Periodic statistics
-  - `BenchmarkPhaseEvent.java` - Benchmark lifecycle phases
-
-* **Instrumentation**: `JfrInstrumentation.java` - Central recorder and statistics aggregator
-* **Runner**: `benchmarking/benchmark-core/src/main/java/.../JfrBenchmarkRunner.java`
-* **Benchmarks**: `benchmarking/benchmark-core/src/main/java/.../jfr/benchmarks/`
-  - `CoreJfrBenchmark.java` - Core validation benchmarks
-  - `ErrorJfrBenchmark.java` - Error path benchmarks
-  - `MixedJfrBenchmark.java` - Mixed workload benchmarks
-
-The instrumentation uses:
-
-* **HdrHistogram**: High-precision latency recording with configurable precision (3 significant digits)
-* **Scheduled reporting**: 1-second periodic statistics emission
-* **Thread-safe recording**: Concurrent operation tracking with atomic counters
-* **Auto-closeable pattern**: Try-with-resources ensures proper event lifecycle

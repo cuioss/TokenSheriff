@@ -80,73 +80,27 @@ Performance benchmarking for JWT token validation core library using JMH.
 
 == Output
 
-Results are generated in `target/benchmark-results/`:
+Results are generated in `target/benchmark-results/` (`target/benchmark-jfr-results/` for `benchmark-jfr`):
 
-* `micro-result.json` - Raw JMH results
-* `benchmark-summary.json` - Overall summary with quality gates
-* `badges/` - Performance badges (score, trend, last-run)
-* `data/` - Individual benchmark metrics JSON files
-* `gh-pages-ready/` - GitHub Pages deployment structure
-* `benchmark-run_*.log` - Execution logs
+* `micro-result.json` - raw JMH results
+* `jwt-validation-metrics.json` - per-step validation timings exported by `LibraryMetricsExporter`
+* `gh-pages-ready/` - HTML reports, badges, data and API files; the layout is described in link:../README.adoc#_generated_structure[Generated Structure]
 
-== Performance Score
-
-Composite metric combining:
-
-* **Throughput (50%)** - Operations per second normalized by 100
-* **Latency (50%)** - Response time (inverted)
-
-Score = (Throughput / 100 × 0.5) + (100 / Latency_ms × 0.5)
+The performance score and grade written to the badges and reports are computed as described in link:../doc/performance-scoring.adoc[Performance Scoring]. Trends are computed against the last 10 archived runs and shown on `trends.html`, published at https://cuioss.github.io/TokenSheriff/benchmarks/micro/trends.html.
 
 == Analysis
 
-=== View Results
-
 [source,bash]
 ----
-# Serve results locally with web UI
-cd benchmarking/scripts
-./serve-reports.sh library  # Opens http://localhost:8080
+# Serve results locally (http://localhost:8080), from the repository root
+benchmarking/scripts/serve-reports.sh library
 
-# Or analyze JSON directly
+# Or read the raw JMH results, from the repository root
 jq '.[] | {benchmark: .benchmark, score: .primaryMetric.score, unit: .primaryMetric.scoreUnit}' \
-  target/benchmark-results/micro-result.json
-
-# View performance summary
-jq '.overallScore, .grade' target/benchmark-results/benchmark-summary.json
+  benchmarking/benchmark-core/target/benchmark-results/micro-result.json
 ----
 
-=== JFR Analysis
-
-[source,bash]
-----
-# Analyze variance (uses analyze-jfr Maven profile)
-./mvnw verify -pl benchmarking/benchmark-core -Panalyze-jfr \
-  -Djfr.file=target/benchmark-results/jfr-benchmark.jfr
-
-# View hot methods
-jfr print --events jdk.ExecutionSample \
-  target/benchmark-results/jfr-benchmark.jfr
-----
-
-== Performance Tracking
-
-=== Automatic Tracking
-
-Each run generates:
-
-* `performance-YYYYMMDD-HHMMSS.json` - Timestamped metrics
-* Updates to `performance-tracking.json` - Last 10 runs
-
-=== GitHub Pages
-
-View trends at: https://cuioss.github.io/TokenSheriff/benchmarks/micro/trends.html
-
-Features:
-
-* Interactive performance charts
-* Trend indicators with percentage changes
-* Performance badges (↗ improving, → stable, ↘ declining)
+The JFR recording of `benchmark-jfr` is analysed as described in link:../doc/JFR-Instrumentation.adoc[JFR Instrumentation].
 
 == Maven Dependency
 
@@ -170,7 +124,7 @@ For comprehensive documentation on benchmarking, analysis, and visualization:
 === Quick Links
 
 * link:../doc/workflow.adoc[Benchmark Workflow] - Complete workflow guide
-* link:../doc/Analysis-03.2026-Micro.adoc[Micro-Benchmark Analysis (March 2026)] - Latest benchmark insights
+* link:../doc/Analysis-03.2026-Micro.adoc[Micro-Benchmark Analysis (March 2026)] - Dated measurement record
 * link:../doc/performance-scoring.adoc[Performance Scoring] - Methodology details
 * link:../doc/local-testing.adoc[Local Testing] - Development setup
 

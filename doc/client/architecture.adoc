@@ -85,7 +85,7 @@ The seam is deliberately narrow: the engine is the *policy* layer (which paramet
 order, which checks) and *drives its own hardened OIDC/OAuth back-channel HTTP* on top of the
 `cui-http` transport primitives (`HttpHandler`, TLS, the `de.cuioss.http.security` egress
 pipeline); validation is the *trust* layer. The engine reuses commons' transport *library*,
-but it no longer delegates the OIDC/OAuth back-channel fetches to a commons transport service —
+but it does not delegate the OIDC/OAuth back-channel fetches to a commons transport service —
 see xref:#_owned_back_channel_http[].
 
 == Confidential authorization-code + PKCE sequence
@@ -140,10 +140,8 @@ choice*; it implements neither.
 
 The five OIDC/OAuth back-channel clients — `DiscoveryResolver`, `TokenEndpointClient`,
 `ParClient`, `UserInfoClient`, `RevocationClient` — construct and drive their *own* `cui-http`
-`HttpHandler` calls rather than delegating to a commons transport service. This is a deliberate
-design choice (the archived *"design fork 1"* recorded in the class javadoc) that was previously
-*not* reflected in this document; an earlier revision claimed the engine "issues no HTTP of its
-own." That claim was false and is corrected here.
+`HttpHandler` calls rather than delegating to a commons transport service; this is a deliberate
+design choice, recorded in the class javadoc.
 
 Because a discovery document is only transport-authenticated — not fully trusted — a hostile or
 mix-up-controlled AS could point a credential-bearing back-channel `POST` at an unintended
@@ -208,6 +206,54 @@ address the HTTP client connects to, so it does not defend against DNS rebinding
 check and the connection; a deployment that needs that guarantee still needs network-level
 egress filtering. This document states the control the client actually applies, and no more.
 ====
+
+== [[_extension_points]] Extension points: subclassable entry methods
+
+Several engine types are public and subclassable, and a relying party may override their entry
+method to intercept, instrument or stub it. Every internal caller therefore calls that one method; a
+new signal on its outcome rides the exception hierarchy the method already throws, as a dedicated
+*subtype* of a documented thrown type, never a preferred overload
+(xref:../adr/0006-A_cross-cutting_signal_on_a_public_subclassable_method_rides_subtype_exceptions_never_a_preferred_overload.adoc[ADR-0006]).
+Existing `catch` clauses, `assertThrows` assertions and `@throws` contracts stay valid.
+
+[cols="1,3", options="header"]
+|===
+| Signal | Carrier subtypes
+
+| Redemption of a refused refresh (whether the server consumed the grant, and the rotated successor)
+| The `Redeemed*` exceptions (`RedeemedResponseException`, `RedeemedScopeRefusalException`,
+  `RedeemedValidationRefusalException`, `RedeemedIdentityRefusalException`) behind the
+  `RedeemedRefreshFailure` marker; the redemption is read back as a `RefreshRedemption`
+  (xref:specification/token-handling.adoc#_refresh_refusal_classification[refresh-refusal classification])
+
+| Refused client authentication at the token endpoint
+| `ClientAuthenticationFailedException`, a `TransportException`
+
+| Refused scope (`invalid_scope`)
+| `InvalidScopeException`, a `TransportException`
+
+| Refused refresh-token family (reuse, revoked family)
+| `RefreshTokenFamilyRevokedException`, a subtype of the protocol exception the family raised before
+|===
+
+Before adding an overload the production path would prefer, establish whether the existing method is
+overridable and whether anything overrides it, test doubles included (`AGENTS.md` § Code Standards).
+
+== [[_null_safety_posture]] Null-safety posture
+
+The client packages are `@NullMarked` (JSpecify). Where a value is optional, the shape follows the
+kind of API surface
+(xref:../adr/0014-Optional_record_components_are_typed_nullable_while_accessor_APIs_expose_Optional.adoc[ADR-0014]):
+
+* An optional *record component* is typed `@Nullable` and carries `null`; no `Optional` is stored.
+  Example: `AuthorizationCodeFlow.AuthenticationResult.refreshToken`, and the nullable
+  `RotationResult.grantedScope` and `StoredToken.subject`.
+* An optional value on a *hand-written accessor* is returned as `Optional`. Example:
+  `TokenResponse.getRefreshToken()` over a nullable field.
+* A record's compact constructor null-rejects every component not annotated `@Nullable`.
+  `AuthenticationResult` rejects a `null` `accessToken` or `idToken` and accepts a `null`
+  `refreshToken`. The annotation and the check are a pair: removing one without the other silently
+  widens a required component.
 
 == Reference & replacement target: portal-authentication-oauth
 

@@ -51,47 +51,11 @@ An ablation study decomposes the full JWT avg latency (2.30ms at 50 connections)
 
 All variants use POST with Authorization header (same WRK Lua script) so differences are purely server-side.
 
-NOTE: A historical Variant A (bare JAX-RS without CDI) confirmed that `@ApplicationScoped` injection has zero per-request cost. It was removed after serving its purpose.
+NOTE: A Variant A (bare JAX-RS without CDI) is not part of this run. Its result, zero per-request cost for `@ApplicationScoped` injection, is recorded in link:Analysis-03.2026-Integration.adoc#_aspects_evaluated_but_ruled_out[Aspects Evaluated but Ruled Out].
 
 == Results (50 connections, 5 threads, 60s)
 
-[cols="2,2,2,2", options="header"]
-|===
-|Endpoint
-|Avg (ms)
-|P99 (ms)
-|Throughput
-
-|Health
-|0.78
-|6.04
-|98,211 ops/s
-
-|B: JAX-RS Baseline
-|1.18
-|7.90
-|57,054 ops/s
-
-|C: Header Only
-|1.24
-|8.00
-|53,845 ops/s
-
-|Mock JWT
-|1.22
-|8.01
-|54,748 ops/s
-
-|D: Direct Validation
-|2.28
-|11.10
-|24,822 ops/s
-
-|JWT
-|2.30
-|11.52
-|25,178 ops/s
-|===
+The per-variant average, P99 and throughput figures are those of the link:Analysis-03.2026-Integration.adoc#_results_50_connections[integration analysis results table]; the decomposition below is computed from them.
 
 == Six-Layer Decomposition
 

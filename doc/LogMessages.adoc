@@ -31,7 +31,7 @@ Note: Only log level INFO and above are documented in this file.
 
 === Using Log Messages for Troubleshooting
 
-The log messages can be used for troubleshooting issues with the JWT Token Validation library. Each log message is associated with a specific component and provides information about what is happening in the system.
+Each log message names the component that logs it; use the tables below to trace a logged identifier to its cause.
 
 For more details about security events related to these log messages, see the SecurityEventCounter implementation in xref:validation/architecture.adoc#securityeventcounter[Architecture].
 

@@ -30,7 +30,15 @@ image::../resources/diagrams/validation-pipeline.svg["The ordered validation pip
 
 When `JweDecryptionConfig` is configured on `TokenValidator`, `NonValidatingJwtParser` transparently handles JWE (5-part) tokens: it decrypts the JWE using `JweDecryptor`, extracts the inner JWS, and feeds it through the existing pipeline. See xref:specification/token-decryption.adoc[Token Decryption] for details.
 
-This pipeline provides separation of concerns, clear error signaling through `TokenValidationException`, and comprehensive security coverage.
+[[access-token-cache]]
+=== Access-Token Cache
+
+`AccessTokenCache` returns a previously validated access token without repeating signature and claim validation. A hit must never return a token whose time-based validity has lapsed, so the two checks whose answer changes with the clock — expiry and maximum token age — are re-applied by the cache itself. The cache is not equivalent to a fresh validation in one respect: a hit does not verify the signature again, so a token whose signing key has left the loader's active and retired key sets stays accepted from the cache while the issuer's loader remains `OK` (the hit only re-checks the loader status), whereas an uncached validation of the same token is rejected. The window ends when the token expires or is evicted.
+
+* *Per-entry time policy.* `AccessTokenCache.put` receives the per-issuer `ValidationContext` the token was validated with and stores that issuer's clock skew and maximum token age on the entry, next to the expiry. The policy is captured at store time and not refreshed when the issuer configuration is read again (issuer configurations are fixed at validator construction). Issuers with different tolerances therefore share one cache without weakening each other, and the background eviction applies each entry's own policy without any request or issuer context.
+* *No `iat`-less token under a maximum age.* When the issuer enforces a maximum token age, a token without `iat` is not cached. The pipeline already rejects it with `MISSING_CLAIM` (`ExpirationValidator.validateTokenAge`) before it stores anything; the refusal in `put` is defence in depth, so a future path that stored a token without the full claim validation still could not bypass the bound. Without a maximum token age such a token is cached as usual.
+* *Rejection inside the lookup.* `AccessTokenCache.get` evaluates a verified hit against the stored policy. An entry expired under its issuer's clock skew is removed and the lookup throws `TOKEN_EXPIRED`; an entry older than the maximum token age plus clock skew is removed and the lookup throws `TOKEN_AGE_EXCEEDED`. Each rejection is logged and counted. The cache never returns an invalid entry, so no caller can forget the check; the lookup is a validation step, not a plain map read.
+* *Order on a hit.* time policy, then issuer re-resolution (rejects a token whose issuer's loader is no longer `OK`), then the DPoP proof, then the custom rules. As on the uncached path, the time checks run before the DPoP proof, so the proof — and its `jti` record in the replay store — is never checked for a token the time checks reject. The uncached path resolves the issuer before it validates the claims, so a token that is both expired and from an issuer whose loader left `OK` is reported `TOKEN_EXPIRED` / `TOKEN_AGE_EXCEEDED` on a hit and as the issuer rejection on a miss; both paths reject it.
 
 === Exception-based Validation
 
@@ -47,6 +55,13 @@ The pipeline uses `TokenValidationException` for error handling, encapsulating:
 _See Requirement xref:requirements.adoc#VALIDATION-2[VALIDATION-2: Token Representation]_
 
 The `TokenValidator` manages multiple `IssuerConfig` instances, selects the appropriate configuration for each token, and orchestrates the validation pipeline. It is immutable and thread-safe after construction.
+
+[[token-validator-ownership]]
+==== Loader Ownership and `close()`
+
+The validator owns the JWKS loaders of the enabled issuer configs it is built from. At construction it retains those loaders; `close()` shuts down the access-token pipeline and the DPoP replay protection and then closes every retained loader that is `AutoCloseable`, which stops its background refresh and releases an executor the loader owns. A loader that is not `AutoCloseable` is skipped. An `Exception` thrown while closing one loader is logged at debug level and does not stop the remaining loaders; an interrupted close restores the thread's interrupt flag and still closes the remaining loaders. An `Error` thrown by a loader's close is not caught, so it propagates and the loaders after it stay open.
+
+Consequence for callers: an `IssuerConfig`, or a pre-built JWKS loader set on it, must not be shared with a validator that outlives the one it was passed to. Closing a loader stops its refresh, clears its keys and resets its status to `UNDEFINED`, so a validator still using a shared loader can no longer verify signatures for that issuer, and a loader that owns its executor cannot be initialised again. The Quarkus producer closes the validator it created on destruction (see xref:../../token-sheriff-quarkus-parent/doc/integration/quarkus-integration.adoc#validator-disposal[Quarkus integration]).
 
 [[token-validator-seams]]
 ==== Public Seams
@@ -67,6 +82,12 @@ Two types carry these results:
 
 * **SignatureVerifiedToken** (`domain.token`) - The mapped claims, the native JSON claims and the verbatim `typ` header of a token whose signature was verified and whose claims were not. It implements neither `TokenContent` nor `MinimalTokenContent`, so it cannot be passed where a validated token is expected, and it is never cached.
 * **IssuerStatusView** - The issuer identifier, the JWKS type and the current `LoaderStatus` of one enabled issuer. It holds the loader only to read its status: it exposes neither the `IssuerConfig` nor the `JwksLoader`, so the loaders stay owned by the validator and are closed only by `TokenValidator.close()`.
+
+Constraints on these seams:
+
+* `verifySignature` runs the string limits, parse (including JWE decryption), `iss` extraction, issuer resolution, header posture, signature and claim mapping — a sibling method of `IdTokenValidationPipeline`, which keeps its own steps. It does not apply the issuer's configured `expectedTokenType`, so one issuer's keys can verify several token types; the `typ` header is returned verbatim for the caller to judge, and every other header check (algorithm allow-list, `kid`, embedded-`jwk` refusal) still applies. It neither reads nor writes the access-token cache. A refusal counts exactly the event of the stage that refused it.
+* The native claim map is deep-immutable: objects as unmodifiable insertion-ordered maps, arrays as unmodifiable lists, scalars unchanged, nested `null` kept, a top-level `null` member dropped (`SignatureVerifiedToken#getNullClaimNames()` reports it). `SignatureVerifiedToken` retains the map; validated tokens do not, so `BaseTokenContent`, `AccessTokenContent` and the cached entries gain no field.
+* The JWKS readiness probe uses `getIssuerStatuses()` for an embedder-supplied validator only when `sheriff.token.health.jwks.report-external-validator=true` (default `false`, because a real status can turn an embedder's readiness `DOWN`), and `sheriff.token.health.jwks.disclose-issuer=false` (default `true`) omits the per-issuer `issuer.N.url` entries.
 
 [[logout-package]]
 === Logout Token Validation
@@ -157,10 +178,44 @@ Key features:
 * **Opt-in unknown key ID refresh** - Off by default. With `HttpJwksLoaderConfig.unknownKidRefreshWindow` set to 5 to 3600 seconds (under Quarkus `sheriff.token.issuers.<name>.jwks.http.unknown-kid-refresh-window-seconds`), once a key set is installed, a `getKeyInfo()` call whose `kid` misses the installed and the retired key sets claims the window with one compare-and-set on a monotonic clock and schedules one background fetch on the loader's refresh executor. The lookup itself performs no I/O, does not wait and still misses, so the triggering token is rejected; once the fetch has installed the new key set, the next token naming that `kid` is accepted. The fetched key set is installed only if it holds the triggering `kid`; a failed or non-matching fetch changes nothing (keys, retired sets, status, endpoint and the time of the last successful load) and is not counted as a failed refresh cycle, so it never contributes to re-discovery or to the maximum-staleness degradation. At most one such fetch runs per window and per loader (xref:requirements.adoc#VALIDATION-4.6[VALIDATION-4.6]).
 * **Opt-in initial load retry** - Off by default. With `HttpJwksLoaderConfig.initialLoadRetry(true)` (under Quarkus `sheriff.token.issuers.<name>.jwks.http.initial-load-retry`), an initial load that ends without installed keys is retried on the loader's refresh executor after 1 second, the delay doubling up to 30 seconds and never above the refresh interval. Each attempt runs the regular background refresh cycle, so a failed discovery is re-resolved and a terminal rejection stays terminal; retries stop at the first installed key set, at `ERROR` and at `close()`, and the status never reports `LOADING` (xref:requirements.adoc#VALIDATION-4.7[VALIDATION-4.7]).
 
-The periodic refresh, the unknown key ID refresh and the initial load retry share one in-flight guard, so their fetches never overlap; while the guard is held, a periodic cycle skips its fetch without counting it as failed. All three install a key set through the same commit step under the lifecycle lock, which re-checks the generation epoch, applies the grace period and the retired-set bound, so a loader closed meanwhile installs nothing (xref:../adr/0018-A_JWKS_loader_fences_stale_work_with_one_lifecycle_lock_and_a_generation_epoch.adoc[ADR-0018]). The design and its bounds are recorded in xref:../adr/0030-An_opt-in_unknown-kid_refresh_claims_one_window_per_loader_and_installs_only_a_key_set_holding_the_kid.adoc[ADR-0030].
+The periodic refresh, the unknown key ID refresh and the initial load retry share one in-flight guard, so their fetches never overlap; while the guard is held, a periodic cycle skips its fetch without counting it as failed. All three install a key set through the same commit step under the lifecycle lock, which re-checks the generation epoch, applies the grace period and the retired-set bound, so a loader closed meanwhile installs nothing (xref:#jwks-lifecycle[]). The design and its bounds are recorded in xref:../adr/0030-An_opt-in_unknown-kid_refresh_claims_one_window_per_loader_and_installs_only_a_key_set_holding_the_kid.adoc[ADR-0030].
 
-The issuer cache admits an issuer for validation only while its loader reports `OK`. The access-token pipeline applies this on a cache hit as well: after the cache has enforced the issuer's time policy, `AccessTokenValidationPipeline` resolves the issuer again, so a token cached before its issuer's loader left `OK` — for example past the maximum staleness — is rejected like any other token of that issuer, before the DPoP proof and the custom rules run (xref:../adr/0021-A_cached_token_is_rejected_for_expiry_or_age_inside_the_cache_before_the_DPoP_proof_is_checked.adoc[ADR-0021]).
+Further rules of the unknown key ID refresh: a miss first reads the window and returns at once, taking nothing, while the window is still claimed; only then does it take the in-flight guard and claim the window, and a lost claim releases the guard. A hand-off the executor rejects, or fails with another `RuntimeException`, releases the guard, is logged at DEBUG and never thrown on the lookup, and burns the window. A caller-supplied executor must run or reject every task it accepts: an accepted and silently discarded fetch leaves the guard held, after which every periodic fetch skips. A fetch that returns the installed key set unchanged is logged at DEBUG, not as `UNKNOWN_KID_REFRESH_DISCARDED`. Both opt-ins require background refresh: `build()` refuses a configured window, or `initialLoadRetry(true)`, together with a refresh interval of 0. Known limitation: a periodic cycle that skips because the guard is held also skips its `maxStaleness` evaluation; with a caller-supplied multi-thread executor and a slow identity provider, a caller who claims every window can keep deferring the staleness degradation. Any other `RuntimeException` of the adapter or key-set build during an on-demand fetch is caught, so it cannot escape unsanitised onto the executor worker (CWE-117), and the outcome is discarded like any other.
 
+The issuer cache admits an issuer for validation only while its loader reports `OK`. The access-token pipeline applies this on a cache hit as well: after the cache has enforced the issuer's time policy, `AccessTokenValidationPipeline` resolves the issuer again, so a token cached before its issuer's loader left `OK` — for example past the maximum staleness — is rejected like any other token of that issuer, before the DPoP proof and the custom rules run (xref:#access-token-cache[]).
+
+[[jwks-status-contract]]
+==== Loader Status Contract
+
+`LoaderStatus.OK` is reported only while a usable key set is installed; the issuer cache and the readiness probe act on that one fact.
+
+* The first load publishes `OK` only when a usable key set is installed; a fetch that succeeds at the HTTP level but yields no usable key, or no content, is a failed load.
+* A failed initialisation publishes `UNDEFINED` ("a refresh cycle will retry") only when background refresh is enabled, a cycle can recover (an endpoint is published, or the loader uses well-known discovery) and the refresh task of this initialisation is actually scheduled and active; otherwise it ends in a terminal `ERROR`. The status is never left at `LOADING`, and an `OK` or `ERROR` a refresh cycle published meanwhile is kept. On the retryable discovery path `UNDEFINED` is published before the task is scheduled; an executor rejection there is corrected to `ERROR`.
+* A failed refresh cycle never downgrades an existing `OK`, except under the opt-in `maxStaleness` above. A refresh that yields no usable key never publishes `OK`.
+
+Endpoint resolution for well-known discovery:
+
+* *Retryable* (status stays `UNDEFINED`, each refresh cycle re-attempts the discovery): a transport failure, an error response, a blocked discovery endpoint, or a document that is unreadable or has no `jwks_uri`.
+* *Terminal rejection* (`ERROR`, no retry, a refresh task meeting it is cancelled): an advertised issuer that does not match, a document with a `jwks_uri` but no `issuer`, a JWKS URI the egress guard blocks, and an advertised `jwks_uri` for which no HTTP handler can be built (malformed, a scheme other than `http`/`https`, or cleartext while insecure HTTP is not allowed) — the last logged once as `JWKS_URI_UNUSABLE` without echoing the URI.
+* With background refresh disabled every resolution failure is a terminal `ERROR`.
+* *Re-discovery.* With an endpoint installed, after three consecutive refresh cycles that installed no keys the next cycle re-runs the discovery under the same issuer gate and egress guard. An accepted re-discovery replaces the endpoint and fetches from it; an unavailable one keeps the endpoint. A rejected one is not terminal while an endpoint is installed: endpoint, keys, status and refresh task are kept, and further re-discovery is suppressed until a refresh succeeds or the endpoint has failed three further cycles. The bound is fixed.
+
+The readiness check reports a loader healthy only with `OK`; while any loader is `UNDEFINED` it reports `loading` as `IN_PROGRESS`, and a terminal `ERROR` reports `NOT_READY` with `loading` `COMPLETE`.
+
+[[jwks-lifecycle]]
+==== Loader Lifecycle Lock and Generation Epoch
+
+`HttpJwksLoader` runs its initialisation and refresh on threads the caller does not control, and their blocking fetches can outlive a `close()` or a later re-initialisation. Stale work is fenced by:
+
+* *One lifecycle lock.* `close()`, the initialisation claim, key installation, status and endpoint publication and refresh scheduling all hold the same lock, so "still live" and "publish" are one atomic step. The lock is never held across a network call.
+* *A generation epoch.* `close()` increments the epoch under the lock. An initialisation captures the epoch it was claimed under, and the refresh task it schedules carries that value, fixed at scheduling. Work is live only while the loader is open and its epoch is current.
+* *An immutable endpoint snapshot.* The adapter and the fetch URI of one resolution are one immutable record published with one reference write, so the URI the egress guard re-checks is the URI that is fetched. It is `null` before the first resolution and after `close()`.
+* *Stale work publishes nothing.* It installs no keys, publishes no status or endpoint and schedules no task; an initialisation superseded by `close()` completes with `UNDEFINED`. The one bounded exception: a `close()` landing between the liveness check and a blocking fetch lets that fetch go out, and its result is discarded.
+* *Claim before acting.* Only the caller that wins the initialisation claim starts the asynchronous work; concurrent callers receive the same future, so at most one initial fetch and one refresh task exist per initialisation.
+
+A loader that owns its refresh executor cannot be initialised again after `close()`; that initialisation is rejected explicitly.
+
+[[oidc-discovery]]
 === OIDC Discovery
 
 _See Requirement xref:requirements.adoc#VALIDATION-4.1[VALIDATION-4.1: JWKS Endpoint Support]_
@@ -170,6 +225,16 @@ _See Requirement xref:requirements.adoc#VALIDATION-4.1[VALIDATION-4.1: JWKS Endp
 For every enabled `IssuerConfig` using well-known discovery, the discovered `issuer` field is compared against the `IssuerConfig` identifier. `IssuerConfig` propagates its identifier into the loader configuration when it is built, so the identifier is configured once and need not be repeated on `HttpJwksLoaderConfig`. A mismatch is a hard failure: no keys are loaded, `ISSUER_MISMATCH` is counted, the discovered `jwks_uri` is never fetched, and every token for that issuer is rejected; the configured identifier stays authoritative for issuer matching. A discovery document that advertises a `jwks_uri` but no `issuer` is a terminal rejection as well: no keys are loaded, `ISSUER_MISMATCH` is counted once and the discovered `jwks_uri` is never fetched. A document missing both `issuer` and `jwks_uri` is an unusable response that stays retryable. An identifier on `HttpJwksLoaderConfig` that differs from the `IssuerConfig` identifier, and a pre-built `WELL_KNOWN` loader passed via `jwksLoader(...)` without the same identifier, are rejected when the `IssuerConfig` is built.
 
 Standalone use of `HttpJwksLoaderConfig` without `IssuerConfig` may omit the identifier for well-known discovery; the loader then uses the discovered `issuer` internally and no comparison takes place.
+
+[[jws-algorithm-catalog]]
+=== JWS Algorithm Catalog
+
+`de.cuioss.sheriff.token.validation.security.JwsAlgorithm` is the single definition of the signing-algorithm facts — key type, digest and, where single-valued, the JCA signature algorithm name and the PSS parameters (xref:../adr/0009-Single_JWS_algorithm_catalog_with_per-consumer_EC_format_composition.adoc[ADR-0009]). Every consumer that signs or verifies derives from it, including the client's DPoP proof generation across the module boundary; `RejectedAlgorithms` is the companion definition of the algorithms that are never accepted.
+
+* *EC carve-out.* For EC entries the catalog supplies no JCA name. JOSE encodes an ECDSA signature as fixed-width `R || S` (P1363), `java.security.Signature` defaults to DER, so each consumer composes the name its wire format needs at its own call site, and both call sites state why.
+* *JWK admission is separate.* Which key material a JWKS may offer is governed by its own list (`JwkAlgorithmPreferences`), not derived from the catalog, so adding a signing algorithm never widens what a remote endpoint may supply.
+* *Shape.* Shared literals live in a nested private type, because enum constant arguments cannot reference fields of the same enum.
+* *Tests.* Test inputs may be derived from the catalog only where that widens coverage; explicit negative cases outside the catalog are kept, each entry's values are pinned explicitly, and a verification oracle never derives its expectation from the catalog.
 
 [[securityeventcounter]]
 === SecurityEventCounter

@@ -1052,7 +1052,7 @@ public class TokenLifecycleManager {
      * successor is named second because a server that does <em>not</em> revoke family-wide has just
      * issued it as a live credential on the very exchange this client is refusing — revoking only the
      * replayed token would leave that successor valid until it expired, which is the disposition
-     * ADR-0005 and ADR-0010 assign to a refusal raised after redemption. Each revocation is independent
+     * ADR-0010 assigns to a refusal raised after redemption. Each revocation is independent
      * and best-effort (attempted only when the provider advertises a revocation endpoint), so a transport
      * failure of the first does not stop the second.
      */
