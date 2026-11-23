@@ -114,6 +114,16 @@ claims did not hold.
   - `SessionViewContributor` (PLAN-09) becomes the CDI adapter of SESSION-10's contributor SPI.
   - ADR question 11 is recorded as decided.
   - Both API Sheriff and Audit Notary reuse the same code.
+- 2026-11-23 — Repository placement, decided by the operator after an adversarial review
+  (`sources/repo-placement-review-2026-11-23.md`; same-repo side 78/100, separate side 55/100): **the
+  same repository, with split-out triggers.**
+  - **Deciding grounds:** ADR-0001's precedent (no promotion trigger has bitten); the seams and the
+    session layer co-evolve during design; snapshot deploys are unreliable, which makes a
+    cross-repository build phase fragile.
+  - **Accepted cost:** shared versioning means a session or BFF fix forces a validation release.
+  - **Rejected alternatives:** a new repository now (`cuioss/session-sheriff`); deferring to the ADR.
+  - **Recorded as** ADR-0032 question 12 (PLAN-01). The mitigations are binding in PLAN-05 (ArchUnit,
+    opt-in artifact) and PLAN-08 (CI scoping, a CI-time measurement).
 
 ## Consumer hand-off notes
 
@@ -162,6 +172,12 @@ Nothing here is staged. Each note goes to the consumer's own repository once the
 - **Native build on a real consumer** (carried over from `api-sheriff-seams`): the client jar's
   `reflect-config.json` has not yet been proven in a consumer's native image. Re-check when Audit
   Notary deletes `TokenClientNativeRegistration`.
+- **Repository split-out triggers** (ADR-0032 question 12). Re-check at every release after the
+  session and BFF modules first ship, and at 1.0.
+  - Fires when: 3 or more releases changed only session/BFF code; under 20 % of session/BFF PRs touch
+    engine paths; a dependency must stay out of validation's supply chain; main PR CI exceeds about
+    20 minutes; or a distinct maintainer or security-advisory process is wanted.
+  - When one fires, stage a promotion plan (move the module directories, add a new BOM).
 - **Compare-and-set persist** (carried over from `api-sheriff-seams` history item 8): API Sheriff's
   refresh persist checks presence only. SESSION-3 `persist` must decide whether it compares and sets.
   Re-check at PLAN-05 outline.

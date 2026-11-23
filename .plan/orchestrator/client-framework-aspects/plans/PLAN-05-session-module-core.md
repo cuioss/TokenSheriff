@@ -87,6 +87,20 @@ already implements this and is Quarkus-free. Drop its gateway-only fields (`acti
 - No dependency on Quarkus, Vert.x, CDI or Jakarta Servlet: the module is framework-neutral. Its
   allowed dependencies are `token-sheriff-client`, `token-sheriff-validation`, `cui-java-tools`, Lombok
   and JSpecify.
+- ⛔ **Repository-placement mitigations (operator decision, 2026-11-23: same repository with split-out
+  triggers; ADR-0032 question 12).** Deliverable 4 includes a `SessionArchitectureTest` modelled on
+  `token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/boundary/ClientArchitectureTest.java`.
+  It enforces:
+  - the module is framework-agnostic;
+  - it uses only published `client` and `validation` packages, never `..internal..`;
+  - its slices are free of cycles.
+
+  Two more mitigations:
+  - **Client and validation never depend on session.** This holds through the Maven dependency
+    direction. Add an ArchUnit guard as well if the client's architecture test can express it.
+  - **Shared versioning, opt-in artifact.** The module stays on the reactor's one version, by
+    deliberate choice. The BOM docs state that `token-sheriff-session` is opt-in.
+- Each PR stays at 100 files or fewer. If the extraction needs more, split it.
 - Log records use the module's own identifier range as ADR-0032 assigns it, never `ApiSheriff-*` ids.
 - Do not edit API Sheriff or Audit Notary: this plan only adds the module.
 - Build and test with Maven through the project's build skill.
@@ -110,6 +124,7 @@ already implements this and is Quarkus-free. Drop its gateway-only fields (`acti
 - HYPOTHESIS: `token-sheriff-session/` — new module; unresolvable by the reader until it exists (verify-at-outline)
 - OBSERVED: `pom.xml`
 - OBSERVED: `bom/pom.xml`
+- HYPOTHESIS: `token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/boundary/ClientArchitectureTest.java` — only if the "client never depends on session" guard is expressible there (verify-at-outline)
 - HYPOTHESIS: `doc/session/` — new documentation set, placement per ADR-0032 (verify-at-outline)
 - OBSERVED: `doc/README.adoc`
 - OBSERVED: `doc/developer/test-impl-mapping.adoc`

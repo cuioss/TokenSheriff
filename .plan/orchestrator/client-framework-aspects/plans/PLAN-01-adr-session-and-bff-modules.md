@@ -73,6 +73,26 @@ repository. They are read-only inputs; never edit them.
        pseudonym, first-login flag) is added through a contributor hook. The ADR records this decision
        and its rationale. What it still decides is whether the anti-CSRF token (question 8) is delivered
        through this view.
+   12. **Repository placement.** The operator decided on 2026-11-23, after an adversarial review whose
+       full record is `.plan/orchestrator/client-framework-aspects/sources/repo-placement-review-2026-11-23.md`.
+       The decision is the SAME repository: new modules in this reactor.
+
+       The ADR records the decision and its rationale: ADR-0001's precedent, the co-evolution with
+       CLIENT-31..35, and fragile snapshot deploys. It records the strongest counter-argument as an
+       accepted cost: shared versioning means a session or BFF fix forces a validation release.
+
+       It also records split-out triggers in ADR-0001's style, with measurable thresholds, re-checked at
+       1.0 or whenever one fires:
+       - 3 or more releases in which only session/BFF code changed (check with
+         `git log -- <module dirs>` between tags);
+       - under 20 % of session/BFF PRs touching engine paths, measured after the first two releases;
+       - a dependency that must stay out of validation's supply chain, such as a session-store client;
+       - main PR CI above about 20 minutes after the modules land;
+       - a distinct maintainer set or security-advisory process for the web-facing layer.
+
+       Finally it records the binding mitigations (ArchUnit boundaries, opt-in artifacts with shared
+       versioning stated in the BOM docs, separate threat models, CI scoping, PRs of at most 100 files).
+       It also amends ADR-0001's Risks section with a cross-reference.
    - Skills: pm-documents:ref-asciidoc, pm-documents:ref-documentation
    - Persona: documenter
 2. **Quarkus OIDC comparison.** Write it as a section of the ADR, or as a document the ADR links. It
@@ -90,8 +110,8 @@ repository. They are read-only inputs; never edit them.
 
 **Done when:**
 
-- ADR-0032 is merged on `main`. Each of the eleven questions carries a decision, a rationale and its
-  rejected alternatives.
+- ADR-0032 is merged on `main`. Each of the twelve questions carries a decision, a rationale and its
+  rejected alternatives. Question 12 states its split-out triggers with measurable thresholds.
 - The comparison cites a Quarkus version.
 - The four scope documents no longer contradict the ADR.
 - The AsciiDoc build of `doc/` is clean (no broken xrefs).
@@ -115,6 +135,9 @@ repository. They are read-only inputs; never edit them.
 ## Claim Labels
 
 - OBSERVED: the highest ADR is 0031 (`doc/adr/0031-Bearer_extraction_scope_challenge_sanitiser_escape_and_bounded_body_reads_are_public_commons_helpers.adoc`), so the next number is 0032 — read at `doc/adr/` listing, 2026-11-23.
+- OBSERVED: ADR-0001 keeps every capability in one multi-module repository and names the conditions for promoting a module to its own repository — read at `doc/adr/0001-Validation_and_Client_Module_Split_with_a_Commons_Base_Layer.adoc` § Decision and § Risks (orchestrator read 2026-11-23).
+- OBSERVED: snapshot deploys were cancelled at the 30-minute cap from 2026-09-04, and none was published after build 47 — read at `.github/project.yml` § `snapshot-deploy-timeout` comment.
+- OBSERVED: `TokenStore` is documented as the SPI a BFF plugs a persistent, shared store into — read at `token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/lifecycle/TokenStore.java` § class Javadoc.
 - OBSERVED: `doc/client/architecture.adoc` states "We do not build a BFF here" — read at `doc/client/architecture.adoc` § line 22 (leaf report, 2026-11-23).
 - OBSERVED: CLIENT-19 requires the engine not to preclude either BFF binding shape and leaves cookies, CSRF and proxying to the application — read at `doc/client/requirements.adoc` § CLIENT-19 (lines 559-570, leaf report).
 - OBSERVED: no Token Sheriff, API Sheriff or Audit Notary document weighs the Quarkus OIDC extension against a BFF of their own; Audit Notary's only mention is about its MCP gateway — read at `Audit-Notary/doc/concepts/local-mcp-gateway.adoc` § line 368 (leaf report).

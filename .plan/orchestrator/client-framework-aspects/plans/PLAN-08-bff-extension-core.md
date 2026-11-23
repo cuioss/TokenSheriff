@@ -103,6 +103,14 @@ shipped behaviour; API Sheriff has no Quarkus example to extract from.
 
 ## Standing Constraints
 
+- ⛔ **Repository-placement mitigations (ADR-0032 question 12).**
+  - The extension is an opt-in artifact on the reactor's one version.
+  - It joins the integration-test module only through the BFF login ITs (PLAN-10), and stays out of
+    `e2e-tests.yml`'s explicit `-pl` list.
+  - Its Quarkus-boot tests run in the quarkus-boot surefire fork group.
+  - Record main PR CI time before and after this plan in the PR, so the "PR CI above about 20 minutes"
+    split-out trigger is measured, not guessed.
+  - Each PR stays at 100 files or fewer.
 - No `quarkus-oidc` dependency. If ADR-0032 chose it, this spec is retired, not adapted.
 - Problem bodies follow COMMONS-10 (RFC 9457). Never log a token, handle or cookie value.
 - Build and test with Maven through the project's build skill.
