@@ -172,6 +172,28 @@ Nothing here is staged. Each note goes to the consumer's own repository once the
 - **Native build on a real consumer** (carried over from `api-sheriff-seams`): the client jar's
   `reflect-config.json` has not yet been proven in a consumer's native image. Re-check when Audit
   Notary deletes `TokenClientNativeRegistration`.
+- **Native public-client login: Audit Notary's local MCP gateway** (`Audit-Notary/doc/concepts/local-mcp-gateway.adoc`
+  §4.3; operator question of 2026-11-23). It is NOT covered by this epic, which is confidential-client and
+  server-side. The engine was checked at `9c242518`:
+  - **Present:**
+    - PKCE `S256`;
+    - RFC 9207 `iss` validation (`flow/IssValidator`);
+    - an https-only policy for the authorization endpoint, with the untrusted URL never echoed
+      (`internal/EndpointSchemePolicy`);
+    - DPoP with a refresh binding that cannot be downgraded (`dpop/ConstraintBinding`);
+    - refresh-token rotation (`token/RefreshTokenFamily`);
+    - the `TokenStore` SPI for a vault;
+    - per-issuer configuration.
+  - **Absent:**
+    - a public client: `ClientAuthMethod` has no `none`;
+    - a loopback redirect with any port: `ClientConfiguration.redirectUri` is one exact string;
+    - RFC 8707 `resource` on the authorize and token requests (no match in `token-sheriff-client`);
+    - the RFC 8628 device grant;
+    - the Client ID Metadata Document, which is still a draft.
+
+  Pending the operator's decision on whether these become engine seams (a new workstream here, or a
+  separate epic at the gateway's stage 2). Trigger: the operator's answer, or the gateway spike
+  (stage 1) landing.
 - **Repository split-out triggers** (ADR-0032 question 12). Re-check at every release after the
   session and BFF modules first ship, and at 1.0.
   - Fires when: 3 or more releases changed only session/BFF code; under 20 % of session/BFF PRs touch
