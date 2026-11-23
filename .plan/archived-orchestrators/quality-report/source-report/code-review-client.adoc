@@ -1,6 +1,7 @@
 = Quality Report: Code Review — token-sheriff-client
-:toc:
+:toc: left
 :toclevels: 3
+:toc-title: Table of Contents
 :sectnums:
 :source-highlighter: highlight.js
 
@@ -142,7 +143,7 @@ as reviewed on 2026-08-15: the selector still never silently selects `tls_client
 then that surface has been classified an *alpha capability* — declared, never selected, and not
 counted as a coverage gap when unexercised — with DPoP as the sender-constraining and
 client-authentication direction. See
-xref:../adr/0012-mTLS_client_authentication_is_an_alpha_capability_DPoP_is_the_sender-constraining_and_client-authentication_direction.adoc[ADR-0012].
+xref:../../../../doc/adr/0012-mTLS_client_authentication_is_an_alpha_capability_DPoP_is_the_sender-constraining_and_client-authentication_direction.adoc[ADR-0012].
 ====
 
 * *DPoP proof generation*: full P-256 domain-parameter check defeats curve confusion; fixed-width EC coordinate encoding; P1363 ECDSA output; a single JWK feeds both the `jwk` header and `jkt`; bounded `jti` reuse refusal; `htu` query/fragment stripping per RFC 9449 §4.2; one-shot `use_dpop_nonce` retry only for DPoP (`DpopProofGenerator.java:203-296, 328-357`).

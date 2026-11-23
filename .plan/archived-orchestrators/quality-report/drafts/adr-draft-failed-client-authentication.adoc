@@ -1,7 +1,9 @@
 = ADR-0020: A failed client authentication is a typed pre-redemption refusal recognised by an exact-code allow-list
 :toc: left
-:toclevels: 2
+:toclevels: 3
+:toc-title: Table of Contents
 :sectnums:
+:source-highlighter: highlight.js
 
 // adr-metadata
 // summary: A token-endpoint refusal of the client's own authentication is surfaced as a typed ClientAuthenticationFailedException recognised by an exact-shape allow-list (4xx invalid_client, or 401 unauthorized_client), stays pre-redemption, and leaves every other shape a plain TransportException
@@ -129,6 +131,6 @@ recognises more than the contract has shown to be unambiguous.
 
 == References
 
-* link:0006-A_cross-cutting_signal_on_a_public_subclassable_method_rides_subtype_exceptions_never_a_preferred_overload.adoc[ADR-0006: subtype exceptions carry cross-cutting signals]
-* link:0010-A_refresh_token_the_authorization_server_declares_invalid_is_a_third_classification_state.adoc[ADR-0010: the three refresh classification states]
+* link:../../../../doc/adr/0006-A_cross-cutting_signal_on_a_public_subclassable_method_rides_subtype_exceptions_never_a_preferred_overload.adoc[ADR-0006: subtype exceptions carry cross-cutting signals]
+* link:../../../../doc/adr/0010-A_refresh_token_the_authorization_server_declares_invalid_is_a_third_classification_state.adoc[ADR-0010: the three refresh classification states]
 * RFC 6749 section 5.2, Error Response
