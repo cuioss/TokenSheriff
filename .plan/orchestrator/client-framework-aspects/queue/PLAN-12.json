@@ -2,7 +2,7 @@
   "id": "PLAN-12",
   "slug": "documentation-review-consolidation-and-adrs",
   "workstream": "WS-05",
-  "status": "staged",
+  "status": "running",
   "lane": "plan-marshall",
   "plan_marshall_plan_id": "",
   "pr": "",
