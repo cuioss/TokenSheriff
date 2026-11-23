@@ -158,7 +158,7 @@ repository. They are read-only inputs; never edit them.
 
 ## Dependencies and Sequencing
 
-- Depends on: none.
+- Depends on: PLAN-14 (documentation baseline: review, consolidation, renumbering; runs first). Otherwise none.
 - Overlaps with: none of the staged specs. PLAN-02 to PLAN-04 touch `doc/client/requirements.adoc`, not
   these files.
 - Adjacent to: `doc/client/requirements.adoc` (requirement texts stay with the seam plans), and API

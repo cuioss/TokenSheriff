@@ -103,7 +103,7 @@ filter has no example in either consumer: neither uses `SecurityIdentity`.
 
 ## Dependencies and Sequencing
 
-- Depends on: PLAN-08, PLAN-06.
+- Depends on: PLAN-14 (documentation baseline: review, consolidation, renumbering; runs first), PLAN-08, PLAN-06.
 - Overlaps with: PLAN-08 and PLAN-10 inside the extension; strictly sequential.
 - Adjacent to: `token-sheriff-session/` (consumed, unchanged).
 

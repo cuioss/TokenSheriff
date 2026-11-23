@@ -104,7 +104,7 @@ Close three small engine gaps that session layers above the engine need.
 
 ## Dependencies and Sequencing
 
-- Depends on: none. No ADR question touches these three items.
+- Depends on: PLAN-14 (documentation baseline: review, consolidation, renumbering; runs first). Otherwise none. No ADR question touches these three items.
 - Overlaps with: PLAN-03 and PLAN-04 on `doc/client/requirements.adoc` and
   `doc/developer/test-impl-mapping.adoc`. PLAN-04 also touches the `logout` package and the
   step-up-and-logout specification. Run in sequence with both.

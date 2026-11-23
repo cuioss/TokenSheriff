@@ -135,7 +135,7 @@ already implements this and is Quarkus-free. Drop its gateway-only fields (`acti
 
 ## Dependencies and Sequencing
 
-- Depends on: PLAN-01 (ADR-0032).
+- Depends on: PLAN-14 (documentation baseline: review, consolidation, renumbering; runs first), PLAN-01 (ADR-0032).
 - Overlaps with: PLAN-06 and PLAN-07, inside the new module, which the gate cannot see; run strictly
   before them. Also PLAN-08 on `bom/pom.xml`.
 - Adjacent to: `token-sheriff-client/.../lifecycle/` (used, not changed); API Sheriff `bff/session/`

@@ -140,7 +140,7 @@ shipped behaviour; API Sheriff has no Quarkus example to extract from.
 
 ## Dependencies and Sequencing
 
-- Depends on: PLAN-07, PLAN-03, PLAN-01.
+- Depends on: PLAN-14 (documentation baseline: review, consolidation, renumbering; runs first), PLAN-07, PLAN-03, PLAN-01.
 - Overlaps with: PLAN-05 on `bom/pom.xml` (one file, and already sequenced); PLAN-09 and PLAN-10 inside
   the new modules (strictly sequential).
 - Adjacent to: `token-sheriff-quarkus-parent/token-sheriff-client-quarkus*` (depended on, unchanged).

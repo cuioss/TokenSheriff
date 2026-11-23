@@ -99,7 +99,7 @@ cause enum of SESSION-7 is new design: API Sheriff's listener has no cause.
 
 ## Dependencies and Sequencing
 
-- Depends on: PLAN-05, PLAN-04, PLAN-02.
+- Depends on: PLAN-14 (documentation baseline: review, consolidation, renumbering; runs first), PLAN-05, PLAN-04, PLAN-02.
 - Overlaps with: PLAN-05 and PLAN-07, inside the new module; strictly sequential.
 - Adjacent to: `token-sheriff-client/.../lifecycle/` and `.../logout/` (consumed, unchanged).
 

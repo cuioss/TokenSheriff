@@ -97,7 +97,7 @@ The source key is an input the application derives.
 
 ## Dependencies and Sequencing
 
-- Depends on: PLAN-01 (defaults).
+- Depends on: PLAN-14 (documentation baseline: review, consolidation, renumbering; runs first), PLAN-01 (defaults).
 - Overlaps with: PLAN-02 and PLAN-04 on `doc/client/requirements.adoc`, `ClientLogMessages.java`,
   `doc/LogMessages.adoc` and `doc/developer/test-impl-mapping.adoc`. Run it in sequence with them.
 - Adjacent to: `flow/AuthorizationCodeFlow.java` and `flow/ParClient.java` (the store holds their

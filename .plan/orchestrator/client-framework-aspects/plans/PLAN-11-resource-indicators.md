@@ -148,7 +148,7 @@ decision, 2026-11-23). They wait for the gateway spike.
 
 ## Dependencies and Sequencing
 
-- Depends on: none. No ADR-0032 question touches it, so it may run before PLAN-01 lands.
+- Depends on: PLAN-14 (documentation baseline: review, consolidation, renumbering; runs first). Otherwise none. No ADR-0032 question touches it, so it may run before PLAN-01 lands.
 - Overlaps with:
   - PLAN-02: the flow tests directory, the requirements and the test mapping.
   - PLAN-03: the requirements, `retrieval-flow.adoc` and the test mapping.

@@ -128,7 +128,7 @@ Audit Notary's specification.
 
 ## Dependencies and Sequencing
 
-- Depends on: PLAN-06, PLAN-02.
+- Depends on: PLAN-14 (documentation baseline: review, consolidation, renumbering; runs first), PLAN-06, PLAN-02.
 - Overlaps with: PLAN-05 and PLAN-06, inside the new module; strictly sequential.
 - Adjacent to: API Sheriff's `bff/cookie/` (stays there unless ADR-0032 moves it, in a separate plan).
 

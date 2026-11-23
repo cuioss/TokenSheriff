@@ -6,7 +6,8 @@
     "WS-01",
     "WS-02",
     "WS-03",
-    "WS-04"
+    "WS-04",
+    "WS-05"
   ],
   "metadata": {
     "parallelization_scope": "2"

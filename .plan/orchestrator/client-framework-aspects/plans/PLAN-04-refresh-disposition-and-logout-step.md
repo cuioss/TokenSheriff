@@ -114,7 +114,7 @@ decision (PLAN-01, question 2).
 
 ## Dependencies and Sequencing
 
-- Depends on: PLAN-01 (logout revocation rule).
+- Depends on: PLAN-14 (documentation baseline: review, consolidation, renumbering; runs first), PLAN-01 (logout revocation rule).
 - Overlaps with: PLAN-02 (logout tests directory, step-up-and-logout specification, requirements, test
   mapping) and PLAN-03 (requirements, log messages, test mapping). Run in sequence.
 - Adjacent to: `lifecycle/RevocationClient.java` and `logout/EndSessionFlow.java`, which are used

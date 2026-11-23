@@ -51,6 +51,15 @@ claims did not hold.
 
 ## Queue annotations
 
+- **PLAN-12 → PLAN-13 → PLAN-14 RUN FIRST** (WS-05, documentation baseline; operator decision of
+  2026-11-23). They are staged last only because queue order follows staging order. Every other spec's
+  `Depends on:` line names PLAN-14, so `next` cannot emit any of them earlier.
+  - After PLAN-12 lands, run `cleanup` to re-ground every other spec's `## Expected Surface`, because
+    documentation paths move.
+  - After PLAN-14 lands, run `cleanup` again: the requirement ids the specs cite change. The new ids are
+    appended after the renumbered sets, so "CLIENT-31..36" in these specs becomes "the next free ids".
+  - Scope 2 buys nothing during WS-05: each of the three plans claims `doc/` and they run strictly in
+    sequence.
 - **PLAN-01:** docs-only; it settles the ADR. **Every Part B and Part C spec (PLAN-05 to PLAN-10)
   depends on it.** After it lands, re-ground those specs against the accepted ADR with `cleanup` before
   emitting them. The operator chose to stage everything now, knowing the ADR may reshape B and C.
@@ -135,7 +144,24 @@ claims did not hold.
     refresh token yield audience-restricted access tokens for several services.
   - **Rejected:** a native public-client workstream now (B); deferring everything to a separate gateway
     epic (C).
-  - PLAN-11 has 5 deliverables, under the split guard. The mitigations are binding in PLAN-05 (ArchUnit,
+  - PLAN-11 has 5 deliverables, under the split guard.
+- 2026-11-23 — Documentation baseline, the new FIRST work (operator). It covers a full review of every
+  document and diagram with the documentation skills (the operator's review prompt), a requirement
+  renumbering to monotonic ids (pre-1.0; the module split had broken the order), an ADR review (decision
+  versus implementation definition, and reduce), and a drastic compression of the document count.
+  - **Measured at `9c242518`:** about 22,800 documentation lines (`doc/` 14,285; module docs 6,098;
+    READMEs about 2,400) against about 53,000 lines of main Java. 31 ADRs total 4,982 lines.
+  - **Requirement ids are out of order everywhere.** CLIENT runs 1–14, 23–25, 27, 29, 15–20, 28, 30, 21,
+    22, 26. VALIDATION lacks 11 and has 12–14 before 9. COMMONS has 17 after 4 and 16 before 13.
+  - **The renumbering touches about 171 files**, beyond the 100-file PR ceiling. The operator first said
+    "2 PRs", then chose 3 PRs cut by prefix when asked. Rejected: 2 PRs with more than 100 files, and
+    dropping requirement ids from the code.
+  - **Staged as WS-05:**
+    - PLAN-12: review, consolidation and ADR reduction, 5 deliverables. The operator approves the
+      target structure before anything moves, and ids are frozen.
+    - PLAN-13: COMMONS and VALIDATION, plus an id-integrity guard.
+    - PLAN-14: CLIENT, and the guard completed.
+  - All 11 earlier specs now depend on PLAN-14. The mitigations are binding in PLAN-05 (ArchUnit,
     opt-in artifact) and PLAN-08 (CI scoping, a CI-time measurement).
 
 ## Consumer hand-off notes
@@ -150,6 +176,10 @@ Nothing here is staged. Each note goes to the consumer's own repository once the
     the operator's.
   - Keep the file in step: when a plan here changes a requirement id, a default or the module layout,
     note that Audit Notary's copy is stale.
+  - ⚠ **Known staleness:** PLAN-13 and PLAN-14 renumber every requirement id, so that file's ids
+    (CLIENT-26, -27, -29, VALIDATION-13.4/13.5 and the planned CLIENT-31..36) and its `doc/` paths will
+    change. Update it from the "Former identifiers" tables once PLAN-14 lands. API Sheriff's references
+    to Token Sheriff ids translate the same way.
 
 - **Audit Notary, deletable against 0.9.10 now:**
   - `security/QueryResponseModeRequestBuilder` (84 lines) and its test → `ResponseMode.QUERY`

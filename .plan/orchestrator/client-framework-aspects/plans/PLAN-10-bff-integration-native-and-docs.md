@@ -89,7 +89,7 @@ the application still owns.
 
 ## Dependencies and Sequencing
 
-- Depends on: PLAN-09, PLAN-07.
+- Depends on: PLAN-14 (documentation baseline: review, consolidation, renumbering; runs first), PLAN-09, PLAN-07.
 - Overlaps with: none of the staged specs on resolved paths. PLAN-09 shares `doc/bff/` and is already
   sequenced.
 - Adjacent to: `token-sheriff-quarkus-parent/e-2-e-playwright/` (left untouched unless the outline finds
