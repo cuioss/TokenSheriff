@@ -51,8 +51,7 @@ metrics; it never interprets a token's trust.*
 | The framework-neutral RFC 6750 helpers of an HTTP edge: `BearerCredentials` reads the
   `Bearer` credentials of an `Authorization` value, and `BearerChallenge` builds the
   `insufficient_scope` challenge. They depend on `java.util` and JSpecify only and never decide
-  an HTTP status. See
-  xref:../adr/0031-Bearer_extraction_scope_challenge_sanitiser_escape_and_bounded_body_reads_are_public_commons_helpers.adoc[ADR-0031].
+  an HTTP status. See xref:#public_helpers[].
 
 | `commons.events`
 | `SecurityEventCounter` and the security-event types, so validation and the client
@@ -62,6 +61,49 @@ metrics; it never interprets a token's trust.*
 | `commons.metrics`
 | Metric identifiers / contracts (`sheriff.token.*`) defined once; edges wire them to
   Micrometer.
+|===
+
+== [[public_helpers]] Public HTTP-edge helpers
+
+Four pieces of HTTP-edge logic are public commons classes, so every edge — the Quarkus producer, the
+client, a gateway built on the library — uses one implementation
+(xref:../adr/0031-Bearer_extraction_scope_challenge_sanitiser_escape_and_bounded_body_reads_are_public_commons_helpers.adoc[ADR-0031]):
+
+[cols="1,3", options="header"]
+|===
+| Helper | Contract
+
+| `commons.http.BearerCredentials`
+| Reads RFC 6750 §2.1 credentials from an `Authorization` value and reports exactly one of `ABSENT`,
+  `MALFORMED` or `PRESENT`. The scheme name matches case-insensitively (RFC 9110 §11.1). The value is
+  trimmed of SP and HTAB; the scheme must be followed by one or more SP (a tab does not separate it, so
+  such a value carries no `Bearer` credentials). An empty or whitespace-only token, and a token holding
+  SP, HTAB or a control character (C0, DEL, C1), is `MALFORMED`. It checks the characters the RFC rules
+  refuse, not the full `b64token` grammar; the token pipeline judges the rest. The Quarkus
+  `BearerTokenProducer` maps `ABSENT` to its no-token path (cookie fallback included), `MALFORMED` to 400
+  `INVALID_REQUEST` and `PRESENT` to validation.
+
+| `commons.http.BearerChallenge`
+| Builds the RFC 6750 §3.1 `insufficient_scope` challenge string; it never decides a status code. A scope
+  name outside the RFC 6749 §3.3 `scope-token` grammar is refused with `IllegalArgumentException`, as is
+  a set of more than 64 distinct scopes or a challenge longer than 8192 characters — the bounds of the
+  client's `InsufficientScopeChallengeParser`, pinned by `InsufficientScopeChallengeRoundTripTest`.
+  Scopes are written sorted with duplicates collapsed. `realm` and `error_description` are RFC 9110
+  §5.6.4 quoted strings that escape `"` and `{backslash}` and refuse CR, LF, NUL, the other C0 controls and DEL.
+  The builder bounds its own work: it retains at most 65 distinct scopes (still checking every further
+  name), scans at most the length bound of a `realm` or `error_description`, and `build()` refuses an
+  over-long value before copying it. The Quarkus extension checks the scopes of every `@BearerAuth` and
+  `@BearerToken` at build time; a set that check misses is answered 500 with `TokenSheriff_Q-201`
+  logged.
+
+| `ErrorTextSanitizer.escapeNonPrintableAscii`
+| The printable-ASCII form of the one commons sanitiser; see the
+  xref:specification/error-model.adoc#printable_ascii_escape[error-model specification].
+
+| `commons.transport.BoundedBodyHandler`
+| The one bounded body reader, with an `OverLimitPolicy` of `FAIL` or `TRUNCATE`; see the
+  xref:specification/transport.adoc#bounded_response_body[transport specification]. A `TRUNCATE` caller
+  must read `BoundedBody.truncated()`.
 |===
 
 == [[archunit]] ArchUnit boundary

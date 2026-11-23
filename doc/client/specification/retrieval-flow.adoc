@@ -143,6 +143,14 @@ TLS (`COMMONS-2`). The token response is validated (xref:#_token_response_valida
 token is validated through the validation pipeline before use
 (xref:token-handling.adoc[token handling]).
 
+[[_authentication_result]]
+The exchange returns `AuthorizationCodeFlow.AuthenticationResult`, a record with exactly one
+(full-arity) constructor: `accessToken` and `idToken` are null-rejected, `refreshToken` is
+`@Nullable` because an authorization server may legitimately issue none
+(xref:../architecture.adoc#_null_safety_posture[null-safety posture]). No shorter constructor or
+factory exists: a form that defaulted `refreshToken` to `null` would silently drop an issued refresh
+token, so every construction site names the value it passes.
+
 == Grants
 
 The engine supports the secure subset of token-endpoint grants
@@ -183,6 +191,16 @@ Client credentials are protected at rest and never logged. Certificate-bound sen
 tokens are a capability distinct from mTLS client authentication
 (xref:#_sender_constrained_tokens[]): the alpha classification covers the client-authentication
 method only.
+
+*Alpha status of `tls_client_auth`*
+(xref:../../adr/0012-mTLS_client_authentication_is_an_alpha_capability_DPoP_is_the_sender-constraining_and_client-authentication_direction.adoc[ADR-0012]).
+`MtlsClientAuth` is a retained, compilable implementation, but `ClientAuthenticationSelector` never
+selects it, whatever the authorization server advertises: a server advertising `tls_client_auth`
+beside a reachable method is routed to the reachable one, so no configuration can send a request that
+goes out unauthenticated. An unexercised alpha strategy is not counted as a coverage gap; the
+exemption holds only while the strategy is unreachable by construction. Leaving alpha means plumbing
+client key material through the transport and standing up certificate infrastructure to exercise it —
+a deliberate architecture change, not a gap a coverage pass closes.
 
 == [[_sender_constrained_tokens]] Requesting sender-constrained tokens
 

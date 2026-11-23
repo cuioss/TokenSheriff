@@ -58,8 +58,7 @@ admits them only behind its explicit, default-off cleartext opt-in (per issuer o
 side, `sheriff.token.issuers.<name>.jwks.http.allow-insecure-http`; client-wide on the client,
 `sheriff.client.allow-insecure-http`), intended for local development and tests, never production.
 An `https` issuer's discovery document may still advertise only `https` endpoints to the client,
-whatever the client opt-in says
-(xref:../../adr/0028-Discovery_refuses_a_non-https_endpoint_advertised_by_an_https_issuer_regardless_of_allowInsecureHttp.adoc[ADR-0028]).
+whatever the client opt-in says (xref:#discovery_endpoint_schemes[]).
 Mitigates xref:../threat-model.adoc#T-TLS[T-TLS].
 
 Certificate validation is unconditional in its chain-trust, expiry and algorithm-constraint
@@ -73,6 +72,40 @@ every HTTPS back-channel call the client engine makes; a cleartext `http` target
 and so no hostname check). Both exist for SAN-mismatched development and
 test topologies, never production; see
 xref:../../adr/0008-Adopt_the_upstream_cui-http_verifyHostname_knob_rather_than_a_local_trust_manager.adoc[ADR-0008].
+
+The mechanism is the upstream `cui-http` knob `HttpHandlerBuilder.verifyHostname(boolean)`; this
+project implements no trust manager. It is exposed on the three builders that own outbound transport —
+`HttpJwksLoaderConfigBuilder` and `WellKnownConfigBuilder` (validation) and `ClientConfiguration`
+(client) — and defaults to `true` on each. The validation side forwards it on both the direct-JWKS and
+the well-known branch; the client forwards it at the single `BackChannelHttp.validatedHandler()` seam,
+so every endpoint client inherits one posture. The relaxation applies only to the context derived from
+the JVM default trust store, so it cannot be combined with a caller-supplied `SSLContext` (refused at
+build time on the client, xref:../../client/requirements.adoc#CLIENT-23[CLIENT-23]); a test that needs
+both relaxed matching and private trust material steers the default trust store through
+`javax.net.ssl.trustStore` and restores it afterwards. The knob needs `cui-http` 2.2 or newer, inherited
+from `cui-java-bom` with no reactor override. No build-level version guard exists:
+`HttpHandlerVerifyHostnameContractTest` compiles only against a `cui-http` exposing the knob and pins
+its default, its builder round trip and the mutual exclusion, and each module carries a control proving
+an untrusted issuer is still refused with the knob off.
+
+=== [[discovery_endpoint_schemes]] Advertised endpoint schemes of an `https` issuer
+
+When the client's configured issuer is `https`, every endpoint the client's provider metadata models
+that the discovery document advertises must be `https` too; a non-`https` value fails discovery, and
+`allowInsecureHttp` does not relax this, because that switch exists for the operator's own topology (an
+`http` issuer, or an `http` back-channel origin), not for a downgrade chosen by the document.
+
+* The checked set is the endpoint map built by `DiscoveryResolver.validateEndpointSchemes`; an
+  advertised field outside it is neither read nor checked, and a field the client starts to call must
+  join it.
+* An absent endpoint is fine; a present value that is not an `https` URL, including a blank one, is a
+  violation.
+* The refusal names the endpoint label only; the advertised URL is untrusted content and is not echoed.
+* The check does not apply to an `http` issuer admitted by `allowInsecureHttp`.
+
+The guarantee is about the advertised scheme, not the connection made: with `allowInsecureHttp` and an
+`http` back-channel origin, a same-origin `https` endpoint is retargeted and contacted over `http`, by the
+operator's explicit choice (xref:#client_back_channel_origin[]).
 
 === [[client_back_channel_origin]] Client back-channel origin
 
