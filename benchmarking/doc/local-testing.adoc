@@ -16,14 +16,20 @@ How to run the benchmarks locally and view the generated reports in a browser.
 ./mvnw verify -pl benchmarking/benchmark-core -Pbenchmark              # library (JMH)
 ./mvnw verify -pl benchmarking/benchmark-integration-wrk -Pbenchmark   # WRK (requires Docker)
 
-# 2. Serve the results
+# 2. Serve the results (stays in the foreground)
 cd benchmarking/scripts
 ./serve-reports.sh library        # or: ./serve-reports.sh wrk
-./serve-reports.sh library 8081   # different port
-./serve-reports.sh stop           # stop running servers
 ----
 
 Then open http://localhost:8080. For a faster library run, add `-Pbenchmark,quick` or `-Djmh.iterations=1 -Djmh.warmupIterations=1`.
+
+Optional variations of step 2:
+
+[source,bash]
+----
+./serve-reports.sh library 8081   # different port
+./serve-reports.sh stop           # stop running servers (from another terminal)
+----
 
 == What Is Served
 

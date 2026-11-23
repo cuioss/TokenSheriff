@@ -92,13 +92,12 @@ The performance score and grade written to the badges and reports are computed a
 
 [source,bash]
 ----
-# Serve results locally (http://localhost:8080)
-cd benchmarking/scripts
-./serve-reports.sh library
+# Serve results locally (http://localhost:8080), from the repository root
+benchmarking/scripts/serve-reports.sh library
 
-# Or read the raw JMH results
+# Or read the raw JMH results, from the repository root
 jq '.[] | {benchmark: .benchmark, score: .primaryMetric.score, unit: .primaryMetric.scoreUnit}' \
-  target/benchmark-results/micro-result.json
+  benchmarking/benchmark-core/target/benchmark-results/micro-result.json
 ----
 
 The JFR recording of `benchmark-jfr` is analysed as described in link:../doc/JFR-Instrumentation.adoc[JFR Instrumentation].

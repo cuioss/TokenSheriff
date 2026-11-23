@@ -215,11 +215,11 @@ Results in `target/benchmark-results/`:
 
 [source,bash]
 ----
-# Serve the reports locally (http://localhost:8080)
-cd benchmarking/scripts
-./serve-reports.sh wrk
+# Serve the reports locally (http://localhost:8080), from the repository root
+benchmarking/scripts/serve-reports.sh wrk
 
-# Or read the files directly
+# Or read the files directly, from this module's directory
+cd benchmarking/benchmark-integration-wrk
 jq '.benchmarks' target/benchmark-results/gh-pages-ready/data/benchmark-data.json
 jq '.' target/benchmark-results/prometheus/jwtValidation-server-metrics.json
 cat target/benchmark-results/quarkus.log
@@ -301,7 +301,7 @@ Prometheus metrics by the embedded `benchmark_name`.
 
 |No Prometheus metrics files
 |Prometheus not reachable at `http://localhost:9090`
-|Check the Prometheus container; the run continues without metrics
+|Check the Prometheus container; the health check fails and the build stops before the benchmark runs
 |===
 
 === Debug Mode
