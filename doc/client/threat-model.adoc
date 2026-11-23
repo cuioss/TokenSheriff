@@ -210,7 +210,7 @@ The client engine:
   `token_endpoint`, `userinfo_endpoint`, `jwks_uri`, `end_session_endpoint`, `revocation_endpoint`,
   `introspection_endpoint`, `pushed_authorization_request_endpoint`) — a blank value included — is
   refused regardless of `allowInsecureHttp`
-  (xref:../adr/0028-Discovery_refuses_a_non-https_endpoint_advertised_by_an_https_issuer_regardless_of_allowInsecureHttp.adoc[ADR-0028]);
+  (xref:../commons/specification/transport.adoc#discovery_endpoint_schemes[Transport § Advertised endpoint schemes]);
   a discovery, token or PAR response without `application/json` on every `Content-Type` line, or a
   userinfo response with neither `application/json` nor `application/jwt`, is refused, as is a
   value carrying `CR`, `LF` or `NUL`; a quoted `expires_in` makes a token or PAR response malformed;
@@ -383,7 +383,7 @@ cost: the engine does not guess how to read a response that does not follow its 
   connection failure or a `5xx`. A failed client authentication — `4xx` `invalid_client`, or exactly
   `401` `unauthorized_client` — is raised as `ClientAuthenticationFailedException` and is
   pre-redemption, so a misconfigured client secret cannot end a session
-  (xref:../adr/0027-A_client_authentication_failure_at_the_token_endpoint_is_a_typed_pre-redemption_refusal.adoc[ADR-0027]).
+  (xref:specification/token-handling.adoc#_refresh_refusal_classification[Token handling § Refresh-refusal classification]).
   *Scope-refused* — a `4xx` naming exactly `invalid_scope`, raised as `InvalidScopeException` with
   a sanitised `error_description` — keeps the session, revokes and clears nothing, schedules no
   retry and logs no `WARN`. *Credential-rejected* (`4xx` `invalid_grant`) attempts a clear and

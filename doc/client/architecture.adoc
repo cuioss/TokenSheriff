@@ -85,7 +85,7 @@ The seam is deliberately narrow: the engine is the *policy* layer (which paramet
 order, which checks) and *drives its own hardened OIDC/OAuth back-channel HTTP* on top of the
 `cui-http` transport primitives (`HttpHandler`, TLS, the `de.cuioss.http.security` egress
 pipeline); validation is the *trust* layer. The engine reuses commons' transport *library*,
-but it no longer delegates the OIDC/OAuth back-channel fetches to a commons transport service —
+but it does not delegate the OIDC/OAuth back-channel fetches to a commons transport service —
 see xref:#_owned_back_channel_http[].
 
 == Confidential authorization-code + PKCE sequence
@@ -140,10 +140,8 @@ choice*; it implements neither.
 
 The five OIDC/OAuth back-channel clients — `DiscoveryResolver`, `TokenEndpointClient`,
 `ParClient`, `UserInfoClient`, `RevocationClient` — construct and drive their *own* `cui-http`
-`HttpHandler` calls rather than delegating to a commons transport service. This is a deliberate
-design choice (the archived *"design fork 1"* recorded in the class javadoc) that was previously
-*not* reflected in this document; an earlier revision claimed the engine "issues no HTTP of its
-own." That claim was false and is corrected here.
+`HttpHandler` calls rather than delegating to a commons transport service; this is a deliberate
+design choice, recorded in the class javadoc.
 
 Because a discovery document is only transport-authenticated — not fully trusted — a hostile or
 mix-up-controlled AS could point a credential-bearing back-channel `POST` at an unintended

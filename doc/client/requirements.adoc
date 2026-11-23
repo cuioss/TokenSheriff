@@ -290,7 +290,7 @@ type (parameters such as `charset` allowed), so an absent, other, structured-suf
 `"3600"` is refused as a malformed response. An `https` issuer's discovery document MUST advertise
 only `https` values for the endpoints the engine models and uses; a non-`https` or blank value is
 refused, and `allowInsecureHttp` does not relax this
-(xref:../adr/0028-Discovery_refuses_a_non-https_endpoint_advertised_by_an_https_issuer_regardless_of_allowInsecureHttp.adoc[ADR-0028]).
+(xref:../commons/specification/transport.adoc#discovery_endpoint_schemes[Transport § Advertised endpoint schemes]).
 
 * Source: https://www.rfc-editor.org/rfc/rfc9700#section-4.3[RFC 9700 §4.3] (credentials in URLs), https://www.rfc-editor.org/rfc/rfc9207[RFC 9207], https://www.rfc-editor.org/rfc/rfc6749#section-5.1[RFC 6749 §5.1] (token response).
 
@@ -649,11 +649,11 @@ a refused entry fails the configuration build with a message naming its zero-bas
 validator's fixed text, never the entry. An admitted entry MUST be stored in the canonical form
 `EgressHostValidator.requireBareHost` returns — lower-case, a bare IPv6 literal in brackets — the form
 the three validation-side builders store, so `getAllowedEgressHosts()`, `equals` and `toString` show
-that form and two configurations whose entries differ only in letter case or in the optional brackets of a
-bare IPv6 literal are equal; other spellings of one IPv6 address (`::1`, `0:0:0:0:0:0:0:1`) stay
-distinct. Entries are not
-trimmed: under Quarkus, an element of `sheriff.client.allowed-egress-hosts` with surrounding whitespace
-(`keycloak, dex`) fails the client mapping instead of being trimmed.
+that form, and two configurations whose entries differ only in letter case or in the optional
+brackets of a bare IPv6 literal are equal. Other spellings of one IPv6 address (the loopback in its
+compressed and in its full form) stay distinct. Entries are not trimmed: under Quarkus, an element of
+`sheriff.client.allowed-egress-hosts` with surrounding whitespace (`keycloak, dex`) fails the client
+mapping instead of being trimmed.
 
 *Revoke if supported.* `RevocationClient.revokeIfSupported(ProviderMetadata, String, String,
 ClientAuthentication)` MUST check its arguments before it reads the metadata, so its contract does not
