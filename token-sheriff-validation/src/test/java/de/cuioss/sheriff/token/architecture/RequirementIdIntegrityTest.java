@@ -250,6 +250,8 @@ class RequirementIdIntegrityTest {
                         "a sub-id reversal is a violation"),
                 () -> assertFalse(findOrderViolations(SAMPLE_PREFIX, definitions("1", "1")).isEmpty(),
                         "a repeated id is a violation"),
+                () -> assertFalse(findOrderViolations(SAMPLE_PREFIX, definitions("0.1", "1", "2", "3")).isEmpty(),
+                        "a sub-id of parent number 0 ahead of any top-level id is not under a parent"),
                 () -> assertFalse(findOrderViolations(SAMPLE_PREFIX, List.of()).isEmpty(),
                         "a document defining no id is a violation, not a vacuous pass"));
     }
@@ -440,8 +442,9 @@ class RequirementIdIntegrityTest {
             violations.add("no " + prefix + " id is defined; an empty document is not a sequential one");
             return violations;
         }
+        final int noParent = -1;
         int expectedNumber = 1;
-        int currentParent = 0;
+        int currentParent = noParent;
         int expectedSubNumber = 1;
         for (Definition definition : definitions) {
             RequirementId id = definition.id();
@@ -457,8 +460,11 @@ class RequirementIdIntegrityTest {
                 violations.add(describe(definition, "sub-id " + id.render(prefix)
                         + " has an explicit zero sub-number; sub-ids are numbered from 1"));
             } else if (id.number() != currentParent) {
+                String enclosing = currentParent == noParent
+                        ? "none, no top-level id precedes it"
+                        : prefix + SEPARATOR + currentParent;
                 violations.add(describe(definition, "sub-id " + id.render(prefix)
-                        + " is not under its parent; the enclosing id is " + prefix + SEPARATOR + currentParent));
+                        + " is not under its parent; the enclosing id is " + enclosing));
             } else {
                 if (id.subNumber() != expectedSubNumber) {
                     violations.add(describe(definition, "expected " + prefix + SEPARATOR + currentParent + "."
