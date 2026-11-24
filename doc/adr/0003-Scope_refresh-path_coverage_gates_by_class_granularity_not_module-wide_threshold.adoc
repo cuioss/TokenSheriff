@@ -34,8 +34,8 @@ run in CI has to live in the module's always-active `<build><plugins>`.
 When a regression class is confined to a small, known subset of a larger unit, the gate's
 *granularity* — not its threshold — decides whether the regression is detectable. The gate is a
 `CLASS`-element JaCoCo `check` rule scoped by an explicit `<includes>` list to exactly the classes that
-own the refresh path, bound in the always-active build, with floors set with real margin above the
-scoped classes' measured coverage.
+own the refresh path, bound in the always-active build, with floors set with real margin below the
+scoped classes' measured coverage (a JaCoCo minimum above the measured coverage fails the check).
 
 The finer granularity must also be *scoped*: applied module-wide, `CLASS` at 0.80 was red on six
 unrelated classes, and `PACKAGE` at 0.80 was red on pre-existing debt; ratcheting the `BUNDLE` rule to

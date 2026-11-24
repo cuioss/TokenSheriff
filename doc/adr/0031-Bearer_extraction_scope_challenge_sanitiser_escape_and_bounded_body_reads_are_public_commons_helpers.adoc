@@ -60,7 +60,9 @@ two aligned body handlers (the client already depends on the commons layer, and 
   and the producer's challenge is always one the client parser accepts.
 * Several defaults changed on upgrade: a lower- or mixed-case scheme is now a presented token; a token
   with an internal space or control character is answered 400 `INVALID_REQUEST`; an out-of-grammar scope,
-  more than 64 scopes, or a challenge over 8192 characters fails the deployment; the client's back-channel
+  more than 64 scopes, or a challenge over 8192 characters fails the deployment, within the two limits of
+  the amendment above (an interface default method is checked on its own, so a merged set over the limit
+  passes the deployment and is answered 500 at request time); the client's back-channel
   reads refuse an over-advertised `Content-Length` before reading and use the validation failure message.
 * The public API of the validation module grew by three classes and one method; a `TRUNCATE` caller must
   read `BoundedBody.truncated()`.

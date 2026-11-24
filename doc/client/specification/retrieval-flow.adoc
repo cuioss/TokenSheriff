@@ -151,6 +151,13 @@ The exchange returns `AuthorizationCodeFlow.AuthenticationResult`, a record with
 factory exists: a form that defaulted `refreshToken` to `null` would silently drop an issued refresh
 token, so every construction site names the value it passes.
 
+The same rule applies to any later breaking change of this kind: a transitional overload or factory
+is refused when the value it would supply implicitly is the value the breaking change made explicit
+to stop it being chosen wrongly — here `refreshToken = null`, a silent drop. A `@Deprecated`
+transitional form is refused as well, because it keeps that value reachable for as long as it
+exists. The refusal does not apply to an overload whose default is always correct, such as an empty
+collection, an identity transform or an inert default.
+
 == Grants
 
 The engine supports the secure subset of token-endpoint grants
