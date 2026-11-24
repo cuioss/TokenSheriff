@@ -49,7 +49,7 @@ Token-Sheriff already satisfies the OAuth 2.1 resource server requirements:
 * **RFC 9068 token type validation** - Optional per-issuer `typ: at+jwt` header validation (see xref:#VALIDATION-8.6[VALIDATION-8.6])
 * **RFC 9449 DPoP sender-constrained tokens** - Optional per-issuer DPoP proof validation binding access tokens to client public keys (see xref:#VALIDATION-8.7[VALIDATION-8.7])
 
-NOTE: Requirement IDs are stable identifiers referenced across documentation and are not sequential. Functional requirements use IDs 1-8 and 12-14; non-functional requirements use IDs 9-10.
+NOTE: Requirement IDs are referenced across documentation and run sequentially in document order. Functional requirements use IDs 1-11; non-functional requirements use IDs 12-13. The IDs that changed when the requirements were renumbered are listed in xref:#former-identifiers[].
 
 == Functional Requirements
 
@@ -455,13 +455,13 @@ The library must support optional per-issuer validation of DPoP (Demonstrating P
 
 _See specification: xref:architecture.adoc#token-validation-pipeline[Token Validation Pipeline]_
 
-[#VALIDATION-12]
-=== VALIDATION-12: Testing and Quality Assurance
+[#VALIDATION-9]
+=== VALIDATION-9: Testing and Quality Assurance
 
 _See specification: xref:security-reference.adoc[Security Reference]_
 
-[#VALIDATION-12.1]
-==== VALIDATION-12.1: Security Testing
+[#VALIDATION-9.1]
+==== VALIDATION-9.1: Security Testing
 
 The library must undergo security testing according to https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html[OWASP JWT Security Cheat Sheet for Java].
 
@@ -475,8 +475,8 @@ Key security tests must include:
 
 _See specifications: xref:security-reference.adoc[Security Reference]_
 
-[#VALIDATION-12.2]
-==== VALIDATION-12.2: Unit Testing
+[#VALIDATION-9.2]
+==== VALIDATION-9.2: Unit Testing
 
 The library must have unit tests with at least 80% code coverage, including:
 
@@ -487,8 +487,8 @@ The library must have unit tests with at least 80% code coverage, including:
 
 _See specification: xref:architecture.adoc[Architecture]_
 
-[#VALIDATION-12.3]
-==== VALIDATION-12.3: Integration Testing
+[#VALIDATION-9.3]
+==== VALIDATION-9.3: Integration Testing
 
 Integration tests must verify compatibility with multiple OIDC identity providers:
 
@@ -514,8 +514,8 @@ Integration tests must verify compatibility with multiple OIDC identity provider
 _See specifications: xref:architecture.adoc[Architecture] and xref:specification/multi-idp-testing.adoc[Multi-IDP Testing]_
 
 
-[#VALIDATION-12.4]
-==== VALIDATION-12.4: Vulnerability Scanning
+[#VALIDATION-9.4]
+==== VALIDATION-9.4: Vulnerability Scanning
 
 The library must be regularly scanned for vulnerabilities using:
 
@@ -525,8 +525,8 @@ The library must be regularly scanned for vulnerabilities using:
 
 _See specification: xref:security-reference.adoc[Security Reference]_
 
-[#VALIDATION-12.5]
-==== VALIDATION-12.5: Compliance Testing
+[#VALIDATION-9.5]
+==== VALIDATION-9.5: Compliance Testing
 
 Tests must verify compliance with:
 
@@ -536,15 +536,15 @@ Tests must verify compliance with:
 
 _See specification: xref:security-reference.adoc[Security Reference]_
 
-[#VALIDATION-13]
-=== VALIDATION-13: Public Validation Seams and Back-Channel Logout
+[#VALIDATION-10]
+=== VALIDATION-10: Public Validation Seams and Back-Channel Logout
 
 The library must offer consumers the narrow entries they need to build on token validation without reaching into its internals, and must validate the logout tokens of https://openid.net/specs/openid-connect-backchannel-1_0.html[OpenID Connect Back-Channel Logout 1.0].
 
 _See specifications: xref:architecture.adoc#token-validator-seams[TokenValidator Public Seams], xref:architecture.adoc#logout-package[Logout Token Validation] and xref:../adr/0029-TokenValidator_publishes_signature-only_verification_native_JSON_claims_and_a_non-fetching_issuer_status_view.adoc[ADR-0029]_
 
-[#VALIDATION-13.1]
-==== VALIDATION-13.1: Signature-Only Verification
+[#VALIDATION-10.1]
+==== VALIDATION-10.1: Signature-Only Verification
 
 `TokenValidator` must offer a signature-only entry, `verifySignature(String)`, that applies the token string limits, resolves an enabled issuer whose JWKS loader is healthy, runs the header checks for algorithm, key ID and embedded JWK, verifies the signature and maps the claims, and reaches no claim verdict.
 
@@ -555,8 +555,8 @@ _See specifications: xref:architecture.adoc#token-validator-seams[TokenValidator
 
 _See specification: xref:security-reference.adoc#signature-only-verification[Signature-Only Verification]_
 
-[#VALIDATION-13.2]
-==== VALIDATION-13.2: Native JSON Claims
+[#VALIDATION-10.2]
+==== VALIDATION-10.2: Native JSON Claims
 
 The library must return the payload of a validated token, through `TokenValidator.getRawClaims(TokenContent)`, and of a signature-verified token, through `SignatureVerifiedToken.getRawClaims()`, as a native JSON map.
 
@@ -567,8 +567,8 @@ The library must return the payload of a validated token, through `TokenValidato
 
 _See specification: xref:architecture.adoc#token-validator-seams[TokenValidator Public Seams]_
 
-[#VALIDATION-13.3]
-==== VALIDATION-13.3: Issuer Status View
+[#VALIDATION-10.3]
+==== VALIDATION-10.3: Issuer Status View
 
 `TokenValidator.getIssuerStatuses()` must return an immutable list with one `IssuerStatusView` per enabled issuer, in configuration order.
 
@@ -579,12 +579,12 @@ _See specification: xref:architecture.adoc#token-validator-seams[TokenValidator 
 
 _See specification: xref:architecture.adoc#token-validator-seams[TokenValidator Public Seams]_
 
-[#VALIDATION-13.4]
-==== VALIDATION-13.4: Logout Token Validation
+[#VALIDATION-10.4]
+==== VALIDATION-10.4: Logout Token Validation
 
 The library must validate a logout token of https://openid.net/specs/openid-connect-backchannel-1_0.html[OpenID Connect Back-Channel Logout 1.0] with every check of sections 2.4 and 2.6 of that specification, run in this fixed order:
 
-. The signature, through the signature-only entry of xref:#VALIDATION-13.1[VALIDATION-13.1]
+. The signature, through the signature-only entry of xref:#VALIDATION-10.1[VALIDATION-10.1]
 . A present `typ` header is `logout+jwt` or `application/logout+jwt`, compared case-insensitively; an absent `typ` is accepted
 . `iss` equals the expected issuer
 . `aud`, a string or an array, contains the expected audience
@@ -594,7 +594,7 @@ The library must validate a logout token of https://openid.net/specs/openid-conn
 . `nonce` is absent, not even present as a JSON `null`
 . `sub` and/or `sid` is present, and each of them that is present is a non-blank string
 . `jti` is present as a non-blank string
-. The `jti` passes the replay guard of xref:#VALIDATION-13.5[VALIDATION-13.5]
+. The `jti` passes the replay guard of xref:#VALIDATION-10.5[VALIDATION-10.5]
 
 A claim the signature-only entry cannot map refuses the token at the first step: a present `iat` or `exp` that is not a number is refused as `ISSUED_AT` or `EXPIRATION`, any other unmappable claim - a `sub` that is a JSON number, boolean, array or object among them - as `SIGNATURE`.
 
@@ -602,8 +602,8 @@ A refusal names exactly one `LogoutTokenCheck`, the first check that failed. The
 
 _See specification: xref:security-reference.adoc#logout-token-validation[Logout Token Validation]_
 
-[#VALIDATION-13.5]
-==== VALIDATION-13.5: Logout Token Replay Guard
+[#VALIDATION-10.5]
+==== VALIDATION-10.5: Logout Token Replay Guard
 
 The library must refuse a logout token whose `jti` was already admitted, through a replay guard that is:
 
@@ -618,15 +618,15 @@ The guard is consulted last, so a token refused by any other check takes no guar
 
 _See specification: xref:security-reference.adoc#logout-replay-guard[Logout Replay Guard]_
 
-[#VALIDATION-14]
-=== VALIDATION-14: Framework-Neutral Bearer Helpers
+[#VALIDATION-11]
+=== VALIDATION-11: Framework-Neutral Bearer Helpers
 
 The library must offer the RFC 6750 handling of an HTTP edge - reading `Bearer` credentials and building the `insufficient_scope` challenge - as public classes of the commons layer that depend on `java.util` and JSpecify only, so that every edge built on the library applies the same rules without copying them.
 
 _See specification: xref:../adr/0031-Bearer_extraction_scope_challenge_sanitiser_escape_and_bounded_body_reads_are_public_commons_helpers.adoc[ADR-0031]_
 
-[#VALIDATION-14.1]
-==== VALIDATION-14.1: Bearer Credential Extraction
+[#VALIDATION-11.1]
+==== VALIDATION-11.1: Bearer Credential Extraction
 
 `BearerCredentials.extract` must read the `Bearer` credentials of an `Authorization` field value (https://datatracker.ietf.org/doc/html/rfc6750#section-2.1[RFC 6750 §2.1]) and report exactly one of three states:
 
@@ -646,8 +646,8 @@ The Quarkus producer answers `MALFORMED` with `INVALID_REQUEST` (HTTP 400) witho
 
 _See specification: xref:../adr/0031-Bearer_extraction_scope_challenge_sanitiser_escape_and_bounded_body_reads_are_public_commons_helpers.adoc[ADR-0031]_
 
-[#VALIDATION-14.2]
-==== VALIDATION-14.2: Insufficient-Scope Challenge
+[#VALIDATION-11.2]
+==== VALIDATION-11.2: Insufficient-Scope Challenge
 
 `BearerChallenge.insufficientScope()` must build the `WWW-Authenticate` value of an https://datatracker.ietf.org/doc/html/rfc6750#section-3.1[RFC 6750 §3.1] `insufficient_scope` challenge as a string, with optional `realm`, `error_description` and `scope` attributes, and must never decide an HTTP status.
 
@@ -665,8 +665,8 @@ _See specification: xref:../adr/0031-Bearer_extraction_scope_challenge_sanitiser
 
 == Non-Functional Requirements
 
-[#VALIDATION-9]
-=== VALIDATION-9: Performance
+[#VALIDATION-12]
+=== VALIDATION-12: Performance
 
 Performance requirements are verified through benchmarking:
 
@@ -675,8 +675,8 @@ Performance requirements are verified through benchmarking:
 
 _See analysis: xref:../../benchmarking/doc/Analysis-03.2026-Micro.adoc[Micro-Benchmark Analysis] and xref:../../benchmarking/doc/Analysis-03.2026-Integration.adoc[Integration Benchmark Analysis]_
 
-[#VALIDATION-9.1]
-==== VALIDATION-9.1: Library Performance (Micro-Benchmarks)
+[#VALIDATION-12.1]
+==== VALIDATION-12.1: Library Performance (Micro-Benchmarks)
 
 **Requirements:**
 
@@ -696,8 +696,8 @@ _See analysis: xref:../../benchmarking/doc/Analysis-03.2026-Micro.adoc[Micro-Ben
 
 _See detailed analysis: xref:../../benchmarking/doc/Analysis-03.2026-Micro.adoc[Micro-Benchmark Analysis (March 2026)]_
 
-[#VALIDATION-9.2]
-==== VALIDATION-9.2: Error Handling Performance
+[#VALIDATION-12.2]
+==== VALIDATION-12.2: Error Handling Performance
 
 **Requirements:**
 
@@ -712,8 +712,8 @@ _See detailed analysis: xref:../../benchmarking/doc/Analysis-03.2026-Micro.adoc[
 
 _See detailed analysis: xref:../../benchmarking/doc/Analysis-03.2026-Micro.adoc#_throughput_results[Throughput Results]_
 
-[#VALIDATION-9.3]
-==== VALIDATION-9.3: Integration Performance (HTTP/REST)
+[#VALIDATION-12.3]
+==== VALIDATION-12.3: Integration Performance (HTTP/REST)
 
 **Requirements:**
 
@@ -733,8 +733,8 @@ _See detailed analysis: xref:../../benchmarking/doc/Analysis-03.2026-Micro.adoc#
 
 _See detailed analysis: xref:../../benchmarking/doc/Analysis-03.2026-Integration.adoc[Integration Benchmark Analysis (March 2026)]_
 
-[#VALIDATION-9.4]
-==== VALIDATION-9.4: Cache Performance
+[#VALIDATION-12.4]
+==== VALIDATION-12.4: Cache Performance
 
 **Requirements:**
 
@@ -752,8 +752,8 @@ _See detailed analysis: xref:../../benchmarking/doc/Analysis-03.2026-Integration
 
 _See analysis: xref:../../benchmarking/doc/Analysis-03.2026-Integration.adoc[Integration Performance Analysis]_
 
-[#VALIDATION-9.5]
-==== VALIDATION-9.5: Scalability and Concurrency
+[#VALIDATION-12.5]
+==== VALIDATION-12.5: Scalability and Concurrency
 
 **Requirements:**
 
@@ -770,21 +770,39 @@ _See analysis: xref:../../benchmarking/doc/Analysis-03.2026-Integration.adoc[Int
 
 _See analysis: xref:../../benchmarking/doc/Analysis-03.2026-Integration.adoc#_connection_sweep_50_300_connections[Connection Scaling Analysis]_
 
-[#VALIDATION-10]
-=== VALIDATION-10: Reliability
+[#VALIDATION-13]
+=== VALIDATION-13: Reliability
 
 _See specification: xref:architecture.adoc#token-validation-pipeline[Token Validation Pipeline]_
 
-[#VALIDATION-10.1]
-==== VALIDATION-10.1: Thread Safety
+[#VALIDATION-13.1]
+==== VALIDATION-13.1: Thread Safety
 
 The implementation must be thread-safe.
 
 _See specification: xref:architecture.adoc#multi-issuer[Multi-Issuer Support]_
 
-[#VALIDATION-10.2]
-==== VALIDATION-10.2: Error Handling
+[#VALIDATION-13.2]
+==== VALIDATION-13.2: Error Handling
 
 The implementation must handle errors gracefully and provide meaningful error messages.
 
 _See specification: xref:architecture.adoc#token-validation-pipeline[Token Validation Pipeline]_
+
+[#former-identifiers]
+== Former identifiers
+
+The requirement IDs were renumbered so they run sequentially in document order. The table lists every
+ID that changed; a sub-ID follows its parent (for example, VALIDATION-12.3 is now VALIDATION-9.3).
+VALIDATION-1 to VALIDATION-8 are unchanged, and VALIDATION-11 was never assigned before.
+
+[cols="1,1", options="header"]
+|===
+| Former identifier | Current identifier
+
+| VALIDATION-9 | VALIDATION-12
+| VALIDATION-10 | VALIDATION-13
+| VALIDATION-12 | VALIDATION-9
+| VALIDATION-13 | VALIDATION-10
+| VALIDATION-14 | VALIDATION-11
+|===

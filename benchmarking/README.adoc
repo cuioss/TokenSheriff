@@ -95,7 +95,7 @@ The GitHub Actions benchmark workflow runs both benchmark modules, combines thei
 * link:doc/performance-scoring.adoc[Performance Scoring] - score, grade and trend calculation
 * link:doc/benchmark-metrics.adoc[Benchmark Metrics System] - Prometheus metrics collected during WRK runs
 * link:doc/JFR-Instrumentation.adoc[JFR Instrumentation] - variance analysis of the library benchmarks
-* xref:../doc/validation/requirements.adoc#VALIDATION-9[Performance Requirements] - performance targets and verification criteria
+* xref:../doc/validation/requirements.adoc#VALIDATION-12[Performance Requirements] - performance targets and verification criteria
 
 === Performance Analysis
 

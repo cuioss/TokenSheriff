@@ -40,7 +40,7 @@ class ProblemDetailExceptionMapperTest {
         String body = (String) response.getEntity();
         assertTrue(body.contains("\"status\":401"));
         assertTrue(body.contains("token-invalid"));
-        // COMMONS-12 / T-LEAK: the internal exception message must not leak.
+        // COMMONS-13 / T-LEAK: the internal exception message must not leak.
         assertFalse(body.contains("secret-subject"));
         assertFalse(body.contains("1700000000"));
     }

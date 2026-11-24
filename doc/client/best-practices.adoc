@@ -18,7 +18,7 @@ capability included merely because "the spec allows it".
 
 The checklist is organized by aspect. Transport hardening *primitives* (TLS enforcement,
 timeouts, bounded reads, JWKS caching) are *owned by*
-xref:../commons/requirements.adoc[commons] (`COMMONS-1`–`COMMONS-8`); the client drives its
+xref:../commons/requirements.adoc[commons] (`COMMONS-1`–`COMMONS-9`); the client drives its
 *own* OIDC/OAuth back-channel HTTP on those primitives and applies an in-module egress/path
 control before each fetch (see
 xref:architecture.adoc#_owned_back_channel_http[Owned back-channel HTTP]); the transport rows
@@ -153,11 +153,11 @@ record that boundary.
   PAR) and applies an in-module egress/path validation before each fetch
   (xref:architecture.adoc#_owned_back_channel_http[Owned back-channel HTTP]); JWKS retrieval
   stays with the commons-backed validation pipeline.
-| xref:../commons/requirements.adoc#COMMONS-1[COMMONS-1]–xref:../commons/requirements.adoc#COMMONS-8[COMMONS-8]
+| xref:../commons/requirements.adoc#COMMONS-1[COMMONS-1]–xref:../commons/requirements.adoc#COMMONS-9[COMMONS-9]
 
 | HTTP-surfaced client errors render as `application/problem+json` (RFC 9457) at the edge; the
   engine throws typed exceptions only. Inbound IdP errors are normalized, not passed through.
-| xref:../commons/requirements.adoc#COMMONS-9[COMMONS-9]–xref:../commons/requirements.adoc#COMMONS-12[COMMONS-12] (xref:requirements.adoc#CLIENT-20[CLIENT-20])
+| xref:../commons/requirements.adoc#COMMONS-10[COMMONS-10]–xref:../commons/requirements.adoc#COMMONS-13[COMMONS-13] (xref:requirements.adoc#CLIENT-20[CLIENT-20])
 |===
 
 == See also

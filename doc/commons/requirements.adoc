@@ -14,8 +14,9 @@ gathers the four cross-cutting concerns every capability sits on: *IdP transport
 counts events and exposes metrics; it never interprets a token's trust* — that is the
 validation layer's job.
 
-Requirement IDs use the `COMMONS-N` scheme, grouped by concern. IDs are stable identifiers referenced across documentation and the
-xref:threat-model.adoc[threat model]; they are not sequential across groups.
+Requirement IDs use the `COMMONS-N` scheme, grouped by concern, and are referenced across documentation and the
+xref:threat-model.adoc[threat model]. The IDs run sequentially in document order; the IDs that changed when the
+requirements were renumbered are listed in xref:#former-identifiers[].
 
 === Document Navigation
 
@@ -154,8 +155,8 @@ xref:specification/transport.adoc#resilience_bounds[Transport specification].
 
 * Source: https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4] (availability), https://www.rfc-editor.org/rfc/rfc7230[RFC 7230] (message framing bounds).
 
-[#COMMONS-17]
-=== COMMONS-17: One bounded response-body handler
+[#COMMONS-5]
+=== COMMONS-5: One bounded response-body handler
 
 The response-size limit of xref:#COMMONS-4[COMMONS-4] MUST be enforced by one public handler,
 `commons.transport.BoundedBodyHandler`, for the validation-side discovery and JWKS reads and for the
@@ -183,8 +184,8 @@ xref:../adr/0031-Bearer_extraction_scope_challenge_sanitiser_escape_and_bounded_
 
 * Source: https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4] (availability), https://www.rfc-editor.org/rfc/rfc9110#section-8.6[RFC 9110 §8.6] (`Content-Length`).
 
-[#COMMONS-5]
-=== COMMONS-5: Discovery (`.well-known`)
+[#COMMONS-6]
+=== COMMONS-6: Discovery (`.well-known`)
 
 Commons fetches and parses OpenID Provider metadata from
 `.well-known/openid-configuration` (OIDC Discovery) and OAuth authorization-server
@@ -193,18 +194,18 @@ issuer; advertised endpoint URLs are subject to xref:#COMMONS-3[].
 
 * Source: https://openid.net/specs/openid-connect-discovery-1_0.html[OpenID Connect Discovery 1.0 §4.3], https://www.rfc-editor.org/rfc/rfc8414[RFC 8414 §3.3].
 
-[#COMMONS-6]
-=== COMMONS-6: JWKS retrieval
+[#COMMONS-7]
+=== COMMONS-7: JWKS retrieval
 
 Commons retrieves JWKS documents (RFC 7517) over the hardened transport, subject to
-xref:#COMMONS-2[], xref:#COMMONS-3[] and xref:#COMMONS-4[], and caches them (xref:#COMMONS-8[]). Key
+xref:#COMMONS-2[], xref:#COMMONS-3[] and xref:#COMMONS-4[], and caches them (xref:#COMMONS-9[]). Key
 *material parsing* is a transport-format concern; *trust decisions* about the resulting
 keys remain in validation.
 
 * Source: https://www.rfc-editor.org/rfc/rfc7517[RFC 7517] (reused from validation bibliography).
 
-[#COMMONS-7]
-=== COMMONS-7: Extended IdP endpoints (client-facing)
+[#COMMONS-8]
+=== COMMONS-8: Extended IdP endpoints (client-facing)
 
 Commons defines the transport contract for the extended IdP endpoints: token (RFC 6749),
 userinfo (OIDC Core), revocation (RFC 7009), introspection (RFC 7662), end-session /
@@ -216,8 +217,8 @@ client builds; introspection has a dispatcher only and no client flow.
 
 * Source: https://www.rfc-editor.org/rfc/rfc6749[RFC 6749], https://www.rfc-editor.org/rfc/rfc7009[RFC 7009], https://www.rfc-editor.org/rfc/rfc7662[RFC 7662], https://www.rfc-editor.org/rfc/rfc9126[RFC 9126], https://openid.net/specs/openid-connect-rpinitiated-1_0.html[OIDC RP-Initiated Logout 1.0].
 
-[#COMMONS-8]
-=== COMMONS-8: Caching of discovery and JWKS
+[#COMMONS-9]
+=== COMMONS-9: Caching of discovery and JWKS
 
 Discovery documents and JWKS are cached with a bounded lifetime to avoid re-fetching on
 every validation. Cache refresh MUST re-apply xref:#COMMONS-2[]–xref:#COMMONS-4[].
@@ -228,8 +229,8 @@ every validation. Cache refresh MUST re-apply xref:#COMMONS-2[]–xref:#COMMONS-
 
 _See xref:specification/error-model.adoc[Error-model specification]._
 
-[#COMMONS-9]
-=== COMMONS-9: Typed exception hierarchy
+[#COMMONS-10]
+=== COMMONS-10: Typed exception hierarchy
 
 Library code (the `commons` and `validation` packages, and the client engine — pure
 Java) MUST signal failure through a typed exception hierarchy defined in `commons.error`.
@@ -237,8 +238,8 @@ Library code MUST NOT produce HTTP problem documents — that is not its layer.
 
 * Source: https://www.rfc-editor.org/rfc/rfc9457[RFC 9457 §3] (problem details are an HTTP-edge concern).
 
-[#COMMONS-10]
-=== COMMONS-10: RFC 9457 rendering at every HTTP edge
+[#COMMONS-11]
+=== COMMONS-11: RFC 9457 rendering at every HTTP edge
 
 Every HTTP edge — `token-sheriff-validation-quarkus`, `token-sheriff-client-quarkus`,
 and any future non-Quarkus/RESTEasy edge (e.g. a portal adapter) — MUST map the typed
@@ -247,24 +248,24 @@ included.
 
 * Source: https://www.rfc-editor.org/rfc/rfc9457[RFC 9457].
 
-[#COMMONS-11]
-=== COMMONS-11: Inbound IdP error normalization
+[#COMMONS-12]
+=== COMMONS-12: Inbound IdP error normalization
 
 Commons MUST normalize inbound IdP error responses (OAuth `error` / `error_description`
 per RFC 6749 §5.2) into the typed model the edges render — one contract, both directions.
 
 * Source: https://www.rfc-editor.org/rfc/rfc6749#section-5.2[RFC 6749 §5.2] (reused from validation bibliography).
 
-[#COMMONS-12]
-=== COMMONS-12: No internal-detail leakage
+[#COMMONS-13]
+=== COMMONS-13: No internal-detail leakage
 
 Rendered problem documents MUST carry only a safe `type` / `title` / `detail`, and MUST NOT
 leak stack traces, internal identifiers, upstream URLs, or credential material.
 
 * Source: https://www.rfc-editor.org/rfc/rfc9457#section-3[RFC 9457 §3] (member semantics), https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4] (information disclosure).
 
-[#COMMONS-16]
-=== COMMONS-16: Printable-ASCII rendering of untrusted text
+[#COMMONS-14]
+=== COMMONS-14: Printable-ASCII rendering of untrusted text
 
 Untrusted text bound for a sink that must carry printable ASCII only MUST be rendered by the one
 commons-layer sanitiser, `ErrorTextSanitizer`, through its printable-ASCII form
@@ -281,8 +282,8 @@ See xref:specification/error-model.adoc#printable_ascii_escape[Error-model speci
 
 _See xref:specification/observability.adoc[Observability specification]._
 
-[#COMMONS-13]
-=== COMMONS-13: Shared security-event surface
+[#COMMONS-15]
+=== COMMONS-15: Shared security-event surface
 
 `SecurityEventCounter` and the security-event types live in `commons.events` so validation
 and the client share one event surface. The counter MUST remain thread-safe and
@@ -290,8 +291,8 @@ free of any Micrometer dependency; the Quarkus extensions expose it.
 
 * Source: https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4] (security monitoring).
 
-[#COMMONS-14]
-=== COMMONS-14: Event categorization
+[#COMMONS-16]
+=== COMMONS-16: Event categorization
 
 Each security event MUST carry a category (structure / signature / semantic) usable by an
 edge to select a response. Event categories MUST NOT depend on any validation-layer type
@@ -301,8 +302,8 @@ edge to select a response. Event categories MUST NOT depend on any validation-la
 
 == Metrics requirements
 
-[#COMMONS-15]
-=== COMMONS-15: Metric identifiers defined once
+[#COMMONS-17]
+=== COMMONS-17: Metric identifiers defined once
 
 Metric identifiers / contracts (`sheriff.token.*`) are defined once in `commons.metrics`.
 Each Quarkus extension wires them to Micrometer; the identifiers themselves carry no
@@ -320,10 +321,33 @@ and xref:specification/observability.adoc[observability] specifications.
 |===
 | Requirement | Threats | Specification
 
-| COMMONS-1..8 | T-SSRF, T-TLS, T-DOS, T-DISCOVERY | transport.adoc
-| COMMONS-17 | T-DOS | transport.adoc
-| COMMONS-9..12 | T-LEAK | error-model.adoc
-| COMMONS-16 | T-LEAK | error-model.adoc
-| COMMONS-13..14 | T-LEAK (categorization) | observability.adoc
-| COMMONS-15 | — | observability.adoc
+| COMMONS-1..9 | T-SSRF, T-TLS, T-DOS, T-DISCOVERY | transport.adoc
+| COMMONS-10..14 | T-LEAK | error-model.adoc
+| COMMONS-15..16 | T-LEAK (categorization) | observability.adoc
+| COMMONS-17 | — | observability.adoc
+|===
+
+[#former-identifiers]
+== Former identifiers
+
+The requirement IDs were renumbered so they run sequentially in document order. The table lists every
+ID that changed; a sub-ID follows its parent. COMMONS-1 to COMMONS-4 are unchanged.
+
+[cols="1,1", options="header"]
+|===
+| Former identifier | Current identifier
+
+| COMMONS-5 | COMMONS-6
+| COMMONS-6 | COMMONS-7
+| COMMONS-7 | COMMONS-8
+| COMMONS-8 | COMMONS-9
+| COMMONS-9 | COMMONS-10
+| COMMONS-10 | COMMONS-11
+| COMMONS-11 | COMMONS-12
+| COMMONS-12 | COMMONS-13
+| COMMONS-13 | COMMONS-15
+| COMMONS-14 | COMMONS-16
+| COMMONS-15 | COMMONS-17
+| COMMONS-16 | COMMONS-14
+| COMMONS-17 | COMMONS-5
 |===

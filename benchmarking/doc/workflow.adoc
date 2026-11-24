@@ -68,7 +68,7 @@ There is no automated pass/fail quality gate — regressions surface through:
 
 == Performance Requirements
 
-See xref:../../doc/validation/requirements.adoc#VALIDATION-9[Performance Requirements] for specific targets and thresholds.
+See xref:../../doc/validation/requirements.adoc#VALIDATION-12[Performance Requirements] for specific targets and thresholds.
 
 == Troubleshooting
 

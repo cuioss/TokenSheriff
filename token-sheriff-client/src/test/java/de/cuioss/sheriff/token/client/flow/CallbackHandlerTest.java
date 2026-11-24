@@ -376,7 +376,7 @@ class CallbackHandlerTest {
         }
 
         @Test
-        @DisplayName("Should route both error and error_description through the commons normalizer (COMMONS-11)")
+        @DisplayName("Should route both error and error_description through the commons normalizer (COMMONS-12)")
         void shouldSurfaceSanitizedErrorDescription() {
             var context = context();
             // The previous inline rejection dropped error_description entirely; the normalizer now

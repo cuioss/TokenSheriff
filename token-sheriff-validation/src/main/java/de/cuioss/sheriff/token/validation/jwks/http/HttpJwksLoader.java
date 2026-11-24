@@ -1960,7 +1960,7 @@ public class HttpJwksLoader implements JwksLoader, LoadingStatusProvider, AutoCl
      * advertised issuer that does not match, or an absent advertised issuer, is a
      * <em>hard discovery failure</em> — this method returns empty,
      * {@link #resolveJWKSAdapter(String)} aborts, and the advertised {@code jwks_uri} is never fetched.
-     * Gating here, before the advertised URL is fetched, closes the SSRF-relevant window (COMMONS-5):
+     * Gating here, before the advertised URL is fetched, closes the SSRF-relevant window (COMMONS-6):
      * a tampered discovery document cannot steer the loader to fetch key material from an
      * attacker-chosen endpoint under the authority of an issuer we do not trust. A mismatch is
      * audited (WARN log + ISSUER_MISMATCH counter). A discovery document that carries a

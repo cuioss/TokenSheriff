@@ -450,7 +450,7 @@ Both controls above leave a residual exposure, recorded here rather than implied
 
 Each flow / token threat is exercised by the commons `generators` dispatchers in their
 *adversarial* mode (xref:../commons/specification/transport.adoc#adversarial_dispatchers[commons
-transport spec], `COMMONS-7`), driven by the client unit tests
+transport spec], `COMMONS-8`), driven by the client unit tests
 (xref:requirements.adoc#CLIENT-22[CLIENT-22]). These adversarial dispatcher cases —
 malformed metadata, oversized bodies, forged responses — stay in the unit layer; the
 integration suite covers only threats reproducible against real providers:
@@ -489,7 +489,7 @@ integration suite covers only threats reproducible against real providers:
   at validation time — belong to the xref:../validation/threat-model.adoc[validation threat
   model]. The client retrieves tokens; validation decides their trust (`CLIENT-15`).
 * *Error-detail leakage* at the HTTP edge — the RFC 9457 no-leak control — is the commons
-  `T-LEAK` threat (`COMMONS-12`); the client engine only throws typed exceptions
+  `T-LEAK` threat (`COMMONS-13`); the client engine only throws typed exceptions
   (`CLIENT-20`).
 * *BFF application concerns* — the browser↔backend session cookie, symmetric-key management,
   backend-API CSRF, request proxying, and front-/back-channel logout *receivers* — are the

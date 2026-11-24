@@ -31,7 +31,7 @@ import jakarta.ws.rs.ext.Provider;
  * {@code doc/commons/specification/error-model.adoc}): library code throws typed exceptions;
  * the edge renders them. The rendered problem document carries only a stable {@code type},
  * a generic {@code title}/{@code detail} and the {@code status} — never the underlying
- * exception message, stack trace or any internal identifier (COMMONS-12, threat T-LEAK).
+ * exception message, stack trace or any internal identifier (COMMONS-13, threat T-LEAK).
  *
  * @since 1.0
  */

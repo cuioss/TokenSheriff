@@ -22,7 +22,7 @@ import java.util.Set;
 /**
  * Normalizes an inbound OAuth 2.0 error response ({@code error} plus optional
  * {@code error_description}, RFC 6749 §4.1.2.1 / §5.2) into the typed {@link ClientProtocolException}
- * the error model renders — <em>one contract, both directions</em> (COMMONS-11).
+ * the error model renders — <em>one contract, both directions</em> (COMMONS-12).
  * <p>
  * The raw upstream {@code error} and {@code error_description} are authorization-server-controlled and
  * are never surfaced verbatim: both are neutralized for log/response injection (CWE-117) before they

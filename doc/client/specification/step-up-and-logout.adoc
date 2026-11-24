@@ -143,7 +143,7 @@ The engine drives the `end_session_endpoint` with:
 
 Logout is not complete until the tokens the engine holds are revoked, so a logout does not
 leave live tokens behind. The engine revokes the access and refresh tokens through its *own*
-`RevocationClient` back-channel call (RFC 7009, on the `cui-http` transport, `COMMONS-7`) and
+`RevocationClient` back-channel call (RFC 7009, on the `cui-http` transport, `COMMONS-8`) and
 clears them from the server-side lifecycle
 (xref:token-handling.adoc[token handling], xref:../requirements.adoc#CLIENT-17[CLIENT-17]).
 
@@ -154,7 +154,7 @@ blocks. *Front-channel / back-channel logout receivers* and the *Session-Managem
 are browser-session concerns owned by the BFF application, not this engine
 (xref:../requirements.adoc#CLIENT-19[CLIENT-19]). A BFF that implements the back-channel logout
 receiver endpoint validates the received logout token with the `token-sheriff-validation`
-logout-token validator (xref:../../validation/requirements.adoc#VALIDATION-13.4[VALIDATION-13.4]).
+logout-token validator (xref:../../validation/requirements.adoc#VALIDATION-10.4[VALIDATION-10.4]).
 
 * Source: https://openid.net/specs/openid-connect-rpinitiated-1_0.html[OpenID Connect RP-Initiated Logout 1.0], https://www.rfc-editor.org/rfc/rfc7009[RFC 7009] (revocation), https://www.rfc-editor.org/rfc/rfc9700#section-4.1[RFC 9700 §4.1] (open-redirect defence).
 

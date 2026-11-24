@@ -49,7 +49,7 @@ not restated here.
 | *Low-level HTTP transport primitives* — the `cui-http` `HttpHandler`, TLS context, and the
   `de.cuioss.http.security` validation pipeline; plus JWKS retrieval and token-signature
   transport, driven by the validation pipeline.
-| xref:../commons/requirements.adoc[commons] (`COMMONS-1`–`COMMONS-8`) / validation. The client
+| xref:../commons/requirements.adoc[commons] (`COMMONS-1`–`COMMONS-9`) / validation. The client
   *builds on* these primitives but drives its *own* OIDC/OAuth back-channel HTTP (discovery,
   token, userinfo, revocation, PAR) and *owns* the in-module egress control it applies to
   advertised URLs — see xref:architecture.adoc#_owned_back_channel_http[owned back-channel HTTP].
@@ -61,8 +61,8 @@ not restated here.
   `VALIDATION-8.7`, RFC 8725). Inherited by every retrieved token; not restated here.
 
 | *RFC 9457 problem+json rendering* — the HTTP-edge mapping of typed exceptions.
-| xref:../commons/requirements.adoc#COMMONS-10[commons] (`COMMONS-10`). The client engine
-  throws typed exceptions (`COMMONS-9`); `token-sheriff-client-quarkus` and any RESTEasy edge
+| xref:../commons/requirements.adoc#COMMONS-11[commons] (`COMMONS-11`). The client engine
+  throws typed exceptions (`COMMONS-10`); `token-sheriff-client-quarkus` and any RESTEasy edge
   render problem+json (xref:#CLIENT-20[]).
 |===
 
@@ -259,7 +259,7 @@ logout does not leave live tokens behind. Front-/back-channel logout *receivers*
 Session-Management iframe are the BFF application's concern, not this engine's. A BFF that
 implements the back-channel logout receiver endpoint validates the received logout token with the
 `token-sheriff-validation` logout-token validator
-(xref:../validation/requirements.adoc#VALIDATION-13.4[VALIDATION-13.4]).
+(xref:../validation/requirements.adoc#VALIDATION-10.4[VALIDATION-10.4]).
 
 * Source: https://openid.net/specs/openid-connect-rpinitiated-1_0.html[OpenID Connect RP-Initiated Logout 1.0], https://www.rfc-editor.org/rfc/rfc9700#section-4.1[RFC 9700 §4.1] (open-redirect on `post_logout_redirect_uri`).
 
@@ -573,13 +573,13 @@ concern and are *not* implemented here.
 === CLIENT-20: Errors via the commons typed-exception / RFC 9457 model
 
 The client engine (pure Java) MUST signal failure through the commons typed-exception
-hierarchy (`COMMONS-9`) and MUST NOT produce HTTP problem documents itself. HTTP-surfaced
+hierarchy (`COMMONS-10`) and MUST NOT produce HTTP problem documents itself. HTTP-surfaced
 client errors MUST conform to the commons RFC 9457 error model: `token-sheriff-client-quarkus`
 (and any future RESTEasy edge, e.g. a portal adapter) maps the typed exceptions to
-`application/problem+json` (`COMMONS-10`), leaking no internal detail (`COMMONS-12`). Inbound
-IdP error responses are normalized by commons (`COMMONS-11`), not passed through verbatim.
+`application/problem+json` (`COMMONS-11`), leaking no internal detail (`COMMONS-13`). Inbound
+IdP error responses are normalized by commons (`COMMONS-12`), not passed through verbatim.
 
-* Source: https://www.rfc-editor.org/rfc/rfc9457[RFC 9457], xref:../commons/requirements.adoc#COMMONS-9[COMMONS-9]–xref:../commons/requirements.adoc#COMMONS-12[COMMONS-12].
+* Source: https://www.rfc-editor.org/rfc/rfc9457[RFC 9457], xref:../commons/requirements.adoc#COMMONS-10[COMMONS-10]–xref:../commons/requirements.adoc#COMMONS-13[COMMONS-13].
 
 [#CLIENT-28]
 === CLIENT-28: Published refresh-result verification
@@ -768,13 +768,13 @@ dependency.
 The engine MUST be thread-safe (shared per-issuer configuration, concurrent flows). Each
 `CLIENT-N` flow / token requirement MUST be exercised by unit tests driving the commons
 `generators` dispatchers in both default and *adversarial* modes where the engine reaches a
-commons dispatcher (the token / userinfo / PAR dispatchers, `COMMONS-7`; the revocation tests use
+commons dispatcher (the token / userinfo / PAR dispatchers, `COMMONS-8`; the revocation tests use
 a dispatcher of their own, and the engine makes no end-session or introspection HTTP call), plus
 real-IdP integration tests. The two-layer verification model, the
 adversarial coverage, and the full `CLIENT-N` → threat → test traceability are specified in
 xref:specification/test-strategy.adoc[Test strategy].
 
-* Source: https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/05-Authorization_Testing/05-Testing_for_OAuth_Weaknesses[OWASP WSTG — Testing for OAuth Weaknesses], xref:../commons/requirements.adoc#COMMONS-7[COMMONS-7].
+* Source: https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/05-Authorization_Testing/05-Testing_for_OAuth_Weaknesses[OWASP WSTG — Testing for OAuth Weaknesses], xref:../commons/requirements.adoc#COMMONS-8[COMMONS-8].
 
 [#CLIENT-26]
 === CLIENT-26: GraalVM native-image contract shipped with the engine

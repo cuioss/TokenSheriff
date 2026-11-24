@@ -7,8 +7,7 @@
 
 == Overview
 
-_Realizes xref:../requirements.adoc#COMMONS-1[COMMONS-1]–xref:../requirements.adoc#COMMONS-8[COMMONS-8]
-and xref:../requirements.adoc#COMMONS-17[COMMONS-17].
+_Realizes xref:../requirements.adoc#COMMONS-1[COMMONS-1]–xref:../requirements.adoc#COMMONS-9[COMMONS-9].
 See xref:../threat-model.adoc[Threat Model] and xref:../architecture.adoc[Architecture]._
 
 `commons.transport` owns the validation-side outbound HTTP to an OpenID Provider —
@@ -281,7 +280,7 @@ reads use the same JDK client and the same cui-http request timeout, but were no
 transport relies on the size bound of the body read, which applies on every JDK, not on a time bound. Mitigates xref:../threat-model.adoc#T-DOS[T-DOS] within that
 limit.
 
-=== [[bounded_response_body]] Bounded response body (COMMONS-17)
+=== [[bounded_response_body]] Bounded response body (COMMONS-5)
 
 The response-size limit is enforced by one public handler, `commons.transport.BoundedBodyHandler`,
 which every bounded read uses: the validation-side discovery and JWKS converters
@@ -329,7 +328,7 @@ total would exceed the ceiling, so the full body is never materialised first.
   plus the buffers of the delivery in flight; the object count grows with the logarithm of the body size. Completion is not covered by that
   bound: the held bytes are assembled into the result and, for the string variant, decoded into a string
   before they are released, so the transient peak there is a small constant multiple of the ceiling (see
-  xref:../requirements.adoc#COMMONS-17[COMMONS-17]).
+  xref:../requirements.adoc#COMMONS-5[COMMONS-5]).
 
 | Failure message
 | The read completes exceptionally with an `IOException` reading
@@ -393,7 +392,7 @@ cui-http, whose adapter performs the send, so this repository has no send call t
 therefore treats the message of any exception that comes out of an HTTP exchange as remote content and
 sanitises it before logging.
 
-=== Caching (COMMONS-8)
+=== Caching (COMMONS-9)
 
 Discovery documents and JWKS are cached with a bounded lifetime; refresh re-applies the TLS,
 SSRF and resilience controls above.

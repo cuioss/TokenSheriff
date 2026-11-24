@@ -37,7 +37,7 @@ image::../resources/diagrams/module-architecture.svg["Token-Sheriff module archi
   `token-sheriff-client` module declares the dependency; it never reverses.
 * The HTTP edge (`token-sheriff-client-quarkus`, or a future RESTEasy / portal adapter) maps
   the engine's typed exceptions to `application/problem+json`
-  (xref:requirements.adoc#CLIENT-20[CLIENT-20], `COMMONS-10`).
+  (xref:requirements.adoc#CLIENT-20[CLIENT-20], `COMMONS-11`).
 
 NOTE: The Maven module (`token-sheriff-client`), the `token-sheriff-client-quarkus`
 extension, and the BOM/reactor assembly are in place. This document specifies the engine those
@@ -78,7 +78,7 @@ The engine owns three responsibilities and *delegates the rest*:
   xref:../commons/architecture.adoc[commons]-backed *validation* pipeline.
 
 | *Error rendering* — typed exceptions → `application/problem+json`.
-| Engine *throws* (`COMMONS-9`); the *HTTP edge renders* (`COMMONS-10`).
+| Engine *throws* (`COMMONS-10`); the *HTTP edge renders* (`COMMONS-11`).
 |===
 
 The seam is deliberately narrow: the engine is the *policy* layer (which parameters, which
@@ -132,7 +132,7 @@ choice*; it implements neither.
   (xref:#_owned_back_channel_http[]). It reuses commons' transport *primitives* (`HttpHandler`, TLS,
   the `de.cuioss.http.security` pipeline), not a commons transport *service*.
 * *Engine throws, edge renders*: the pure-Java engine throws commons typed exceptions
-  (`COMMONS-9`); only the HTTP edge produces problem+json (`CLIENT-20`, `COMMONS-10`).
+  (`COMMONS-10`); only the HTTP edge produces problem+json (`CLIENT-20`, `COMMONS-11`).
 * *Engine ≠ BFF*: the browser session / cookie layer is out of the engine entirely
   (`CLIENT-19`).
 

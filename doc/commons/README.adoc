@@ -67,13 +67,13 @@ xref:architecture.adoc[Architecture]).
 | Bibliography — transport / error-model standards new to commons, and those reused (cited, not restated) from the validation set.
 
 | xref:specification/transport.adoc[Spec — Transport]
-| The IdP endpoints, TLS / SSRF / resilience controls, caching, the bounded response-body handler, and the MockWebServer dispatcher artifact (`COMMONS-1`–`COMMONS-8`, `COMMONS-17`).
+| The IdP endpoints, TLS / SSRF / resilience controls, caching, the bounded response-body handler, and the MockWebServer dispatcher artifact (`COMMONS-1`–`COMMONS-9`).
 
 | xref:specification/error-model.adoc[Spec — Error model]
-| Typed exceptions → RFC 9457 at every HTTP edge; inbound IdP error normalization; the printable-ASCII escape (`COMMONS-9`–`COMMONS-12`, `COMMONS-16`).
+| Typed exceptions → RFC 9457 at every HTTP edge; inbound IdP error normalization; the printable-ASCII escape (`COMMONS-10`–`COMMONS-14`).
 
 | xref:specification/observability.adoc[Spec — Observability]
-| The security-event surface and the metric identifiers (`COMMONS-13`–`COMMONS-15`).
+| The security-event surface and the metric identifiers (`COMMONS-15`–`COMMONS-17`).
 |===
 
 == See also
