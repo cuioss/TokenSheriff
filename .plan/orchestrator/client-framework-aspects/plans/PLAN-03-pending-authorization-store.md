@@ -52,6 +52,15 @@ The source key is an input the application derives.
    BFF-20.
    - Skills: pm-documents:ref-asciidoc, pm-documents:ref-documentation
    - Persona: documenter
+5. **Complete the no-shim rule in `retrieval-flow.adoc`** (folded 2026-11-24 from PLAN-15's landing; the epic's
+   standing rule puts a residual into the staged plan that fits by content). PLAN-15 restored the general rule at
+   `doc/client/specification/retrieval-flow.adoc:154-159` but left out two decision points of the deleted ADR-0013
+   (read it at `66cecbf4^1`): "source compatibility is not the acceptance test" (a shim that recompiles every caller
+   leaves every caller's behaviour unexamined) and "a deprecation window would not narrow the exposure, only date
+   it". Add both, in the same section, in the document's own words. Do not revive ADR-0013 and do not reuse its
+   number (ADR-0032 is taken by PLAN-01; the next free number is the one after it).
+   - Skills: pm-documents:ref-documentation, pm-documents:ref-asciidoc
+   - Persona: documenter
 
 **Done when:**
 
@@ -59,6 +68,8 @@ The source key is an input the application derives.
   tests that fail at `9c242518` (the type does not exist there).
 - `./mvnw -pl token-sheriff-client -am verify` is green, including the JaCoCo gate.
 - CLIENT-31 is in `doc/client/requirements.adoc` with a test mapping.
+- `retrieval-flow.adoc` states that source compatibility is not the acceptance test for a shim, and that a
+  deprecation window only dates the exposure (neither is stated at `0545cffd`).
 - The pull request's open Sonar read at the head lists zero new-code issues and zero hotspots left to
   review, with the rules left open named. A failed read is recorded as `unknown`, never as `0`.
 
@@ -81,6 +92,7 @@ The source key is an input the application derives.
 - OBSERVED: Audit Notary bounds 10,000 total, 10 min, no per-source share, and frees the slot on PAR failure — read at `Audit-Notary/audit-notary/src/main/java/de/cuioss/notary/audit/security/LoginTransactions.java` § `MAX_PENDING` and `LoginService.java` § lines 134-150 (leaf report).
 - HYPOTHESIS: API Sheriff needs no release because it pushes PAR before storing — confirm/refute at `API-Sheriff/api-sheriff/src/main/java/de/cuioss/sheriff/gateway/bff/login/LoginFlow.java` § lines 157-167 (verify-at-outline); the `release` operation stays either way, because Audit Notary stores first.
 - HYPOTHESIS: `FlowContext` is runtime-initialized in native image and the new store type needs the same treatment — confirm/refute at `token-sheriff-client/src/main/resources/META-INF/native-image/de.cuioss.sheriff.token/token-sheriff-client/native-image.properties` § `--initialize-at-run-time` (verify-at-outline).
+- OBSERVED: `retrieval-flow.adoc:154-159` carries the refusal, the `@Deprecated` refusal and the scope limit, and neither "source compatibility is not the acceptance test" nor the deprecation-window rationale — read at `doc/client/specification/retrieval-flow.adoc:154-159` at `0545cffd`; ADR-0013 stated both as decision points 1 and 2, read at `doc/adr/0013-Reject_a_compatibility_shim_that_would_resurrect_a_removed_silent-drop_defect_class.adoc:39-40` at `66cecbf4^1` (orchestrator, 2026-11-24).
 - Verify-first clause: the defaults are ADR-0032's (PLAN-01). If PLAN-01 has not landed, stop and do not invent them.
 
 ## Expected Surface

@@ -1,0 +1,11 @@
+{
+  "id": "PLAN-15",
+  "slug": "plan-12-residual-fixes",
+  "workstream": "WS-05",
+  "status": "shipped",
+  "lane": "plan-marshall",
+  "plan_marshall_plan_id": "plan-15-plan-12-residual-fixes",
+  "pr": "954",
+  "landing": "landings/PLAN-15.md",
+  "seq": 15
+}

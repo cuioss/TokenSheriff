@@ -60,6 +60,19 @@ claims did not hold.
     appended after the renumbered sets, so "CLIENT-31..36" in these specs becomes "the next free ids".
   - Scope 2 buys nothing during WS-05: each of the three plans claims `doc/` and they run strictly in
     sequence.
+  - **PLAN-15 shipped as #954 (2026-11-24, `0545cffd`)**, before PLAN-13: it closed PLAN-12's layer-3 findings and
+    dispositioned the 23 CodeRabbit comments (16 files, no id change; the ADR set is unchanged at 17, next free
+    number 0032). It shares 15 files with PLAN-13 and 10 with PLAN-14, so PLAN-13's spec names it in `Depends on:`,
+    now satisfied. Order: PLAN-13 -> PLAN-14. Residual documentation defects are in Open Defects; they do not gate
+    PLAN-13, which changes ids only.
+  - **PLAN-12 shipped as #952 (2026-11-24, `66cecbf4`).** The ADR set is now 17 files (0001, 0003, 0006-0010,
+    0012, 0014, 0015, 0017, 0022, 0024, 0026, 0029-0031; the next free number stays 0032) and four Quarkus guides are
+    gone. Run `cleanup` before emitting PLAN-13 so the staged specs are re-grounded against the new layout.
+- **Residuals follow the standing rule in Decisions (2026-11-24).** PLAN-03 gained deliverable 5 (the no-shim
+  decision points in `retrieval-flow.adoc`) and PLAN-04 gained deliverable 6 (refresh-classification documentation;
+  ADR-0010 added to its surface). **PLAN-16** is the container for the validation, benchmarking and client-discovery
+  modules, 5 deliverables, `Depends on: PLAN-14`; it shares 8 files with PLAN-13 and 4 with PLAN-14, so it runs
+  after them, and shares only ADR-0017 with PLAN-01 (one file, not a block). Nothing else depends on it.
 - **PLAN-01:** docs-only; it settles the ADR. **Every Part B and Part C spec (PLAN-05 to PLAN-10)
   depends on it.** After it lands, re-ground those specs against the accepted ADR with `cleanup` before
   emitting them. The operator chose to stage everything now, knowing the ADR may reshape B and C.
@@ -163,6 +176,36 @@ claims did not hold.
     - PLAN-14: CLIENT, and the guard completed.
   - All 11 earlier specs now depend on PLAN-14. The mitigations are binding in PLAN-05 (ArchUnit,
     opt-in artifact) and PLAN-08 (CI scoping, a CI-time measurement).
+- 2026-11-24 — **Standing rule for residuals (operator): fold, and open a container only when nothing fits.**
+  A finding, declined review comment or follow-up a landing leaves behind (layer-2 and layer-3 findings of
+  `analyze`, and the follow-ups of a plan's finding message) goes into the staged plan that fits it BY CONTENT,
+  as a further deliverable, and the Expected Surface is updated in the same edit. Only when the fitting plan
+  would exceed 10 deliverables, or no staged plan fits, is a follow-up plan staged as the CONTAINER for the
+  module(s) concerned; later residuals of those modules are appended to that container until it reaches 10
+  deliverables. Details:
+  - A plan that only renumbers ids (PLAN-13, PLAN-14) is never a host; "only ids change" is its constraint.
+  - A residual that reverses a decision the operator accepted is a Watch, never a deliverable.
+  - A layer-3 defect is still reported to the operator at once and is never fixed inline. This rule decides WHERE a
+    residual goes, not WHETHER it is staged: that stays the operator's word, and the rule was given for PLAN-15's
+    residuals first.
+  - First application, PLAN-15's landing (`landings/PLAN-15.md`): refresh-classification documentation (the
+    `RefreshFlow.classify` domain, the refusal-kind table, ADR-0010's nonce-retry conditions) folded into PLAN-04
+    as deliverable 6, with ADR-0010 added to its surface; the missing no-shim decision points folded into PLAN-03
+    as deliverable 5 (`retrieval-flow.adoc` was already in its surface); everything else — validation cache and
+    architecture text, ADR-0017, benchmarking documentation and runner, the `DiscoveryResolver` endpoint set — no
+    staged plan fits, so PLAN-16 is the container for the validation, benchmarking and client-discovery modules,
+    5 deliverables, after PLAN-14. Largest staged plan now: PLAN-04, 6 deliverables.
+- 2026-11-24 — **plan-marshall candidate lessons are routed to the plan-marshall repository (operator).** This
+  repository's lessons store refuses bundle-prefixed `plan-marshall:*` lessons (`wrong_store`), so the 12 held
+  messages were filed into `/home/oliver/git/plan-marshall`'s `lessons-routing` inbox through that repository's own
+  `inbox write` (sender type `orchestrator`, sender `client-framework-aspects`, kind `candidate-lesson`), as
+  `client-framework-aspects-001` to `-012`, all valid and queued. Mapping: PLAN-12 `-001`..`-005` -> `-001`..`-005`;
+  PLAN-12 `-007` -> `-006`; PLAN-12 `-008` -> `-007`; PLAN-15 `-002`..`-006` -> `-008`..`-012`. The originals are
+  archived here. PLAN-12 `-006` stays folded into lesson `2026-11-21-13-003` (this store). Two notes were added in
+  transit: the orchestrator's verification of the `--changed-paths-file` drift (PLAN-12 `-007`) and the
+  cross-reference to it from PLAN-15 `-005`. The files sit uncommitted in that repository's ledger worktree and
+  reach its `main` through that repository's own `land`; the `--allow-foreign-store` override was never used. Standing
+  rule: a candidate lesson naming a bundle this repository does not own is routed this way, not held.
 
 ## Consumer hand-off notes
 
@@ -213,10 +256,59 @@ Nothing here is staged. Each note goes to the consumer's own repository once the
 
 ## Open Defects
 
-- None owned yet.
+- **Incomplete landing: `plan-12-documentation-review-consolidation-009.md`** (PLAN-12, 2026-11-24).
+  `inbox landing-check` reported `complete: false`; missing keys: `unresolved_review_threads`,
+  `review_body_findings_total`, `review_body_findings_handled`, `sonar_open_new_issues` (all `unknown`).
+  The landing was reconciled as far as it goes. Re-reads at analysis (`review-gate`: `undecidable_read` on the
+  23-comment CodeRabbit body; Sonar `read_open_issues`: `undecidable`, `head_revision_unavailable`) are
+  `unknown` as well, so the figures stay unmeasured; the Done-when "zero Sonar issues and hotspots" is not
+  evidenced.
+- **PLAN-12's layer-3 findings are closed by PLAN-15** (shipped as #954, `0545cffd`, 2026-11-24;
+  `landings/PLAN-15.md`): the `AccessTokenCache` Javadoc, ADR-0013's general rule (restored at
+  `retrieval-flow.adoc:154-159`, thinner than the ADR, see below), ADR-0010's `supersedes` line, and the advisory
+  leftovers. The Sonar and review-body numbers of PLAN-12 stay `unknown` (entry above).
+- **PLAN-15 residual documentation defects** (2026-11-24; `landings/PLAN-15.md`; none fixed inline; staged by the
+  operator's direction under the standing residual rule in Decisions; retire each item when its plan lands):
+  - Destinations: L3-1, L3-2, L3-4, L3-5 and L2-2 -> PLAN-16 (deliverables 1-3); L3-3 -> PLAN-04 (deliverable 6);
+    L2-1 -> PLAN-03 (deliverable 5).
+  - L3-1 `AccessTokenCache.java:44-45` and `:70` keep "raw token verification on cache hits" and "verifies token
+    content on each hit", which describe only the hash-collision guard and read as a signature guarantee.
+  - L3-2 `doc/validation/architecture.adoc:36`: "the window ends when the token expires or is evicted" omits maximum
+    token age and DPoP or custom-rule rejection.
+  - L3-3 ADR-0010 `:63-66`: the DPoP nonce retry is stated without its conditions (DPoP sender constraint, non-blank
+    clean header, never after `invalid_scope`; `TokenEndpointClient.java:253-265`, `:592-599`).
+  - L3-4 `doc/validation/architecture.adoc:262` (and the `maxPayloadSize` table row): "bounds token parts only"
+    contradicts `security-settings.adoc:56`.
+  - L3-5 ADR-0017 `:21-27`: one run-on em-dash sentence.
+  - L2-1 `retrieval-flow.adoc:154-159` omits two decision points of the deleted ADR-0013: "source compatibility is
+    not the acceptance test" and "a deprecation window only dates the exposure".
+  - L2-2 `benchmarking/doc/local-testing.adoc:28-33`: the new path sits below a Quick Start that already does
+    `cd benchmarking/scripts`.
+  - Not shown by reading: the Asciidoctor render of the `token-type-validation-rfc-9068` anchor.
+- **PLAN-15 finding `-001`, archived** (declined review comments and code-side follow-ups; the decline was
+  procedural, because the files lie outside PLAN-15's Expected Surface, and each still applies at HEAD).
+  Destinations: `token-handling.adoc` x2 -> PLAN-04 (deliverable 6); `performance-scoring.adoc:136`,
+  `benchmarking/README.adoc:43`, `JfrBenchmarkRunner` and `DiscoveryResolver` -> PLAN-16 (deliverables 3-5); the
+  ADR-0031 item -> Watch below:
+  - `doc/client/specification/token-handling.adoc:114-115` (verifier refusals belong in the documented domain of
+    `RefreshFlow.classify`; line 114 still says "exactly two sources") and `:118-120` (the refusal-kind table
+    hardcodes four kinds with no control against `RefreshFailureClassification.Kind`).
+  - `benchmarking/doc/performance-scoring.adoc:136` (the claim that one anomalous run does not flip the trend).
+  - `benchmarking/README.adoc:43` (`serve-reports.sh library` shown as the way to view `benchmark-jfr` results; the
+    script has no JFR target).
+  - Product-code follow-ups, never hosted by PLAN-13 or PLAN-14: the ADR-0031
+    deployment scope check evaluates a default method's scopes alone, not the merged set; `JfrBenchmarkRunner
+    .createConfiguration()` overrides the `jmh.*` values with fixed ones; `DiscoveryResolver.validateEndpointSchemes`
+    lists the HTTPS-checked endpoints by hand.
 
 ## Watches
 
+- **ADR-0031 deployment scope check on interface default methods** (2026-11-24, from PLAN-15's finding `-001`): the
+  check evaluates a default method's scopes on their own, so a merged set (class-level `@BearerAuth` plus the
+  inherited default method) over the 64-scope limit fails at request time with a 500 instead of at deployment.
+  `doc/adr/0031-...adoc:48` records this limit as ACCEPTED BY THE OPERATOR, so extending the check reverses an
+  accepted decision and is not a residual: it is not staged. Re-open only if the operator reverses the limit;
+  then it belongs to a plan for `token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/`.
 - **pm-mcp-clients / plan-marshall-mcp L-2** (`plan-marshall-documentation/doc/later-improvements.adoc`):
   OAuth for the web adapter, with BFF versus a token-mediating backend still undecided. Two things to
   re-check: the BFF branch would make it a third consumer of Part C, and the daemon side needs
