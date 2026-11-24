@@ -71,7 +71,7 @@ Algorithm upgrades without breaking changes via `SignatureAlgorithmPreferences`.
 [[signature-only-verification]]
 === Signature-Only Verification
 
-_See Requirement xref:requirements.adoc#VALIDATION-13.1[VALIDATION-13.1: Signature-Only Verification]_
+_See Requirement xref:requirements.adoc#VALIDATION-10.1[VALIDATION-10.1: Signature-Only Verification]_
 
 WARNING: `TokenValidator.verifySignature(String)` reaches *no claim verdict*. Its `SignatureVerifiedToken` is not an authentication decision. It establishes only that the token is within the token string limits, was signed by a key of an enabled issuer whose JWKS loader is healthy, and passes the header checks for algorithm, key ID and embedded JWK. The token may be expired, issued for another audience, lack `sub` or `azp`, or be of any token type. The issuer's configured expected token type is *not* checked: the `typ` header is returned verbatim, and judging it is the caller's job.
 
@@ -84,7 +84,7 @@ The claims are mapped after the signature check. A value a claim mapper fails on
 [[logout-token-validation]]
 === Logout Token Validation
 
-_See Requirement xref:requirements.adoc#VALIDATION-13.4[VALIDATION-13.4: Logout Token Validation]_
+_See Requirement xref:requirements.adoc#VALIDATION-10.4[VALIDATION-10.4: Logout Token Validation]_
 
 `LogoutTokenValidator` validates a logout token of https://openid.net/specs/openid-connect-backchannel-1_0.html[OpenID Connect Back-Channel Logout 1.0] on top of the xref:#signature-only-verification[signature-only entry]. It runs these checks in a fixed order and refuses the token with the first `LogoutTokenCheck` that fails:
 
@@ -123,7 +123,7 @@ The validator does not log and the refusal carries no text taken from the token,
 [[logout-replay-guard]]
 === Logout Replay Guard
 
-_See Requirement xref:requirements.adoc#VALIDATION-13.5[VALIDATION-13.5: Logout Token Replay Guard]_
+_See Requirement xref:requirements.adoc#VALIDATION-10.5[VALIDATION-10.5: Logout Token Replay Guard]_
 
 `LogoutTokenReplayGuard` keeps the SHA-256 digest of each admitted `jti`, never the `jti` itself, until `iat` plus the freshness window. A token is not accepted after that instant anyway, because the `ISSUED_AT` check refuses it, so the retention covers exactly the period in which a replay could otherwise succeed. A `jti` still retained is refused as `REPLAYED`.
 

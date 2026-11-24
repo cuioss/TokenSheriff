@@ -7,8 +7,7 @@
 
 == Overview
 
-_Realizes xref:../requirements.adoc#COMMONS-9[COMMONS-9]–xref:../requirements.adoc#COMMONS-12[COMMONS-12]
-and xref:../requirements.adoc#COMMONS-16[COMMONS-16].
+_Realizes xref:../requirements.adoc#COMMONS-10[COMMONS-10]–xref:../requirements.adoc#COMMONS-14[COMMONS-14].
 See xref:../threat-model.adoc#T-LEAK[T-LEAK]._
 
 The error model splits cleanly by layer: *libraries throw typed exceptions*; *HTTP edges
@@ -23,13 +22,13 @@ the inbound normalization of IdP error responses; each edge owns its RFC 9457 ma
 
 | *Libraries* — `commons` + `validation` packages, the client engine (pure Java)
 | Throw a *typed exception hierarchy* defined in `commons.error`. They MUST NOT produce HTTP
-  problem documents — that is not their layer (xref:../requirements.adoc#COMMONS-9[COMMONS-9]).
+  problem documents — that is not their layer (xref:../requirements.adoc#COMMONS-10[COMMONS-10]).
 
 | *HTTP edges* — `token-sheriff-validation-quarkus`, `token-sheriff-client-quarkus`, and any
   future non-Quarkus / RESTEasy edge (e.g. a portal adapter)
 | MUST map those exceptions to `application/problem+json` per
   https://www.rfc-editor.org/rfc/rfc9457[RFC 9457], without leaking internal detail
-  (xref:../requirements.adoc#COMMONS-10[COMMONS-10], xref:../requirements.adoc#COMMONS-12[COMMONS-12]),
+  (xref:../requirements.adoc#COMMONS-11[COMMONS-11], xref:../requirements.adoc#COMMONS-13[COMMONS-13]),
   validation rejection responses included.
 |===
 
@@ -62,7 +61,7 @@ Each edge maps the typed exception to a problem document:
 
 A problem document carries `type`, `title`, `status`, and a *safe* `detail`. It MUST NOT
 carry stack traces, internal identifiers, upstream URLs, or credential material
-(xref:../requirements.adoc#COMMONS-12[COMMONS-12], mitigating xref:../threat-model.adoc#T-LEAK[T-LEAK]).
+(xref:../requirements.adoc#COMMONS-13[COMMONS-13], mitigating xref:../threat-model.adoc#T-LEAK[T-LEAK]).
 
 Because every rendered member is a fixed, per-category constant (no request or exception
 data is interpolated), the `validation-quarkus` edge builds the document from constant
@@ -81,14 +80,14 @@ switch to a serialized DTO with proper JSON escaping rather than string concaten
 }
 ----
 
-== Inbound IdP error normalization (COMMONS-11)
+== Inbound IdP error normalization (COMMONS-12)
 
 Commons normalizes inbound OAuth error responses (`error` / `error_description`, RFC 6749
 §5.2) into the same typed model the edges render — *one contract, both directions*. The
 raw upstream error is never passed through to the caller verbatim.
 
 [#printable_ascii_escape]
-== Printable-ASCII escape form (COMMONS-16)
+== Printable-ASCII escape form (COMMONS-14)
 
 `ErrorTextSanitizer` is the one sanitiser of untrusted text
 (xref:../../adr/0022-A_flow_context_is_single-use_and_untrusted_text_is_sanitised_by_one_commons-layer_utility.adoc[ADR-0022]).

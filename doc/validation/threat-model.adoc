@@ -202,7 +202,7 @@ _See Requirement xref:requirements.adoc#VALIDATION-8.3[VALIDATION-8.3: Secure Co
 
 === Denial of Service
 
-_See Requirements xref:requirements.adoc#VALIDATION-8.1[VALIDATION-8.1: Token Size Limits] and xref:requirements.adoc#VALIDATION-9[VALIDATION-9: Performance]_
+_See Requirements xref:requirements.adoc#VALIDATION-8.1[VALIDATION-8.1: Token Size Limits] and xref:requirements.adoc#VALIDATION-12[VALIDATION-12: Performance]_
 
 ==== Threats and Mitigations
 
@@ -355,7 +355,7 @@ _See Requirement xref:requirements.adoc#VALIDATION-8.7[VALIDATION-8.7: DPoP Send
 
 === Public Seams and Back-Channel Logout Threats
 
-_See Requirement xref:requirements.adoc#VALIDATION-13[VALIDATION-13: Public Validation Seams and Back-Channel Logout]_
+_See Requirement xref:requirements.adoc#VALIDATION-10[VALIDATION-10: Public Validation Seams and Back-Channel Logout]_
 
 ==== Threats and Mitigations
 

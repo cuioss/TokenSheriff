@@ -80,8 +80,8 @@ xref:../commons/specification/transport.adoc#bounded_response_body[Transport spe
 
 * xref:0001-Validation_and_Client_Module_Split_with_a_Commons_Base_Layer.adoc[ADR-0001] — the commons base
   layer
-* xref:../validation/requirements.adoc#VALIDATION-14[VALIDATION-14],
-  xref:../commons/requirements.adoc#COMMONS-16[COMMONS-16] and
-  xref:../commons/requirements.adoc#COMMONS-17[COMMONS-17]
+* xref:../validation/requirements.adoc#VALIDATION-11[VALIDATION-11],
+  xref:../commons/requirements.adoc#COMMONS-14[COMMONS-14] and
+  xref:../commons/requirements.adoc#COMMONS-5[COMMONS-5]
 * `token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/flow/InsufficientScopeChallengeRoundTripTest.java`
   — the builder and parser round trip

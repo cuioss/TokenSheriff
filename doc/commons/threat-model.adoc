@@ -64,7 +64,7 @@ TLS paths are held to the requirements below.
 | Validate the advertised `issuer` against the configured issuer; treat every advertised
   URL as untrusted input and subject it to T-SSRF controls before use.
 | https://www.rfc-editor.org/rfc/rfc8414[RFC 8414 §3.3], https://openid.net/specs/openid-connect-discovery-1_0.html[OIDC Discovery 1.0 §4.3]
-| xref:requirements.adoc#COMMONS-5[COMMONS-5]
+| xref:requirements.adoc#COMMONS-6[COMMONS-6]
 
 | [[T-TLS]]T-TLS
 | *TLS downgrade / MITM on any IdP fetch.* Downgrade to plaintext or a forged certificate
@@ -98,7 +98,7 @@ TLS paths are held to the requirements below.
   problem documents carrying a safe `type` / `title` / `detail`, never stack traces or
   internal identifiers. Inbound IdP errors are normalized, not passed through verbatim.
 | https://www.rfc-editor.org/rfc/rfc9457#section-3[RFC 9457 §3], https://www.rfc-editor.org/rfc/rfc9700[RFC 9700 §4]
-| xref:requirements.adoc#COMMONS-9[COMMONS-9], xref:requirements.adoc#COMMONS-10[COMMONS-10], xref:requirements.adoc#COMMONS-11[COMMONS-11], xref:requirements.adoc#COMMONS-12[COMMONS-12]
+| xref:requirements.adoc#COMMONS-10[COMMONS-10], xref:requirements.adoc#COMMONS-11[COMMONS-11], xref:requirements.adoc#COMMONS-12[COMMONS-12], xref:requirements.adoc#COMMONS-13[COMMONS-13]
 |===
 
 [#_residual_risks]

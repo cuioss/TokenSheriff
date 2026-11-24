@@ -7,7 +7,7 @@
 
 == Overview
 
-_Realizes xref:../requirements.adoc#COMMONS-13[COMMONS-13]–xref:../requirements.adoc#COMMONS-15[COMMONS-15]._
+_Realizes xref:../requirements.adoc#COMMONS-15[COMMONS-15]–xref:../requirements.adoc#COMMONS-17[COMMONS-17]._
 
 Observability in commons is two things: the *security-event surface* (`commons.events`) and
 the *metric identifiers* (`commons.metrics`). Both are defined once, carry no Micrometer
@@ -16,14 +16,14 @@ dependency, and are wired to Micrometer by each Quarkus extension.
 == Security events (`commons.events`)
 
 `SecurityEventCounter` and the security-event types live in `commons.events` so validation
-and the client share one event surface (xref:../requirements.adoc#COMMONS-13[COMMONS-13]).
+and the client share one event surface (xref:../requirements.adoc#COMMONS-15[COMMONS-15]).
 
 * `SecurityEventCounter` — a thread-safe, highly concurrent counter keyed by event type; no
   Micrometer dependency (so the base layer stays dependency-light).
 * `SecurityEventCounter.EventType` — the enumerated events, each carrying an
   `EventCategory`.
 * `EventCategory` — `INVALID_STRUCTURE`, `INVALID_SIGNATURE`, `SEMANTIC_ISSUES` — usable by
-  an edge to choose a response (xref:../requirements.adoc#COMMONS-14[COMMONS-14]).
+  an edge to choose a response (xref:../requirements.adoc#COMMONS-16[COMMONS-16]).
 
 Because commons must not depend on validation (the
 xref:../architecture.adoc#archunit[ArchUnit boundary]), the event types carry *no compile
@@ -36,7 +36,7 @@ The Quarkus extensions expose the counter.
 == Metric identifiers (`commons.metrics`)
 
 Metric identifiers / contracts under the `sheriff.token.*` namespace are defined once in
-`commons.metrics` (xref:../requirements.adoc#COMMONS-15[COMMONS-15]). The identifiers are
+`commons.metrics` (xref:../requirements.adoc#COMMONS-17[COMMONS-17]). The identifiers are
 plain constants / descriptors with no Micrometer dependency; each Quarkus extension binds
 them to a `MeterRegistry`.
 

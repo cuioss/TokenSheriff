@@ -131,7 +131,7 @@ declares that test-jar dependency (`classifier` `generators`, `scope` `test`) an
 * the OP-endpoint dispatchers the engine actually calls — `TokenDispatcher`,
   `UserInfoDispatcher` and `ParDispatcher`
   (xref:../../commons/specification/transport.adoc#adversarial_dispatchers[commons transport
-  spec], `COMMONS-7`). The artifact's `RevocationDispatcher`, `IntrospectionDispatcher` and
+  spec], `COMMONS-8`). The artifact's `RevocationDispatcher`, `IntrospectionDispatcher` and
   `EndSessionDispatcher` are not used by the client tests: the revocation tests declare a
   dispatcher of their own, the engine implements no introspection flow, and it builds the
   end-session redirect without making an HTTP call;
@@ -282,7 +282,7 @@ maintained upstream.
 NOTE: The unit layer does *not* re-test what other modules own — signature / algorithm policy
 and claim trust are the xref:../../validation/requirements.adoc[validation] pipeline's
 (`VALIDATION-*`), and the low-level TLS / transport *primitives* are `cui-http`'s
-(`COMMONS-1`–`COMMONS-8`); the client tests assert it *invokes* those and reacts correctly. The
+(`COMMONS-1`–`COMMONS-9`); the client tests assert it *invokes* those and reacts correctly. The
 engine's *own* back-channel egress control, however — advertised-URL path validation, scheme /
 TLS refusal, and the bounded response read (xref:../architecture.adoc#_owned_back_channel_http[owned
 back-channel HTTP]) — is in-module and *is* tested here (an attack-database drive of the
