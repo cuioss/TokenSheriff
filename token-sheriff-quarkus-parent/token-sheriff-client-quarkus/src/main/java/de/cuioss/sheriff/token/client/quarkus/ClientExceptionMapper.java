@@ -23,7 +23,7 @@ import jakarta.ws.rs.ext.Provider;
 /**
  * Maps the client engine's outbound {@link TransportException} to {@code application/problem+json}
  * per <a href="https://www.rfc-editor.org/rfc/rfc9457">RFC 9457</a> at the Quarkus HTTP edge
- * ({@code CLIENT-20}, {@code COMMONS-10}).
+ * ({@code CLIENT-20}, {@code COMMONS-11}).
  * <p>
  * The pure-Java client engine ({@code token-sheriff-client}) throws typed exceptions only and renders
  * no problem document itself ({@code CLIENT-21}); this edge mapper is the client-quarkus realization
