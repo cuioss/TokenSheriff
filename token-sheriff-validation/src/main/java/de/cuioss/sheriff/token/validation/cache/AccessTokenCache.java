@@ -41,8 +41,8 @@ import java.util.concurrent.TimeUnit;
  * Thread-safe cache for validated access tokens using optimistic caching strategy.
  * <p>
  * This cache stores successfully validated access tokens to avoid redundant validation
- * of the same tokens. It uses integer hashCode for cache keys to optimize performance
- * while maintaining security through raw token verification on cache hits.
+ * of the same tokens. It keys entries on the SHA-256 digest of the token to optimize
+ * performance while maintaining security through raw token verification on cache hits.
  * <p>
  * Features:
  * <ul>
@@ -60,9 +60,12 @@ import java.util.concurrent.TimeUnit;
  * clock skew tolerance and maximum token age, taken from the per-issuer
  * {@link ValidationContext} passed to {@link #put}. Every cache hit re-applies that issuer's
  * expiry and maximum token age, and the validation pipeline re-checks the status of the
- * issuer's JWKS loader. A hit does not verify the signature again, however: a token whose
- * signing key has left the loader's key sets stays accepted from the cache, while an uncached
- * validation of the same token rejects it, until the token expires or is evicted.
+ * issuer's JWKS loader and then runs the DPoP proof and custom validation rules. A hit does not
+ * verify the signature again, however: a token whose signing key has left the loader's key sets
+ * can stay accepted from the cache, while an uncached validation of the same token rejects it,
+ * for as long as those other checks pass. The hit ends when the token expires, when it reaches
+ * its issuer's maximum token age (the entry is then removed and the hit is rejected), when a
+ * DPoP or custom rule rejects it, or when it is evicted.
  * <p>
  * The cache verifies token content on each hit to handle potential hash collisions.
  * JWTs self-expire via their exp claim, reducing need for complex eviction strategies.

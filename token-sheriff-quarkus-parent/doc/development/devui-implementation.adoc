@@ -170,12 +170,18 @@ e-2-e-playwright/
     └── test-fixtures.js                       # Shared test fixtures
 ----
 
-Run from `token-sheriff-quarkus-parent/`:
+Run from `token-sheriff-quarkus-parent/`. Start only the `keycloak` service: a plain `up -d` also starts
+the `token-sheriff-integration-tests` service, whose image build copies a prebuilt native runner that this
+procedure does not build. `quarkus:dev` stays in the foreground, so keep it running in the first terminal
+and run Playwright in a second one:
 
 [source,bash]
 ----
-docker compose -f token-sheriff-quarkus-integration-tests/docker-compose.yml up -d
+# Terminal 1
+docker compose -f token-sheriff-quarkus-integration-tests/docker-compose.yml up -d keycloak
 ../mvnw -f token-sheriff-quarkus-integration-tests/pom.xml quarkus:dev
+
+# Terminal 2
 cd e-2-e-playwright && npx playwright test
 ----
 

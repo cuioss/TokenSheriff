@@ -492,8 +492,8 @@ xref:../client/specification/test-strategy.adoc[Client test strategy] § Coverag
 [#integration-test-skip-binding]
 === Integration-test skip binding in `token-sheriff-client`
 
-The Failsafe tier of `token-sheriff-client` is switched off by binding its own skip property to
-`skipTests` in the POM `<properties>` — `<ownSkipProperty>${skipTests}</ownSkipProperty>` — with an
+The Failsafe tier of `token-sheriff-client` is switched off by binding Failsafe's skip property
+`skipITs` to `skipTests` in the POM `<properties>` — `<skipITs>${skipTests}</skipITs>` — with an
 explicit literal default `<skipTests>false</skipTests>`; never in the Failsafe `<configuration>` block.
 A `<properties>` default yields to a command-line `-D` of the same key, a `<configuration>` value does
 not, and some Failsafe versions do not treat their skip property as an alias of `skipTests`. The
@@ -502,13 +502,13 @@ exception is `token-sheriff-quarkus-integration-tests`: its `skipITs` defaults t
 binding sits inside the Failsafe `<configuration>` of each profile. In `token-sheriff-client` the
 binding keeps three lanes correct:
 
-* `-DskipTests`: the module's own flag interpolates to the same value, the integration-test JVM never
+* `-DskipTests`: `skipITs` interpolates to the same value, the integration-test JVM never
   starts and writes no coverage data, so on a clean build a downstream coverage gate sees honestly
   absent data (a stale `target/jacoco.exec` from an earlier run survives `verify -DskipTests`).
-* An explicit `-D` of the module's own skip property: wins over the property default, so the
+* An explicit `-DskipITs`: wins over the property default, so the
   integration tier alone can be forced on or off; the gate is then graded on unit coverage only.
-* Neither flag: both properties keep their literal defaults, the tier runs and every coverage gate is
-  enforced.
+* Neither flag: `skipTests` keeps its literal default `false` and `skipITs` interpolates to it, the tier
+  runs and every coverage gate is enforced.
 
 [#integration-tests]
 == Integration-test specifications

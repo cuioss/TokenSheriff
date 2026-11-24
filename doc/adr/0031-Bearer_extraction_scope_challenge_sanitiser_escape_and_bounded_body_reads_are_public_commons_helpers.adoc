@@ -47,7 +47,7 @@ built, through the same challenge builder the producer uses, merged per bean cla
 merges them at run time (xref:0024-The_bearer-token_interceptor_reads_its_class-level_binding_from_the_bean_class_not_the_ArC_subclass.adoc[ADR-0024]).
 Two limits are accepted by the operator: an interface default method is checked on its own, and an
 override of a generic base method is found by name and parameter types only. A set the check misses is
-answered 500 on the request path. The `error_description` grammar stays the RFC 9110 quoted string, and
+answered 500 on the request path of a request whose validated token lacks one of its scopes. The `error_description` grammar stays the RFC 9110 quoted string, and
 both helpers bound their own work on hostile input.
 
 Rejected: keeping the helpers private (the copies had already diverged); exact scheme matching (refuses
@@ -62,7 +62,9 @@ two aligned body handlers (the client already depends on the commons layer, and 
   with an internal space or control character is answered 400 `INVALID_REQUEST`; an out-of-grammar scope,
   more than 64 scopes, or a challenge over 8192 characters fails the deployment, within the two limits of
   the amendment above (an interface default method is checked on its own, so a merged set over the limit
-  passes the deployment and is answered 500 at request time); the client's back-channel
+  passes the deployment; at request time only a request whose validated token lacks a required scope of
+  that set is answered 500, because the challenge is built only then — a request without a token is
+  answered 401 and a fully authorized request proceeds); the client's back-channel
   reads refuse an over-advertised `Content-Length` before reading and use the validation failure message.
 * The public API of the validation module grew by three classes and one method; a `TRUNCATE` caller must
   read `BoundedBody.truncated()`.
