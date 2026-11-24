@@ -4,8 +4,10 @@
 
 ## START HERE
 
-**Resume anchor**: PLAN-12 (#952) and PLAN-15 (#954) shipped and reconciled. Emitted PLAN-13 (renumber COMMONS and VALIDATION), awaiting operator-confirmed launch; then PLAN-14, then PLAN-16 (module residuals container). Residuals follow the standing rule (fold by content, container only when full or nothing fits): PLAN-03 deliverable 5, PLAN-04 deliverable 6, PLAN-16. The 12 held plan-marshall candidate lessons were routed to the plan-marshall repository's lessons-routing inbox (client-framework-aspects-001..012, uncommitted in that repo's ledger worktree). Ledger land PR #953 is stuck on build / conclusion; the PLAN-15 reconciliation, PLAN-13 emit, residual staging and lesson routing need the next land. After PLAN-14: /plan-orchestrator cleanup to re-ground PLAN-01..11.
+**Resume anchor**: PLAN-13 (renumber COMMONS and VALIDATION) is RUNNING in a plan-marshall session; its worktree holds the renumbering, the ledger is untouched by it. On its landing message (inbox, kind landing): run /plan-orchestrator analyze (full ship; stamp pr, landing, plan_marshall_plan_id), then /plan-orchestrator land, then next -> PLAN-14 (renumber CLIENT, completes the guard), then PLAN-16 (module residuals container). PLAN-15 and PLAN-12 are shipped and reconciled; PLAN-03 deliverable 5, PLAN-04 deliverable 6 and PLAN-16 hold their residuals (standing rule in epic.md Decisions). 12 plan-marshall candidate lessons were routed to the plan-marshall repository's lessons-routing inbox (client-framework-aspects-001..012; they land with that repo's own land). Open: nothing owed by the operator. After PLAN-14: /plan-orchestrator cleanup to re-ground PLAN-01..11 (ids and doc paths move).
 **Phase**: orchestrating
+**Running**:
+- PLAN-13 (WS-05)
 **Queue** (staged, in order):
 1. PLAN-01 (WS-01)
 2. PLAN-02 (WS-02)
@@ -18,9 +20,8 @@
 9. PLAN-09 (WS-04)
 10. PLAN-10 (WS-04)
 11. PLAN-11 (WS-02)
-12. PLAN-13 (WS-05)
-13. PLAN-14 (WS-05)
-14. PLAN-16 (WS-05)
+12. PLAN-14 (WS-05)
+13. PLAN-16 (WS-05)
 - PLAN-12 (WS-05) — plan=plan-12-documentation-review-consolidation — PR 952 — landing=landings/PLAN-12.md — status: shipped
 - PLAN-15 (WS-05) — plan=plan-15-plan-12-residual-fixes — PR 954 — landing=landings/PLAN-15.md — status: shipped
 
@@ -39,6 +40,6 @@
 | 9 | PLAN-09 | WS-04 | staged | doc/bff/; doc/developer/test-impl-mapping.adoc; token-sheriff-quarkus-parent/token-sheriff-bff-quarkus-deployment/; token-sheriff-quarkus-parent/token-sheriff-bff-quarkus/ | plan-marshall |
 | 10 | PLAN-10 | WS-04 | staged | doc/README.adoc; doc/bff/; token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/ | plan-marshall |
 | 11 | PLAN-11 | WS-02 | staged | doc/client/requirements.adoc; doc/client/specification/retrieval-flow.adoc; doc/client/specification/token-handling.adoc; doc/developer/test-impl-mapping.adoc; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/config/ClientConfiguration.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/AuthorizationRequestBuilder.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/AuthorizationRequestOptions.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/ClientCredentialsFlow.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/ParClient.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/RefreshFlow.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/TokenEndpointClient.java; token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/flow/; token-sheriff-quarkus-parent/token-sheriff-client-quarkus/src/main/java/de/cuioss/sheriff/token/client/quarkus/config/ClientConfigMapper.java; token-sheriff-quarkus-parent/token-sheriff-client-quarkus/src/main/java/de/cuioss/sheriff/token/client/quarkus/config/ClientRuntimeConfig.java | plan-marshall |
-| 12 | PLAN-13 | WS-05 | staged | benchmarking/README.adoc; benchmarking/doc/; doc/; token-sheriff-quarkus-parent/doc/; token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/; token-sheriff-validation/ | plan-marshall |
+| 12 | PLAN-13 | WS-05 | running | benchmarking/README.adoc; benchmarking/doc/; doc/; token-sheriff-quarkus-parent/doc/; token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/; token-sheriff-validation/ | plan-marshall |
 | 13 | PLAN-14 | WS-05 | staged | doc/; token-sheriff-client/; token-sheriff-quarkus-parent/doc/; token-sheriff-quarkus-parent/token-sheriff-client-quarkus-deployment/; token-sheriff-quarkus-parent/token-sheriff-client-quarkus/; token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/ | plan-marshall |
 | 14 | PLAN-16 | WS-05 | staged | benchmarking/README.adoc; benchmarking/benchmark-core/src/main/java/de/cuioss/sheriff/token/validation/benchmark/JfrBenchmarkRunner.java; benchmarking/benchmark-core/src/test/java/; benchmarking/doc/JFR-Instrumentation.adoc; benchmarking/doc/local-testing.adoc; benchmarking/doc/performance-scoring.adoc; doc/adr/0017-A_JWKS_loader_reports_OK_only_with_usable_keys_and_retries_only_transient_discovery_failures.adoc; doc/validation/architecture.adoc; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/discovery/DiscoveryResolver.java; token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/discovery/; token-sheriff-validation/doc/configuration/security-settings.adoc; token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/cache/AccessTokenCache.java | plan-marshall |
