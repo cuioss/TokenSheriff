@@ -352,7 +352,7 @@ class RequirementIdIntegrityTest {
 
     @Test
     @DisplayName("The repository root resolves from the repository root and from a module directory")
-    void repositoryRootResolvesFromModuleAndRoot(@TempDir Path temporary) throws IOException {
+    void repositoryRootResolvesFromModuleAndRoot(@TempDir Path temporary) throws Exception {
         Path root = temporary.resolve("repository");
         Path module = root.resolve("some-module");
         Files.createDirectories(module);
