@@ -97,7 +97,8 @@ that the discovery document advertises must be `https` too; a non-`https` value 
 
 * The checked set is the endpoint map built by `DiscoveryResolver.validateEndpointSchemes`; an
   advertised field outside it is neither read nor checked, and a field the client starts to call must
-  join it.
+  join it. The map is a hand-maintained list that mirrors the URL-valued endpoint fields of
+  `ProviderMetadata`; no build-time control enforces that the two stay in sync.
 * An absent endpoint is fine; a present value that is not an `https` URL, including a blank one, is a
   violation.
 * The refusal names the endpoint label only; the advertised URL is untrusted content and is not echoed.
@@ -384,8 +385,10 @@ token endpoint client through its own send; both wait on `HttpClient.sendAsync` 
   for a request the client refuses before sending, is a request-side fault and reaches the caller as
   thrown.
 
-The wait has no bound of its own; the request timeout and the size ceiling of
-xref:#resilience_bounds[] bound it. The validation-side discovery and JWKS reads hand the handler to
+The wait has no bound of its own. Of the bounds in xref:#resilience_bounds[], the request timeout bounds
+the wait for the response headers and the size ceiling bounds the size of the body; a server that stalls
+after sending the headers is not bounded on a JDK whose request timeout does not cover the body read.
+The validation-side discovery and JWKS reads hand the handler to
 cui-http, whose adapter performs the send, so this repository has no send call there to map. A caller
 therefore treats the message of any exception that comes out of an HTTP exchange as remote content and
 sanitises it before logging.

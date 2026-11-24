@@ -102,19 +102,14 @@ Open `target/benchmark-jfr-results/jfr-benchmark.jfr` and filter the Event Brows
 
 == Configuration
 
-The `benchmark-jfr` profile runs `de.cuioss.sheriff.token.validation.benchmark.JfrBenchmarkRunner`, which selects the benchmarks in the `...benchmark.jfr.benchmarks` package (`CoreJfrBenchmark`, `ErrorJfrBenchmark`, `MixedJfrBenchmark`) and starts the forked JVM with `-XX:StartFlightRecording=...,settings=profile`. Its defaults:
+The `benchmark-jfr` profile runs `de.cuioss.sheriff.token.validation.benchmark.JfrBenchmarkRunner`, which selects the benchmarks in the `...benchmark.jfr.benchmarks` package (`CoreJfrBenchmark`, `ErrorJfrBenchmark`, `MixedJfrBenchmark`) and starts the forked JVM with `-XX:StartFlightRecording=...,settings=profile`. `JfrBenchmarkRunner.createConfiguration()` sets these values explicitly:
 
 * 1 fork, 16 threads
 * 5 warmup iterations of 3 s, 5 measurement iterations of 5 s
+* the include pattern of the `...benchmark.jfr.benchmarks` package
 * output directory `target/benchmark-jfr-results/`
 
-The JMH system properties of the link:../benchmark-core/README.adoc[benchmark-core README] (`jmh.iterations`, `jmh.threads`, `jmh.time`, ...) override these values, for example for a quick run:
-
-[source,bash]
-----
-./mvnw verify -Pbenchmark-jfr -pl benchmarking/benchmark-core \
-  -Djmh.iterations=2 -Djmh.warmupIterations=1 -Djmh.time=3s
-----
+These fixed values apply whatever the JMH system properties of the link:../benchmark-core/README.adoc[benchmark-core README] (`jmh.iterations`, `jmh.threads`, `jmh.time`, ...) are set to; of those properties only the result format (`jmh.result.format`) still takes effect for this runner. The runner starts from `BenchmarkConfiguration.builder()`, which reads and validates the required `jmh.*` properties before the overrides above are applied, so those properties must still be present and valid (a missing or blank `jmh.include`, for example, fails the run); only their values are overridden.
 
 == Output Files
 

@@ -9,6 +9,7 @@
 // summary: A refused refresh is classified into three states, not two — pre-redemption, credential-rejected, and redeemed — because a credential the authorization server declared invalid is neither a transient fault nor a redemption; an amendment adds a fourth, scope-refused (invalid_scope), which keeps the session and owes no retry
 // tags: oauth, refresh-token, fail-closed, session-lifecycle, client
 // affects: token-sheriff-client
+// supersedes: 5
 // end-adr-metadata
 
 == Status
@@ -58,7 +59,11 @@ bundle keeps its family); an empty or unreadable store is cleared.
 
 The recognition rule for credential-rejected is an allow-list of exactly one code: a `4xx` status, a
 body that parses as an RFC 6749 §5.2 error response, and `error` exactly `invalid_grant`. Every other
-shape stays pre-redemption, including a `5xx` carrying `invalid_grant`. The fail-safe direction is to
+shape stays pre-redemption, including a `5xx` carrying `invalid_grant`, except the separately
+allow-listed `invalid_scope` on a `4xx`, which the scope-refused amendment below classifies. The rule is
+applied to the response the exchange ends on, after the one DPoP nonce retry: a non-success answer
+carrying a `DPoP-Nonce` header is retried once, so a `5xx` answered by a `4xx` `invalid_grant` on the
+retry is credential-rejected. The fail-safe direction is to
 preserve the session, and widening the list is a decision argued one code at a time. The library's
 own dispatch of a refused exchange ends in a failing `default` arm, so a further state fails loudly
 instead of falling through to the session-preserving default.

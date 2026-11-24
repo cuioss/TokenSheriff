@@ -139,9 +139,15 @@ jcmd <pid> JFR.stop
 ./application -XX:StartFlightRecording=duration=60s,filename=jwt-profile.jfr,settings=profile
 ./application -XX:StartFlightRecording=duration=0,filename=jwt-profile-%t.jfr,maxsize=100M,maxage=1h
 
-# Investigation workflow: start with JFR, load, stop (triggers the dump), analyse
+# Investigation workflow: start with JFR, load, stop (triggers the dump), analyse.
+# Run from the Compose directory token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests.
 docker compose -f docker-compose.yml -f docker-compose.jfr.yml up -d
-wrk -t4 -c50 -d60s --latency -s benchmarking/benchmark-integration-wrk/src/main/resources/wrk-scripts/jwt_benchmark.lua https://localhost:10443/jwt/validate
+# Supply valid tokens first: without TOKEN_DATA the Lua script sends mock tokens, and the
+# recording profiles the 401 rejection path instead of successful validation.
+# fetch_tokens.sh takes the Keycloak URL, realm, client and user as arguments (see the script
+# for their defaults); jwt_benchmark.sh in the same directory fetches tokens the same way.
+export TOKEN_DATA="$(bash ../../benchmarking/benchmark-integration-wrk/src/main/resources/wrk-scripts/fetch_tokens.sh)"
+wrk -t4 -c50 -d60s --latency -s ../../benchmarking/benchmark-integration-wrk/src/main/resources/wrk-scripts/jwt_benchmark.lua https://localhost:10443/jwt/validate
 docker compose down
 jfr summary target/jfr-output/jwt-profile.jfr
 jfr print --events ExecutionSample target/jfr-output/jwt-profile.jfr

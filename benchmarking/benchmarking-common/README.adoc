@@ -169,6 +169,8 @@ de.cuioss.benchmarking.common/
 
 === Configure Benchmark Execution
 
+`BenchmarkConfiguration.builder()` reads the `jmh.include`, `jmh.forks`, `jmh.warmupIterations`, `jmh.iterations`, `jmh.time`, `jmh.warmupTime` and `jmh.threads` system properties (see xref:#_system_properties[System Properties]) and throws an `IllegalArgumentException` when any of them is missing or blank. Of the defaults listed there, the builder applies only that of `jmh.result.format` (`JSON`). Explicit `with*` calls on the builder override the values it read.
+
 [source,java]
 ----
 import de.cuioss.benchmarking.common.config.BenchmarkConfiguration;
@@ -176,9 +178,6 @@ import de.cuioss.benchmarking.common.config.BenchmarkType;
 import de.cuioss.benchmarking.common.runner.AbstractBenchmarkRunner;
 
 // Create a concrete benchmark runner
-// Note: BenchmarkConfiguration.builder() reads JMH settings from system properties
-// (jmh.include, jmh.forks, jmh.time, etc.). Use BenchmarkConfiguration.defaults()
-// for a builder without system property requirements.
 public class MyBenchmarkRunner extends AbstractBenchmarkRunner {
     @Override
     protected BenchmarkConfiguration createConfiguration() {

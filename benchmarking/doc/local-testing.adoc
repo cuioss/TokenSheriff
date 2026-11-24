@@ -23,12 +23,12 @@ cd benchmarking/scripts
 
 Then open http://localhost:8080. For a faster library run, add `-Pbenchmark,quick` or `-Djmh.iterations=1 -Djmh.warmupIterations=1`.
 
-Optional variations of step 2:
+Optional variations of step 2, run from the repository root:
 
 [source,bash]
 ----
-./serve-reports.sh library 8081   # different port
-./serve-reports.sh stop           # stop running servers (from another terminal)
+benchmarking/scripts/serve-reports.sh library 8081   # different port
+benchmarking/scripts/serve-reports.sh stop           # stop running servers (from another terminal)
 ----
 
 == What Is Served
@@ -62,5 +62,5 @@ npx http-server -p 8080
 
 === Port Already in Use
 
-* Use another port: `./serve-reports.sh library 8081`
-* Stop existing servers: `./serve-reports.sh stop`
+* Use another port: `benchmarking/scripts/serve-reports.sh library 8081` (from the repository root)
+* Stop existing servers: `benchmarking/scripts/serve-reports.sh stop` (from the repository root)

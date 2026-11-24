@@ -54,7 +54,7 @@ TokenValidator validator = TokenValidator.builder()
 
 Base64 encoding increases size by ~33%: an 8KB token yields ~6KB decoded content. The 8KB per-part limit accommodates header + payload; the 4KB string limit prevents individual field attacks.
 
-`maxPayloadSize` bounds token parts only: JWKS and well-known discovery documents are bounded by `maxHttpResponseSize` alone, so a JWKS document larger than one decoded JWT part is accepted up to that ceiling.
+`maxPayloadSize` bounds each decoded JWT part and also bounds JWKS content supplied as a string (in-memory or file-based key loading). JWKS and well-known discovery documents loaded over HTTP are bounded by `maxHttpResponseSize` instead. That ceiling bounds the size of the response body; it does not guarantee that a smaller document is accepted, because each JSON string value in it is still limited by `maxStringLength`.
 
 == Recommended Settings
 
@@ -78,6 +78,7 @@ ParserConfig standard = ParserConfig.builder()
         .build();
 ----
 
+[#token-type-validation-rfc-9068]
 == Token Type Validation (RFC 9068)
 
 By default, no token type (`typ` header) validation is performed. This is a deliberate design decision:

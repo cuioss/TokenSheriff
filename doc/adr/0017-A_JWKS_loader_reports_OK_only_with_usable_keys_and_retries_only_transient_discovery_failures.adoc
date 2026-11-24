@@ -19,7 +19,11 @@ Accepted
 == Context
 
 A JWKS loader's status is consumed twice: the issuer cache admits an issuer only while its loader is
-`OK`, and the readiness check reports ready only while every loader is `OK`. A status that does not
+`OK`, and the readiness check reports ready only while every loader it checks is `OK` as of its last
+check — the answer is cached for `sheriff.token.health.jwks.cache-seconds` (default 30 s), so a loader that
+leaves `OK` is reflected in readiness only once that cache expires — the loaders of
+an application-supplied (external) validator are checked only when
+`sheriff.token.health.jwks.report-external-validator` is `true` (default `false`). A status that does not
 match the loader's real state therefore changes what is accepted or whether the application receives
 traffic. The status must be truthful — an `OK` after a fetch that yielded no usable key verifies
 nothing, and a loader that never leaves a failed first load never recovers. Yet not every failure is
