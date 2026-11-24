@@ -4,7 +4,7 @@
 
 ## START HERE
 
-**Resume anchor**: PLAN-12 (#952) and PLAN-15 (#954) shipped and reconciled. Emitted PLAN-13 (renumber COMMONS and VALIDATION), awaiting operator-confirmed launch; then PLAN-14, then PLAN-16 (module residuals container). Residuals follow the standing rule (fold by content, container only when full or nothing fits): PLAN-03 deliverable 5, PLAN-04 deliverable 6 and PLAN-16 hold PLAN-15's leftovers. Operator owes: the decision on filing the 12 held plan-marshall candidate lessons (wrong_store). Ledger land PR #953 is stuck on build / conclusion (in progress 5 h, outcome indeterminate); PLAN-15 reconciliation, PLAN-13 emit and the residual staging need the next land. After PLAN-14: /plan-orchestrator cleanup to re-ground PLAN-01..11.
+**Resume anchor**: PLAN-12 (#952) and PLAN-15 (#954) shipped and reconciled. Emitted PLAN-13 (renumber COMMONS and VALIDATION), awaiting operator-confirmed launch; then PLAN-14, then PLAN-16 (module residuals container). Residuals follow the standing rule (fold by content, container only when full or nothing fits): PLAN-03 deliverable 5, PLAN-04 deliverable 6, PLAN-16. The 12 held plan-marshall candidate lessons were routed to the plan-marshall repository's lessons-routing inbox (client-framework-aspects-001..012, uncommitted in that repo's ledger worktree). Ledger land PR #953 is stuck on build / conclusion; the PLAN-15 reconciliation, PLAN-13 emit, residual staging and lesson routing need the next land. After PLAN-14: /plan-orchestrator cleanup to re-ground PLAN-01..11.
 **Phase**: orchestrating
 **Queue** (staged, in order):
 1. PLAN-01 (WS-01)

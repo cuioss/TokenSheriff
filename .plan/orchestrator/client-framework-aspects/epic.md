@@ -195,6 +195,17 @@ claims did not hold.
     architecture text, ADR-0017, benchmarking documentation and runner, the `DiscoveryResolver` endpoint set — no
     staged plan fits, so PLAN-16 is the container for the validation, benchmarking and client-discovery modules,
     5 deliverables, after PLAN-14. Largest staged plan now: PLAN-04, 6 deliverables.
+- 2026-11-24 — **plan-marshall candidate lessons are routed to the plan-marshall repository (operator).** This
+  repository's lessons store refuses bundle-prefixed `plan-marshall:*` lessons (`wrong_store`), so the 12 held
+  messages were filed into `/home/oliver/git/plan-marshall`'s `lessons-routing` inbox through that repository's own
+  `inbox write` (sender type `orchestrator`, sender `client-framework-aspects`, kind `candidate-lesson`), as
+  `client-framework-aspects-001` to `-012`, all valid and queued. Mapping: PLAN-12 `-001`..`-005` -> `-001`..`-005`;
+  PLAN-12 `-007` -> `-006`; PLAN-12 `-008` -> `-007`; PLAN-15 `-002`..`-006` -> `-008`..`-012`. The originals are
+  archived here. PLAN-12 `-006` stays folded into lesson `2026-11-21-13-003` (this store). Two notes were added in
+  transit: the orchestrator's verification of the `--changed-paths-file` drift (PLAN-12 `-007`) and the
+  cross-reference to it from PLAN-15 `-005`. The files sit uncommitted in that repository's ledger worktree and
+  reach its `main` through that repository's own `land`; the `--allow-foreign-store` override was never used. Standing
+  rule: a candidate lesson naming a bundle this repository does not own is routed this way, not held.
 
 ## Consumer hand-off notes
 
@@ -289,13 +300,6 @@ Nothing here is staged. Each note goes to the consumer's own repository once the
     deployment scope check evaluates a default method's scopes alone, not the merged set; `JfrBenchmarkRunner
     .createConfiguration()` overrides the `jmh.*` values with fixed ones; `DiscoveryResolver.validateEndpointSchemes`
     lists the HTTPS-checked endpoints by hand.
-- **Twelve candidate-lesson messages held in `inbox/`**, undispositioned: PLAN-12's `-001` to `-005`, `-007`, `-008`
-  and PLAN-15's `plan-15-plan-12-residual-fixes-002` to `-006`. Filing `plan-marshall:*` or other bundle-prefixed
-  lessons into this repository's store is refused (`wrong_store`); the `--allow-foreign-store` override was not used
-  without the operator's say-so, and a bundle prefix was not stripped to get past the guard. Drafts for the PLAN-12
-  ones are in `.plan/temp/lesson-*.md`; the PLAN-15 messages already carry the corpus body shape.
-  PLAN-12 `-006` was folded into lesson `2026-11-21-13-003` as a recurrence and is not held. PLAN-15 `-005` record 3
-  independently confirms the `--changed-paths-file` drift of PLAN-12 `-007`.
 
 ## Watches
 
