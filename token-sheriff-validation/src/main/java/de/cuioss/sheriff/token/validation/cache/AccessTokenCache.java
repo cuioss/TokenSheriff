@@ -58,9 +58,11 @@ import java.util.concurrent.TimeUnit;
  * <p>
  * Each entry carries the time policy of the issuer that validated it — that issuer's own
  * clock skew tolerance and maximum token age, taken from the per-issuer
- * {@link ValidationContext} passed to {@link #put}. Every cache hit re-applies that policy,
- * so the cache never returns a token the uncached validation pipeline would reject at the
- * same instant.
+ * {@link ValidationContext} passed to {@link #put}. Every cache hit re-applies that issuer's
+ * expiry and maximum token age, and the validation pipeline re-checks the status of the
+ * issuer's JWKS loader. A hit does not verify the signature again, however: a token whose
+ * signing key has left the loader's key sets stays accepted from the cache, while an uncached
+ * validation of the same token rejects it, until the token expires or is evicted.
  * <p>
  * The cache verifies token content on each hit to handle potential hash collisions.
  * JWTs self-expire via their exp claim, reducing need for complex eviction strategies.
