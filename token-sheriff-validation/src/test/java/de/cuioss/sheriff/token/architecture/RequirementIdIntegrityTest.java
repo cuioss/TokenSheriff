@@ -18,6 +18,7 @@ package de.cuioss.sheriff.token.architecture;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
@@ -44,9 +45,10 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * <ol>
  * <li><b>Monotonic order</b> - in document order the top-level ids run 1, 2, 3, ... N with no gap
  * and no reversal, and every sub-id {@code N.M} sits under its parent {@code N} with {@code M}
- * running 1, 2, ... in order.</li>
+ * running 1, 2, ... in order. A sub-id written with an explicit zero sub-number is never valid.</li>
  * <li><b>No dangling reference</b> - every id token found in the repository's documentation and
- * sources resolves to a definition.</li>
+ * sources resolves to a definition. Both endpoints of a range token (a first id, two periods and a
+ * last number) must resolve, and an explicit zero sub-number never resolves.</li>
  * <li><b>No duplicate definition</b> - every id is defined once, and only in its prefix's own
  * requirements document.</li>
  * </ol>
@@ -109,14 +111,26 @@ class RequirementIdIntegrityTest {
     }
 
     /**
-     * A requirement id; {@code subNumber} is {@code 0} for a top-level id.
+     * A requirement id; {@code subNumber} is {@link #NO_SUB_NUMBER} for a top-level id. An explicitly
+     * written zero sub-number is kept as {@code 0}, so it stays distinguishable from the top-level id.
      *
      * @param number the top-level number
-     * @param subNumber the sub-id number, or {@code 0}
+     * @param subNumber the sub-id number, or {@link #NO_SUB_NUMBER} when the id has none
      */
     record RequirementId(int number, int subNumber) {
 
+        /** The {@code subNumber} of a top-level id, which carries no sub-number at all. */
+        static final int NO_SUB_NUMBER = -1;
+
+        static RequirementId topLevel(int number) {
+            return new RequirementId(number, NO_SUB_NUMBER);
+        }
+
         boolean isTopLevel() {
+            return subNumber == NO_SUB_NUMBER;
+        }
+
+        boolean hasZeroSubNumber() {
             return subNumber == 0;
         }
 
@@ -148,7 +162,7 @@ class RequirementIdIntegrityTest {
 
     @BeforeAll
     static void sweepRepository() throws IOException {
-        repositoryRoot = resolveRepositoryRoot();
+        repositoryRoot = resolveRepositoryRoot(Path.of(System.getProperty("basedir", System.getProperty("user.dir"))));
         assertTrue(Files.isRegularFile(repositoryRoot.resolve("pom.xml")),
                 "Repository root did not resolve to a Maven project root (resolved to " + repositoryRoot
                         + "). Refusing to report success: the sweep never ran, so a passing result here "
@@ -241,6 +255,23 @@ class RequirementIdIntegrityTest {
     }
 
     @Test
+    @DisplayName("The order check rejects an explicit zero sub-id and accepts sub-ids numbered from 1")
+    void orderPredicateRejectsZeroSubId() {
+        List<String> zeroSubIdViolations = findOrderViolations(SAMPLE_PREFIX, definitions("1", "1.0"));
+
+        assertAll("an explicit zero sub-id is not the top-level id",
+                () -> assertNotEquals(RequirementId.topLevel(1), definitions("1.0").getFirst().id(),
+                        "an explicit zero sub-id is parsed apart from the top-level id"),
+                () -> assertFalse(zeroSubIdViolations.isEmpty(), "an explicit zero sub-id is a violation"),
+                () -> assertTrue(zeroSubIdViolations.getFirst().contains("zero sub-number"),
+                        () -> "the violation names the zero sub-number, got " + zeroSubIdViolations),
+                () -> assertFalse(findOrderViolations(SAMPLE_PREFIX, definitions("1.0", "1")).isEmpty(),
+                        "an explicit zero sub-id ahead of its parent is a violation"),
+                () -> assertTrue(findOrderViolations(SAMPLE_PREFIX, definitions("1", "1.1")).isEmpty(),
+                        "the neighbouring sub-id 1 is sequential"));
+    }
+
+    @Test
     @DisplayName("The order check rejects the pre-renumbering VALIDATION and COMMONS orders")
     void orderPredicateRejectsPreRenumberingOrders() {
         List<Definition> formerValidationOrder =
@@ -269,8 +300,10 @@ class RequirementIdIntegrityTest {
         assertAll("defined references are clean",
                 () -> assertTrue(dangling("see " + id(SAMPLE_PREFIX, "2") + " and " + id(SAMPLE_PREFIX, "2.1"),
                         defined).isEmpty(), "defined ids and sub-ids resolve"),
-                () -> assertTrue(dangling("| " + id(SAMPLE_PREFIX, "1") + "..9 | transport", defined).isEmpty(),
-                        "a range token reads as its first id only, which is defined"),
+                () -> assertTrue(dangling("| " + id(SAMPLE_PREFIX, "1") + "..2 | transport", defined).isEmpty(),
+                        "a range whose both endpoints are defined resolves"),
+                () -> assertTrue(dangling("| " + id(SAMPLE_PREFIX, "2") + ".. | open", defined).isEmpty(),
+                        "two periods without a last number are no range"),
                 () -> assertTrue(dangling("ends with " + id(SAMPLE_PREFIX, "2") + ".", defined).isEmpty(),
                         "a sentence-ending period is not a sub-id"),
                 () -> assertTrue(dangling("OTHER" + SAMPLE_PREFIX + SEPARATOR + 99, defined).isEmpty(),
@@ -282,7 +315,56 @@ class RequirementIdIntegrityTest {
                 () -> assertFalse(dangling("see " + id(SAMPLE_PREFIX, "2.7"), defined).isEmpty(),
                         "an undefined sub-id of a defined parent dangles"),
                 () -> assertFalse(dangling("see " + id(SAMPLE_PREFIX, "1.1"), defined).isEmpty(),
-                        "a sub-id is not resolved by its parent alone"));
+                        "a sub-id is not resolved by its parent alone"),
+                () -> assertFalse(dangling("| " + id(SAMPLE_PREFIX, "1") + "..9 | transport", defined).isEmpty(),
+                        "a range with an undefined end dangles although its first id is defined"),
+                () -> assertFalse(dangling("| " + id(SAMPLE_PREFIX, "9") + "..2 | transport", defined).isEmpty(),
+                        "a range with an undefined first id dangles"));
+    }
+
+    @Test
+    @DisplayName("The reference check rejects an explicit zero sub-id and accepts sub-ids numbered from 1")
+    void danglingPredicateRejectsZeroSubId() {
+        Set<RequirementId> defined = definedIds(definitions("1", "2", "2.1"));
+        Set<RequirementId> definedWithZeroAnchor = definedIds(definitions("1", "2", "2.0"));
+
+        assertAll("an explicit zero sub-id never resolves",
+                () -> assertFalse(dangling("see " + id(SAMPLE_PREFIX, "2.0"), defined).isEmpty(),
+                        "an explicit zero sub-id is not read as its top-level parent"),
+                () -> assertFalse(dangling("see " + id(SAMPLE_PREFIX, "2.0"), definedWithZeroAnchor).isEmpty(),
+                        "an explicit zero sub-id dangles even when a zero-sub-id anchor exists"),
+                () -> assertTrue(dangling("see " + id(SAMPLE_PREFIX, "2.1"), defined).isEmpty(),
+                        "the neighbouring sub-id 1 resolves"),
+                () -> assertTrue(dangling("see " + id(SAMPLE_PREFIX, "2"), defined).isEmpty(),
+                        "the plain top-level form resolves"));
+    }
+
+    @Test
+    @DisplayName("The sub-id range end inherits the parent of its first id")
+    void rangeEndInheritsSubIdParent() {
+        List<Reference> references = parseReferences(SAMPLE_PREFIX, SAMPLE_DOCUMENT,
+                List.of("| " + id(SAMPLE_PREFIX, "2.1") + "..3 |"), new boolean[1]);
+
+        assertEquals(List.of(new RequirementId(2, 1), new RequirementId(2, 3)),
+                references.stream().map(Reference::id).toList(),
+                "a sub-id range yields both endpoints under the same parent");
+    }
+
+    @Test
+    @DisplayName("The repository root resolves from the repository root and from a module directory")
+    void repositoryRootResolvesFromModuleAndRoot(@TempDir Path temporary) throws IOException {
+        Path root = temporary.resolve("repository");
+        Path module = root.resolve("some-module");
+        Files.createDirectories(module);
+        Files.writeString(root.resolve("pom.xml"), "<project/>");
+        Files.writeString(module.resolve("pom.xml"), "<project/>");
+        Path document = root.resolve(RequirementPrefix.COMMONS.document);
+        Files.createDirectories(document.getParent());
+        Files.writeString(document, "= Requirements");
+
+        assertAll("the first directory carrying the repository markers is the root",
+                () -> assertEquals(root, resolveRepositoryRoot(root), "invoked from the repository root"),
+                () -> assertEquals(root, resolveRepositoryRoot(module), "invoked from a module directory"));
     }
 
     @Test
@@ -323,7 +405,7 @@ class RequirementIdIntegrityTest {
         List<Reference> parsedReferences = parseReferences(SAMPLE_PREFIX, SAMPLE_DOCUMENT, lines, excluded);
 
         assertAll("the region ends at the next level-2 heading",
-                () -> assertEquals(List.of(new RequirementId(1, 0), new RequirementId(2, 0)),
+                () -> assertEquals(List.of(RequirementId.topLevel(1), RequirementId.topLevel(2)),
                         parsedDefinitions.stream().map(Definition::id).toList(),
                         "anchors inside the region are not definitions; anchors after it are"),
                 () -> assertTrue(parsedReferences.stream().noneMatch(reference -> reference.id().number() >= 98),
@@ -371,6 +453,9 @@ class RequirementIdIntegrityTest {
                 currentParent = id.number();
                 expectedNumber = id.number() + 1;
                 expectedSubNumber = 1;
+            } else if (id.hasZeroSubNumber()) {
+                violations.add(describe(definition, "sub-id " + id.render(prefix)
+                        + " has an explicit zero sub-number; sub-ids are numbered from 1"));
             } else if (id.number() != currentParent) {
                 violations.add(describe(definition, "sub-id " + id.render(prefix)
                         + " is not under its parent; the enclosing id is " + prefix + SEPARATOR + currentParent));
@@ -396,7 +481,10 @@ class RequirementIdIntegrityTest {
     static List<String> findDanglingReferences(String prefix, List<Reference> references, Set<RequirementId> defined) {
         List<String> violations = new ArrayList<>();
         for (Reference reference : references) {
-            if (!defined.contains(reference.id())) {
+            if (reference.id().hasZeroSubNumber()) {
+                violations.add(reference.location() + " -> " + reference.id().render(prefix)
+                        + " has an explicit zero sub-number and never names a valid id: " + reference.text());
+            } else if (!defined.contains(reference.id())) {
                 violations.add(reference.location() + " -> " + reference.id().render(prefix) + " is not defined: "
                         + reference.text());
             }
@@ -476,7 +564,8 @@ class RequirementIdIntegrityTest {
             }
             Matcher matcher = anchor.matcher(lines.get(index));
             while (matcher.find()) {
-                definitions.add(new Definition(toId(matcher), source, source + ":" + (index + 1),
+                definitions.add(new Definition(toId(matcher.group(1), matcher.group(2)), source,
+                        source + ":" + (index + 1),
                         lines.get(index).strip()));
             }
         }
@@ -485,7 +574,10 @@ class RequirementIdIntegrityTest {
 
     /**
      * Collects the id tokens of a prefix outside the excluded lines. A sub-id needs a digit after the
-     * dot, so a range written with two periods reads as its first id only.
+     * dot, so a sentence-ending period is not a sub-id. A range - a first id, two periods and a last
+     * number, optionally with its own sub-number - yields one reference per endpoint; when the first id
+     * is a sub-id and the last number carries no sub-number, the last number is a sub-number under the
+     * same parent.
      *
      * @param prefix the prefix to look for
      * @param source the repository-relative path of the scanned file
@@ -494,24 +586,38 @@ class RequirementIdIntegrityTest {
      * @return the references in document order
      */
     static List<Reference> parseReferences(String prefix, String source, List<String> lines, boolean[] excluded) {
-        Pattern token = Pattern.compile("\\b" + prefix + SEPARATOR + "(\\d+)(?:\\.(\\d+))?");
+        Pattern token = Pattern.compile(
+                "\\b" + prefix + SEPARATOR + "(\\d+)(?:\\.(\\d+))?(?:\\.\\.(\\d+)(?:\\.(\\d+))?)?");
         List<Reference> references = new ArrayList<>();
         for (int index = 0; index < lines.size(); index++) {
             if (excluded[index]) {
                 continue;
             }
+            String location = source + ":" + (index + 1);
+            String text = lines.get(index).strip();
             Matcher matcher = token.matcher(lines.get(index));
             while (matcher.find()) {
-                references.add(new Reference(toId(matcher), source + ":" + (index + 1), lines.get(index).strip()));
+                RequirementId first = toId(matcher.group(1), matcher.group(2));
+                references.add(new Reference(first, location, text));
+                if (matcher.group(3) != null) {
+                    references.add(new Reference(rangeEnd(first, matcher.group(3), matcher.group(4)), location, text));
+                }
             }
         }
         return references;
     }
 
-    private static RequirementId toId(Matcher matcher) {
-        int number = Integer.parseInt(matcher.group(1));
-        int subNumber = matcher.group(2) == null ? 0 : Integer.parseInt(matcher.group(2));
-        return new RequirementId(number, subNumber);
+    private static RequirementId toId(String number, String subNumber) {
+        return subNumber == null
+                ? RequirementId.topLevel(Integer.parseInt(number))
+                : new RequirementId(Integer.parseInt(number), Integer.parseInt(subNumber));
+    }
+
+    private static RequirementId rangeEnd(RequirementId first, String lastNumber, String lastSubNumber) {
+        if (lastSubNumber != null || first.isTopLevel()) {
+            return toId(lastNumber, lastSubNumber);
+        }
+        return new RequirementId(first.number(), Integer.parseInt(lastNumber));
     }
 
     private static Set<RequirementId> definedIds(List<Definition> definitions) {
@@ -524,12 +630,29 @@ class RequirementIdIntegrityTest {
         return definition.location() + " -> " + problem + ": " + definition.text();
     }
 
-    private static Path resolveRepositoryRoot() {
-        Path moduleBase = Path.of(System.getProperty("basedir", System.getProperty("user.dir")))
-                .toAbsolutePath()
-                .normalize();
-        Path parent = moduleBase.getParent();
-        return parent != null ? parent : moduleBase;
+    /**
+     * Resolves the repository root as the first of {@code start} and its ancestors that carries the
+     * repository markers: a {@code pom.xml} and a registered requirements document. Works whether the
+     * test runs from a module directory or from the repository root.
+     *
+     * @param start the directory the search begins at, typically the module base directory
+     * @return the first directory carrying the markers, or the normalized {@code start} when none does;
+     *         the setup assertions then refuse the run
+     */
+    static Path resolveRepositoryRoot(Path start) {
+        Path base = start.toAbsolutePath().normalize();
+        for (Path candidate = base; candidate != null; candidate = candidate.getParent()) {
+            if (carriesRepositoryMarkers(candidate)) {
+                return candidate;
+            }
+        }
+        return base;
+    }
+
+    private static boolean carriesRepositoryMarkers(Path candidate) {
+        return Files.isRegularFile(candidate.resolve("pom.xml"))
+                && Arrays.stream(RequirementPrefix.values())
+                .anyMatch(prefix -> Files.isRegularFile(candidate.resolve(prefix.document)));
     }
 
     private static boolean isScanned(Path file) {
