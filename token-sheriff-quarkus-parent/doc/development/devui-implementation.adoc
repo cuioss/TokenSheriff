@@ -174,8 +174,8 @@ Run from `token-sheriff-quarkus-parent/`:
 
 [source,bash]
 ----
-docker compose up -d
-./mvnw -f token-sheriff-quarkus-integration-tests/pom.xml quarkus:dev
+docker compose -f token-sheriff-quarkus-integration-tests/docker-compose.yml up -d
+../mvnw -f token-sheriff-quarkus-integration-tests/pom.xml quarkus:dev
 cd e-2-e-playwright && npx playwright test
 ----
 
