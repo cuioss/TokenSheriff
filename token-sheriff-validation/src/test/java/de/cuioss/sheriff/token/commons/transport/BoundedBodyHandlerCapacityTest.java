@@ -39,7 +39,7 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Pins the memory bound of {@link BoundedBodyHandler} that COMMONS-17, the transport specification and
+ * Pins the memory bound of {@link BoundedBodyHandler} that COMMONS-5, the transport specification and
  * ADR-0031 state in one form: the array holding the bytes read so far never exceeds the ceiling and is at
  * most twice the bytes received, or the first allocation ({@code 1024} bytes, or the ceiling when that is
  * smaller) when that is larger. The capacity is read after every buffer through the subscriber's

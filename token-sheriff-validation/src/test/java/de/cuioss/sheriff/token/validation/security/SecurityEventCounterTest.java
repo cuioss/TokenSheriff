@@ -35,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * Verifies requirements:
  * <ul>
  *   <li><a href="../../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-7.3">VALIDATION-7.3: Security Events</a> (security event monitoring and tracking)</li>
- *   <li><a href="../../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-10.1">VALIDATION-10.1: Thread Safety</a></li>
+ *   <li><a href="../../../../../../../../../../doc/validation/requirements.adoc#VALIDATION-13.1">VALIDATION-13.1: Thread Safety</a></li>
  * </ul>
  * <p>
  * This test class ensures that security events are properly counted, can be reset,

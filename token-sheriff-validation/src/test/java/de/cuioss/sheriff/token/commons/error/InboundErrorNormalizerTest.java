@@ -22,7 +22,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@DisplayName("InboundErrorNormalizer (COMMONS-11)")
+@DisplayName("InboundErrorNormalizer (COMMONS-12)")
 class InboundErrorNormalizerTest {
 
     /** The BEL control character (0x07), used to prove non-CR/LF control chars are also escaped. */
