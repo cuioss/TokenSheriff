@@ -81,7 +81,7 @@ public class CallbackHandler {
         }
         if (parameters.hasError()) {
             // Route both error and error_description through the shared commons normalizer so the
-            // inbound and outbound error surfaces render one sanitized contract (COMMONS-11).
+            // inbound and outbound error surfaces render one sanitized contract (COMMONS-12).
             throw InboundErrorNormalizer.normalize(parameters.error(), parameters.errorDescription());
         }
         return parameters.getCode()
