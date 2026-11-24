@@ -298,10 +298,6 @@ Prometheus metrics by the embedded `benchmark_name`.
 |Timeout errors or a failing `pre-benchmark-health-check.sh`
 |Service, Keycloak or Prometheus not ready
 |Check `quarkus.log` and the dumped Keycloak logs
-
-|No Prometheus metrics files
-|Prometheus not reachable at `http://localhost:9090`
-|Check the Prometheus container; the health check fails and the build stops before the benchmark runs
 |===
 
 === Debug Mode
