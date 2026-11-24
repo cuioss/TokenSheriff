@@ -169,7 +169,7 @@ de.cuioss.benchmarking.common/
 
 === Configure Benchmark Execution
 
-`BenchmarkConfiguration.builder()` starts from the `jmh.*` system properties (see <<_system_properties,System Properties>>), and explicit `with*` calls on the builder override them.
+`BenchmarkConfiguration.builder()` reads the `jmh.include`, `jmh.forks`, `jmh.warmupIterations`, `jmh.iterations`, `jmh.time`, `jmh.warmupTime` and `jmh.threads` system properties (see xref:#_system_properties[System Properties]) and throws an `IllegalArgumentException` when any of them is missing or blank. The builder applies none of the defaults listed there. Explicit `with*` calls on the builder override the values it read.
 
 [source,java]
 ----
