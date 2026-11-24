@@ -29,14 +29,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.EnumMap;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -261,10 +254,10 @@ class RequirementIdIntegrityTest {
 
         assertAll("the former orders are not sequential",
                 () -> assertFalse(validationViolations.isEmpty(), "... 8, 12 ... is not sequential"),
-                () -> assertTrue(validationViolations.get(0).contains(id(RequirementPrefix.VALIDATION.name(), "12")),
+                () -> assertTrue(validationViolations.getFirst().contains(id(RequirementPrefix.VALIDATION.name(), "12")),
                         () -> "the first violation is the jump from 8 to 12, got " + validationViolations),
                 () -> assertFalse(commonsViolations.isEmpty(), "... 4, 17 ... is not sequential"),
-                () -> assertTrue(commonsViolations.get(0).contains(id(RequirementPrefix.COMMONS.name(), "17")),
+                () -> assertTrue(commonsViolations.getFirst().contains(id(RequirementPrefix.COMMONS.name(), "17")),
                         () -> "the first violation is the jump from 4 to 17, got " + commonsViolations));
     }
 
@@ -304,10 +297,10 @@ class RequirementIdIntegrityTest {
 
         assertAll("duplicate and foreign anchors are violations",
                 () -> assertFalse(findDuplicateDefinitions(SAMPLE_PREFIX, SAMPLE_DOCUMENT,
-                        List.of(first, second, definition("2", SAMPLE_DOCUMENT))).isEmpty(),
+                                List.of(first, second, definition("2", SAMPLE_DOCUMENT))).isEmpty(),
                         "an anchor defined twice is a violation"),
                 () -> assertFalse(findDuplicateDefinitions(SAMPLE_PREFIX, SAMPLE_DOCUMENT,
-                        List.of(first, definition("2", "sample/other.adoc"))).isEmpty(),
+                                List.of(first, definition("2", "sample/other.adoc"))).isEmpty(),
                         "an anchor outside the owning document is a violation"));
     }
 
@@ -575,7 +568,7 @@ class RequirementIdIntegrityTest {
     }
 
     private static Definition definition(String number, String source) {
-        return parseDefinitions(SAMPLE_PREFIX, source, List.of(anchor(number)), new boolean[1]).get(0);
+        return parseDefinitions(SAMPLE_PREFIX, source, List.of(anchor(number)), new boolean[1]).getFirst();
     }
 
     private static List<Definition> definitions(String... numbers) {
