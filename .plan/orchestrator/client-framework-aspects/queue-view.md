@@ -4,7 +4,7 @@
 
 ## START HERE
 
-**Resume anchor**: PLAN-12 shipped (#952), reconciled. Emitted PLAN-15 (PLAN-12 residual fixes), awaiting operator-confirmed launch; order PLAN-15 -> PLAN-13 -> PLAN-14; every other spec depends on PLAN-14. Operator owes: decision on filing the 7 held plan-marshall candidate lessons (inbox -001..-005,-007,-008; wrong_store refusal). Ledger land PR #953 (PLAN-12 reconciliation) was waiting on CI; later ledger writes (PLAN-15) need the next land. After PLAN-14: /plan-orchestrator cleanup to re-ground PLAN-01..11.
+**Resume anchor**: PLAN-12 (#952) and PLAN-15 (#954) shipped and reconciled. Emitted PLAN-13 (renumber COMMONS and VALIDATION), awaiting operator-confirmed launch; then PLAN-14. Operator owes: (1) whether to stage a fix plan for the PLAN-15 residual documentation defects and the 4 declined comments (Open Defects), (2) the decision on filing the 12 held plan-marshall candidate lessons (wrong_store). Ledger land PR #953 is stuck on build / conclusion (in progress for 5 h); PLAN-15 reconciliation and later writes need the next land. After PLAN-14: /plan-orchestrator cleanup to re-ground PLAN-01..11.
 **Phase**: orchestrating
 **Queue** (staged, in order):
 1. PLAN-01 (WS-01)
@@ -20,8 +20,8 @@
 11. PLAN-11 (WS-02)
 12. PLAN-13 (WS-05)
 13. PLAN-14 (WS-05)
-14. PLAN-15 (WS-05)
 - PLAN-12 (WS-05) — plan=plan-12-documentation-review-consolidation — PR 952 — landing=landings/PLAN-12.md — status: shipped
+- PLAN-15 (WS-05) — plan=plan-15-plan-12-residual-fixes — PR 954 — landing=landings/PLAN-15.md — status: shipped
 
 ## Ordered Queue
 
@@ -40,4 +40,3 @@
 | 11 | PLAN-11 | WS-02 | staged | doc/client/requirements.adoc; doc/client/specification/retrieval-flow.adoc; doc/client/specification/token-handling.adoc; doc/developer/test-impl-mapping.adoc; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/config/ClientConfiguration.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/AuthorizationRequestBuilder.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/AuthorizationRequestOptions.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/ClientCredentialsFlow.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/ParClient.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/RefreshFlow.java; token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/TokenEndpointClient.java; token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/flow/; token-sheriff-quarkus-parent/token-sheriff-client-quarkus/src/main/java/de/cuioss/sheriff/token/client/quarkus/config/ClientConfigMapper.java; token-sheriff-quarkus-parent/token-sheriff-client-quarkus/src/main/java/de/cuioss/sheriff/token/client/quarkus/config/ClientRuntimeConfig.java | plan-marshall |
 | 12 | PLAN-13 | WS-05 | staged | benchmarking/README.adoc; benchmarking/doc/; doc/; token-sheriff-quarkus-parent/doc/; token-sheriff-quarkus-parent/token-sheriff-validation-quarkus/; token-sheriff-validation/ | plan-marshall |
 | 13 | PLAN-14 | WS-05 | staged | doc/; token-sheriff-client/; token-sheriff-quarkus-parent/doc/; token-sheriff-quarkus-parent/token-sheriff-client-quarkus-deployment/; token-sheriff-quarkus-parent/token-sheriff-client-quarkus/; token-sheriff-quarkus-parent/token-sheriff-quarkus-integration-tests/ | plan-marshall |
-| 14 | PLAN-15 | WS-05 | staged | benchmarking/benchmark-integration-wrk/README.adoc; benchmarking/benchmarking-common/README.adoc; benchmarking/doc/JFR-Instrumentation.adoc; benchmarking/doc/local-testing.adoc; doc/adr/0003-Scope_refresh-path_coverage_gates_by_class_granularity_not_module-wide_threshold.adoc; doc/adr/0010-A_refresh_token_the_authorization_server_declares_invalid_is_a_third_classification_state.adoc; doc/adr/0017-A_JWKS_loader_reports_OK_only_with_usable_keys_and_retries_only_transient_discovery_failures.adoc; doc/adr/0031-Bearer_extraction_scope_challenge_sanitiser_escape_and_bounded_body_reads_are_public_commons_helpers.adoc; doc/client/specification/retrieval-flow.adoc; doc/commons/specification/transport.adoc; doc/developer/test-impl-mapping.adoc; token-sheriff-quarkus-parent/doc/development/devui-implementation.adoc; token-sheriff-quarkus-parent/doc/integration/quarkus-integration.adoc; token-sheriff-quarkus-parent/doc/performance/native-optimization-guide.adoc; token-sheriff-validation/doc/configuration/multi-issuer-setup.adoc; token-sheriff-validation/doc/configuration/security-settings.adoc; token-sheriff-validation/src/main/java/de/cuioss/sheriff/token/validation/cache/AccessTokenCache.java | plan-marshall |

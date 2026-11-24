@@ -60,9 +60,11 @@ claims did not hold.
     appended after the renumbered sets, so "CLIENT-31..36" in these specs becomes "the next free ids".
   - Scope 2 buys nothing during WS-05: each of the three plans claims `doc/` and they run strictly in
     sequence.
-  - **PLAN-15 (staged 2026-11-24 on operator request) runs BEFORE PLAN-13**: it closes PLAN-12's layer-3
-    findings and the untriaged CodeRabbit comments. It shares 15 files with PLAN-13 and 10 with PLAN-14, so
-    PLAN-13's spec now names it in `Depends on:`. Order: PLAN-15 -> PLAN-13 -> PLAN-14.
+  - **PLAN-15 shipped as #954 (2026-11-24, `0545cffd`)**, before PLAN-13: it closed PLAN-12's layer-3 findings and
+    dispositioned the 23 CodeRabbit comments (16 files, no id change; the ADR set is unchanged at 17, next free
+    number 0032). It shares 15 files with PLAN-13 and 10 with PLAN-14, so PLAN-13's spec names it in `Depends on:`,
+    now satisfied. Order: PLAN-13 -> PLAN-14. Residual documentation defects are in Open Defects; they do not gate
+    PLAN-13, which changes ids only.
   - **PLAN-12 shipped as #952 (2026-11-24, `66cecbf4`).** The ADR set is now 17 files (0001, 0003, 0006-0010,
     0012, 0014, 0015, 0017, 0022, 0024, 0026, 0029-0031; the next free number stays 0032) and four Quarkus guides are
     gone. Run `cleanup` before emitting PLAN-13 so the staged specs are re-grounded against the new layout.
@@ -226,21 +228,45 @@ Nothing here is staged. Each note goes to the consumer's own repository once the
   23-comment CodeRabbit body; Sonar `read_open_issues`: `undecidable`, `head_revision_unavailable`) are
   `unknown` as well, so the figures stay unmeasured; the Done-when "zero Sonar issues and hotspots" is not
   evidenced.
-- **PLAN-12 layer-3 findings, staged as PLAN-15 on the operator's word (2026-11-24)** (`landings/PLAN-12.md`; none fixed inline; retire this entry when PLAN-15 lands):
-  - L3-1 `AccessTokenCache` class Javadoc (`AccessTokenCache.java:61-63`) still says a hit never returns a token
-    the uncached pipeline would reject; `doc/validation/architecture.adoc:36` was corrected to say it does not
-    re-verify the signature. Production source, outside every staged spec's surface.
-  - L3-2 ADR-0013's general no-shim rule is cut down to the `AuthenticationResult` fact in
-    `doc/client/specification/retrieval-flow.adoc:147-152`.
-  - L3-3 ADR-0010 lost its `// supersedes: 5` metadata line.
-  - L3-4 advisory leftovers carried from the PR: `BenchmarkConfiguration.defaults()` example in
-    `benchmarking/benchmarking-common/README.adoc:180`; `./serve-reports.sh stop` without its directory in
-    `benchmarking/doc/local-testing.adoc:31`; the roughly 19 untriaged CodeRabbit minor comments (list in the
-    review-body lesson draft).
-- **Seven PLAN-12 candidate-lesson messages held in `inbox/`** (`-001` to `-005`, `-007`, `-008`), undispositioned.
-  Filing `plan-marshall:*` lessons into this repository's store is refused (`wrong_store`); the
-  `--allow-foreign-store` override was not used without the operator's say-so. Drafts are in `.plan/temp/lesson-*.md`.
-  `-006` was folded into lesson `2026-11-21-13-003` as a recurrence and is not held.
+- **PLAN-12's layer-3 findings are closed by PLAN-15** (shipped as #954, `0545cffd`, 2026-11-24;
+  `landings/PLAN-15.md`): the `AccessTokenCache` Javadoc, ADR-0013's general rule (restored at
+  `retrieval-flow.adoc:154-159`, thinner than the ADR, see below), ADR-0010's `supersedes` line, and the advisory
+  leftovers. The Sonar and review-body numbers of PLAN-12 stay `unknown` (entry above).
+- **PLAN-15 residual documentation defects** (2026-11-24; `landings/PLAN-15.md`; none fixed inline, none staged;
+  reported to the operator, who decides whether to stage a fix plan):
+  - L3-1 `AccessTokenCache.java:44-45` and `:70` keep "raw token verification on cache hits" and "verifies token
+    content on each hit", which describe only the hash-collision guard and read as a signature guarantee.
+  - L3-2 `doc/validation/architecture.adoc:36`: "the window ends when the token expires or is evicted" omits maximum
+    token age and DPoP or custom-rule rejection.
+  - L3-3 ADR-0010 `:63-66`: the DPoP nonce retry is stated without its conditions (DPoP sender constraint, non-blank
+    clean header, never after `invalid_scope`; `TokenEndpointClient.java:253-265`, `:592-599`).
+  - L3-4 `doc/validation/architecture.adoc:262` (and the `maxPayloadSize` table row): "bounds token parts only"
+    contradicts `security-settings.adoc:56`.
+  - L3-5 ADR-0017 `:21-27`: one run-on em-dash sentence.
+  - L2-1 `retrieval-flow.adoc:154-159` omits two decision points of the deleted ADR-0013: "source compatibility is
+    not the acceptance test" and "a deprecation window only dates the exposure".
+  - L2-2 `benchmarking/doc/local-testing.adoc:28-33`: the new path sits below a Quick Start that already does
+    `cd benchmarking/scripts`.
+  - Not shown by reading: the Asciidoctor render of the `token-type-validation-rfc-9068` anchor.
+- **PLAN-15 finding `-001`, archived** (declined review comments and code-side follow-ups; the decline was
+  procedural, because the files lie outside PLAN-15's Expected Surface, and each still applies at HEAD):
+  - `doc/client/specification/token-handling.adoc:114-115` (verifier refusals belong in the documented domain of
+    `RefreshFlow.classify`; line 114 still says "exactly two sources") and `:118-120` (the refusal-kind table
+    hardcodes four kinds with no control against `RefreshFailureClassification.Kind`).
+  - `benchmarking/doc/performance-scoring.adoc:136` (the claim that one anomalous run does not flip the trend).
+  - `benchmarking/README.adoc:43` (`serve-reports.sh library` shown as the way to view `benchmark-jfr` results; the
+    script has no JFR target).
+  - Product-code follow-ups, which belong to a spec of their own and never to PLAN-13 or PLAN-14: the ADR-0031
+    deployment scope check evaluates a default method's scopes alone, not the merged set; `JfrBenchmarkRunner
+    .createConfiguration()` overrides the `jmh.*` values with fixed ones; `DiscoveryResolver.validateEndpointSchemes`
+    lists the HTTPS-checked endpoints by hand.
+- **Twelve candidate-lesson messages held in `inbox/`**, undispositioned: PLAN-12's `-001` to `-005`, `-007`, `-008`
+  and PLAN-15's `plan-15-plan-12-residual-fixes-002` to `-006`. Filing `plan-marshall:*` or other bundle-prefixed
+  lessons into this repository's store is refused (`wrong_store`); the `--allow-foreign-store` override was not used
+  without the operator's say-so, and a bundle prefix was not stripped to get past the guard. Drafts for the PLAN-12
+  ones are in `.plan/temp/lesson-*.md`; the PLAN-15 messages already carry the corpus body shape.
+  PLAN-12 `-006` was folded into lesson `2026-11-21-13-003` as a recurrence and is not held. PLAN-15 `-005` record 3
+  independently confirms the `--changed-paths-file` drift of PLAN-12 `-007`.
 
 ## Watches
 
