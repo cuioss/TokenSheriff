@@ -65,6 +65,20 @@ decision (PLAN-01, question 2).
    - log rows in `doc/LogMessages.adoc` and test-mapping rows.
    - Skills: pm-documents:ref-asciidoc, pm-documents:ref-documentation
    - Persona: documenter
+6. **Residual refresh-classification documentation defects** (folded 2026-11-24 from PLAN-15's landing; the
+   epic's standing rule puts a residual into the staged plan that fits by content). Correct them in the same
+   pass as deliverable 5, because the table CLIENT-32 publishes is what these passages describe:
+   - `doc/client/specification/token-handling.adoc` § `RefreshFlow.classify` (lines 114-115): "its documented domain
+     is exactly two sources" omits the verifier refusals (`RefreshResultVerifier`). State the full domain.
+   - `doc/client/specification/token-handling.adoc` § refusal-kind table (lines 118-120): the table hardcodes four
+     kinds with no control against `RefreshFailureClassification.Kind`. Derive it, or require a same-change update
+     as the `ScopeDelta` table does; and make sure the new CLIENT-32 table cannot drift from it either.
+   - ADR-0010 (lines 63-66): the sentence on the single DPoP nonce retry states no conditions. State them:
+     the sender constraint is DPoP, the `DPoP-Nonce` header is non-blank and free of CR, LF and NUL, and no retry
+     follows an `invalid_scope` answer (`TokenEndpointClient.java:253-265`, `:592-599`). A bearer-only or mTLS
+     client gets no retry and a `5xx` stays pre-redemption.
+   - Skills: pm-documents:ref-documentation, pm-documents:ref-asciidoc
+   - Persona: documenter
 
 **Done when:**
 
@@ -73,6 +87,10 @@ decision (PLAN-01, question 2).
   lifecycle tests stay green unchanged, beside the new edge tests.
 - `./mvnw -pl token-sheriff-client -am verify` is green.
 - CLIENT-32 and CLIENT-33 are documented.
+- `token-handling.adoc` no longer says "exactly two sources" for `RefreshFlow.classify`, and its refusal-kind
+  table is derived from, or guarded against, `RefreshFailureClassification.Kind`; ADR-0010 states the conditions
+  of the DPoP nonce retry (the "exactly two sources" text and the unconditioned ADR sentence are read at
+  `0545cffd`; the table's missing control is a hypothesis, see Claim Labels).
 - The pull request's open Sonar read at the head lists zero new-code issues and zero hotspots left to
   review, with the rules left open named. A failed read is recorded as `unknown`, never as `0`.
 
@@ -96,6 +114,9 @@ decision (PLAN-01, question 2).
 - OBSERVED: API Sheriff's table adds persist-failure and session-terminated rows and revokes the successor or the presented token — read at `API-Sheriff/api-sheriff/src/main/java/de/cuioss/sheriff/gateway/bff/refresh/TokenRefreshCoordinator.java` § lines 565-585 (leaf report).
 - OBSERVED: API Sheriff latches the first revocation failure at WARN (`ApiSheriff-147`), later ones DEBUG, and revokes only the refresh token — read at `API-Sheriff/api-sheriff/src/main/java/de/cuioss/sheriff/gateway/bff/logout/RpInitiatedLogout.java` § lines 60-61, 256-266 (leaf report).
 - HYPOTHESIS: the two tables agree on the four kinds and differ only in the write-outcome rows and in which token is revoked on `REDEEMED` — confirm/refute at `TokenLifecycleManager.java` § `revokeAndClearFailClosed` (~1066-1174) against `TokenRefreshCoordinator.java` § `disposeRefusal` (verify-at-outline).
+- OBSERVED: `RefreshFlow.classify`'s documented domain reads "exactly two sources: refusals raised inside the refresh exchange, and the refresh-token family refusal" — read at `doc/client/specification/token-handling.adoc:114-115` at `0545cffd` (orchestrator, 2026-11-24).
+- OBSERVED: the DPoP nonce retry happens only for a DPoP sender constraint, with a non-blank header free of CR/LF/NUL, and never after an `invalid_scope` answer — read at `token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/flow/TokenEndpointClient.java:253-265` and `:592-599` at `0545cffd`; ADR-0010 states it without those conditions at `doc/adr/0010-A_refresh_token_the_authorization_server_declares_invalid_is_a_third_classification_state.adoc:63-66`.
+- HYPOTHESIS: the refusal-kind table at `token-handling.adoc:118-120` still hardcodes four kinds with no control (the PLAN-15 lane's report, `landings/PLAN-15.md`) — confirm/refute by reading the table against `RefreshFailureClassification.Kind` (verify-at-outline).
 - Verify-first clause: the revoked token set at logout is ADR-0032's decision. If PLAN-01 has not landed, stop.
 
 ## Expected Surface
@@ -109,6 +130,7 @@ decision (PLAN-01, question 2).
 - OBSERVED: `doc/client/requirements.adoc`
 - OBSERVED: `doc/client/specification/token-handling.adoc`
 - OBSERVED: `doc/client/specification/step-up-and-logout.adoc`
+- OBSERVED: `doc/adr/0010-A_refresh_token_the_authorization_server_declares_invalid_is_a_third_classification_state.adoc`
 - OBSERVED: `doc/LogMessages.adoc`
 - OBSERVED: `doc/developer/test-impl-mapping.adoc`
 
