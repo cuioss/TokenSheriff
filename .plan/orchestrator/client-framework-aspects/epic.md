@@ -60,6 +60,9 @@ claims did not hold.
     appended after the renumbered sets, so "CLIENT-31..36" in these specs becomes "the next free ids".
   - Scope 2 buys nothing during WS-05: each of the three plans claims `doc/` and they run strictly in
     sequence.
+  - **PLAN-12 shipped as #952 (2026-11-24, `66cecbf4`).** The ADR set is now 17 files (0001, 0003, 0006-0010,
+    0012, 0014, 0015, 0017, 0022, 0024, 0026, 0029-0031; the next free number stays 0032) and four Quarkus guides are
+    gone. Run `cleanup` before emitting PLAN-13 so the staged specs are re-grounded against the new layout.
 - **PLAN-01:** docs-only; it settles the ADR. **Every Part B and Part C spec (PLAN-05 to PLAN-10)
   depends on it.** After it lands, re-ground those specs against the accepted ADR with `cleanup` before
   emitting them. The operator chose to stage everything now, knowing the ADR may reshape B and C.
@@ -213,7 +216,28 @@ Nothing here is staged. Each note goes to the consumer's own repository once the
 
 ## Open Defects
 
-- None owned yet.
+- **Incomplete landing: `plan-12-documentation-review-consolidation-009.md`** (PLAN-12, 2026-11-24).
+  `inbox landing-check` reported `complete: false`; missing keys: `unresolved_review_threads`,
+  `review_body_findings_total`, `review_body_findings_handled`, `sonar_open_new_issues` (all `unknown`).
+  The landing was reconciled as far as it goes. Re-reads at analysis (`review-gate`: `undecidable_read` on the
+  23-comment CodeRabbit body; Sonar `read_open_issues`: `undecidable`, `head_revision_unavailable`) are
+  `unknown` as well, so the figures stay unmeasured; the Done-when "zero Sonar issues and hotspots" is not
+  evidenced.
+- **PLAN-12 layer-3 findings, awaiting the operator's word on staging** (`landings/PLAN-12.md`; none fixed inline):
+  - L3-1 `AccessTokenCache` class Javadoc (`AccessTokenCache.java:61-63`) still says a hit never returns a token
+    the uncached pipeline would reject; `doc/validation/architecture.adoc:36` was corrected to say it does not
+    re-verify the signature. Production source, outside every staged spec's surface.
+  - L3-2 ADR-0013's general no-shim rule is cut down to the `AuthenticationResult` fact in
+    `doc/client/specification/retrieval-flow.adoc:147-152`.
+  - L3-3 ADR-0010 lost its `// supersedes: 5` metadata line.
+  - L3-4 advisory leftovers carried from the PR: `BenchmarkConfiguration.defaults()` example in
+    `benchmarking/benchmarking-common/README.adoc:180`; `./serve-reports.sh stop` without its directory in
+    `benchmarking/doc/local-testing.adoc:31`; the roughly 19 untriaged CodeRabbit minor comments (list in the
+    review-body lesson draft).
+- **Seven PLAN-12 candidate-lesson messages held in `inbox/`** (`-001` to `-005`, `-007`, `-008`), undispositioned.
+  Filing `plan-marshall:*` lessons into this repository's store is refused (`wrong_store`); the
+  `--allow-foreign-store` override was not used without the operator's say-so. Drafts are in `.plan/temp/lesson-*.md`.
+  `-006` was folded into lesson `2026-11-21-13-003` as a recurrence and is not held.
 
 ## Watches
 
