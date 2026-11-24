@@ -60,6 +60,9 @@ claims did not hold.
     appended after the renumbered sets, so "CLIENT-31..36" in these specs becomes "the next free ids".
   - Scope 2 buys nothing during WS-05: each of the three plans claims `doc/` and they run strictly in
     sequence.
+  - **PLAN-15 (staged 2026-11-24 on operator request) runs BEFORE PLAN-13**: it closes PLAN-12's layer-3
+    findings and the untriaged CodeRabbit comments. It shares 15 files with PLAN-13 and 10 with PLAN-14, so
+    PLAN-13's spec now names it in `Depends on:`. Order: PLAN-15 -> PLAN-13 -> PLAN-14.
   - **PLAN-12 shipped as #952 (2026-11-24, `66cecbf4`).** The ADR set is now 17 files (0001, 0003, 0006-0010,
     0012, 0014, 0015, 0017, 0022, 0024, 0026, 0029-0031; the next free number stays 0032) and four Quarkus guides are
     gone. Run `cleanup` before emitting PLAN-13 so the staged specs are re-grounded against the new layout.
@@ -223,7 +226,7 @@ Nothing here is staged. Each note goes to the consumer's own repository once the
   23-comment CodeRabbit body; Sonar `read_open_issues`: `undecidable`, `head_revision_unavailable`) are
   `unknown` as well, so the figures stay unmeasured; the Done-when "zero Sonar issues and hotspots" is not
   evidenced.
-- **PLAN-12 layer-3 findings, awaiting the operator's word on staging** (`landings/PLAN-12.md`; none fixed inline):
+- **PLAN-12 layer-3 findings, staged as PLAN-15 on the operator's word (2026-11-24)** (`landings/PLAN-12.md`; none fixed inline; retire this entry when PLAN-15 lands):
   - L3-1 `AccessTokenCache` class Javadoc (`AccessTokenCache.java:61-63`) still says a hit never returns a token
     the uncached pipeline would reject; `doc/validation/architecture.adoc:36` was corrected to say it does not
     re-verify the signature. Production source, outside every staged spec's surface.

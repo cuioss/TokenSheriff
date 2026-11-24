@@ -98,7 +98,8 @@ or fewer (operator decision, 2026-11-23: three PRs, cut by prefix).
 
 ## Dependencies and Sequencing
 
-- Depends on: PLAN-12 (renumber once, over the consolidated text).
+- Depends on: PLAN-12 (renumber once, over the consolidated text), PLAN-15 (PLAN-12's residual fixes land
+  first, so the renumbering runs over corrected text; 15 shared files, strictly sequential).
 - Overlaps with: PLAN-14 (shared documents such as `doc/developer/test-impl-mapping.adoc` and the guard);
   strictly sequential.
 - Adjacent to: `token-sheriff-client/`, whose `CLIENT-*` ids PLAN-14 renumbers. Client files citing
