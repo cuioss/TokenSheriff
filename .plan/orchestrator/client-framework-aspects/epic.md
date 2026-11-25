@@ -65,6 +65,11 @@ claims did not hold.
     number 0032). It shares 15 files with PLAN-13 and 10 with PLAN-14, so PLAN-13's spec names it in `Depends on:`,
     now satisfied. Order: PLAN-13 -> PLAN-14. Residual documentation defects are in Open Defects; they do not gate
     PLAN-13, which changes ids only.
+  - **PLAN-13 shipped as #956 (2026-11-24, `1022071f`; `landings/PLAN-13.md`).** COMMONS and VALIDATION are monotonic
+    (COMMONS 1..17, VALIDATION 1..13 with 11 now defined), each document ends in a "Former identifiers" table, and
+    `RequirementIdIntegrityTest` guards both prefixes with CLIENT `PENDING`. 33 files. **PLAN-14 is next and runs alone**
+    (`doc/`, the client module, the client Quarkus modules). It removes the CLIENT `PENDING` entry and keeps the guard's
+    absent-versus-zero and range-endpoint tests. Its spec never hosts a residual.
   - **PLAN-12 shipped as #952 (2026-11-24, `66cecbf4`).** The ADR set is now 17 files (0001, 0003, 0006-0010,
     0012, 0014, 0015, 0017, 0022, 0024, 0026, 0029-0031; the next free number stays 0032) and four Quarkus guides are
     gone. Run `cleanup` before emitting PLAN-13 so the staged specs are re-grounded against the new layout.
@@ -73,6 +78,10 @@ claims did not hold.
   ADR-0010 added to its surface). **PLAN-16** is the container for the validation, benchmarking and client-discovery
   modules, 5 deliverables, `Depends on: PLAN-14`; it shares 8 files with PLAN-13 and 4 with PLAN-14, so it runs
   after them, and shares only ADR-0017 with PLAN-01 (one file, not a block). Nothing else depends on it.
+  **PLAN-16 now has 7 deliverables** (2026-11-25): PLAN-13's landing added deliverable 6 (guard follow-ups in
+  `RequirementIdIntegrityTest`: xref targets, file kinds swept, the `resolveRepositoryRoot` fall-through, the 713-line size)
+  and deliverable 7 (the `doc/commons/requirements.adoc:334` sub-id sentence). It overlaps PLAN-14 on the guard file, so
+  it starts from PLAN-14's version. Room left: 3 deliverables.
 - **PLAN-01:** docs-only; it settles the ADR. **Every Part B and Part C spec (PLAN-05 to PLAN-10)
   depends on it.** After it lands, re-ground those specs against the accepted ADR with `cleanup` before
   emitting them. The operator chose to stage everything now, knowing the ADR may reshape B and C.
@@ -207,6 +216,21 @@ claims did not hold.
   reach its `main` through that repository's own `land`; the `--allow-foreign-store` override was never used. Standing
   rule: a candidate lesson naming a bundle this repository does not own is routed this way, not held.
 
+- 2026-11-25 — **PLAN-13 landing reconciled** (`landings/PLAN-13.md`; row stamped `shipped`, PR 956). Residuals folded
+  under the standing rule: the guard follow-ups (xref targets, file kinds, fall-through test, class size) -> PLAN-16
+  deliverable 6, the COMMONS intro sentence -> PLAN-16 deliverable 7; PLAN-14 is a renumbering plan and hosts nothing.
+  Recorded only, not staged: the widened `COMMONS-1..9` ranges (accurate: new `COMMONS-5`, the bounded body handler, lives in
+  the range's `transport.adoc`) and the squash body's "Clarified when logout revocation occurs" line (the diff there is
+  ids only; history is not rewritten). Three layer-3 findings, all minor, reported to the operator in the same turn; the
+  orchestrator's own stale-id sweep found no citation of a moved id outside the 33 touched files.
+- 2026-11-25 — **Candidate lessons `plan-13-renumber-commons-validation-001` to `-006` disposed.** `-002` (absent versus explicit
+  zero) and `-003` (range endpoints, repository root, xref target) promoted to this store as `2026-11-25-06-001` and
+  `-002`; `-001` (per-task verification module list), `-004` (installed-script flag drift, folds into this store's
+  `2026-11-18-12-002` and `2026-11-21-13-003` as a recurrence on the plan-marshall side), `-005` (pre-push freshness verdict) and
+  `-006` (OOM under a disabled build server) routed to `/home/oliver/git/plan-marshall`'s `lessons-routing` inbox as
+  `client-framework-aspects-013` to `-016`, under the 2026-11-24 standing rule. They reach that repository's `main` with its own
+  `land`.
+
 ## Consumer hand-off notes
 
 Nothing here is staged. Each note goes to the consumer's own repository once the named release exists.
@@ -219,7 +243,7 @@ Nothing here is staged. Each note goes to the consumer's own repository once the
     the operator's.
   - Keep the file in step: when a plan here changes a requirement id, a default or the module layout,
     note that Audit Notary's copy is stale.
-  - ⚠ **Known staleness:** PLAN-13 and PLAN-14 renumber every requirement id, so that file's ids
+  - ⚠ **Known staleness (PLAN-13 landed 2026-11-24 for COMMONS and VALIDATION; CLIENT follows with PLAN-14):** PLAN-13 and PLAN-14 renumber every requirement id, so that file's ids
     (CLIENT-26, -27, -29, VALIDATION-13.4/13.5 and the planned CLIENT-31..36) and its `doc/` paths will
     change. Update it from the "Former identifiers" tables once PLAN-14 lands. API Sheriff's references
     to Token Sheriff ids translate the same way.
@@ -263,6 +287,14 @@ Nothing here is staged. Each note goes to the consumer's own repository once the
   23-comment CodeRabbit body; Sonar `read_open_issues`: `undecidable`, `head_revision_unavailable`) are
   `unknown` as well, so the figures stay unmeasured; the Done-when "zero Sonar issues and hotspots" is not
   evidenced.
+- **PLAN-13 unverified Sonar figure** (2026-11-25): the landing says `sonar_open_new_issues=0`; the re-read returned
+  `undecidable` (`head_revision_unavailable`), so the figure is unverified, not contradicted; the Done-when "zero Sonar issues and
+  hotspots" is not evidenced (same state as PLAN-12). `review_body_findings_handled` is not re-verified (progress file not read).
+- **PLAN-13 residuals** (2026-11-25; `landings/PLAN-13.md`; none fixed inline; retire each when PLAN-16 lands):
+  L3-1 xref targets are not checked against the linked document's anchors (`RequirementIdIntegrityTest.java:485-493`);
+  L3-2 only `.adoc`, `.md`, `.java` are swept (`:69`); L3-3 the `return base` fall-through is untested (`:650-656`) and the class is
+  713 lines against `AGENTS.md` § Test Class Size; L2-3 `doc/commons/requirements.adoc:334`. Destinations: PLAN-16 deliverables 6
+  and 7.
 - **PLAN-12's layer-3 findings are closed by PLAN-15** (shipped as #954, `0545cffd`, 2026-11-24;
   `landings/PLAN-15.md`): the `AccessTokenCache` Javadoc, ADR-0013's general rule (restored at
   `retrieval-flow.adoc:154-159`, thinner than the ADR, see below), ADR-0010's `supersedes` line, and the advisory

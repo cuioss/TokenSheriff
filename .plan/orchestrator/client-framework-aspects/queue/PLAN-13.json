@@ -2,10 +2,10 @@
   "id": "PLAN-13",
   "slug": "renumber-commons-and-validation-requirements",
   "workstream": "WS-05",
-  "status": "running",
+  "status": "shipped",
   "lane": "plan-marshall",
-  "plan_marshall_plan_id": "",
-  "pr": "",
-  "landing": "",
+  "plan_marshall_plan_id": "plan-13-renumber-commons-validation",
+  "pr": "956",
+  "landing": "landings/PLAN-13.md",
   "seq": 13
 }

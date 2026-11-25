@@ -15,7 +15,9 @@ workstream: WS-05
 
 Close the residuals PLAN-15's landing left in three modules, in one plan, after the documentation baseline is
 final (PLAN-14): the cache and validation documentation defects, the benchmarking documentation and runner
-defects, and one client discovery guard. No requirement id changes.
+defects, and one client discovery guard; and, appended 2026-11-25 from PLAN-13's landing, the follow-ups of the
+requirement-id integrity guard and one vestigial sentence in the COMMONS requirements document. No requirement id
+changes.
 
 ## Deliverables
 
@@ -64,6 +66,29 @@ defects, and one client discovery guard. No requirement id changes.
    a URL-valued component is not covered. No behaviour change for the fields checked today.
    - Skills: pm-dev-java:java-core, pm-dev-java:junit-core
    - Persona: implementer
+6. **Requirement-id integrity guard follow-ups** (appended from `landings/PLAN-13.md`, L3-1 to L3-3). Work in
+   `RequirementIdIntegrityTest` as PLAN-14 leaves it (CLIENT enforced, the `PENDING` entry gone); keep the absent-versus-
+   explicit-zero predicate tests and the range-endpoint and repository-root tests PLAN-13 added.
+   - **Check xref targets.** A reference such as `xref:../validation/requirements.adoc#COMMONS-11[...]` is also checked
+     against the anchors of the document the xref names, not only against the prefix's own id set
+     (`RequirementIdIntegrityTest.java:485-493` resolves the token only). Add a predicate test for a token that exists in
+     its own catalog but not in the linked document.
+   - **Sweep every file kind a citation can sit in.** `SCANNED_EXTENSIONS` (`:69`) holds `.adoc`, `.md` and `.java`, and
+     `EXCLUDED_DIRECTORIES` (`:71-72`) holds `.github` and `.claude`. Decide at outline which further kinds (`.puml`,
+     `.svg`, `.properties`, `.yml`, `.json`, `.xml`, scripts) carry citations today; add the ones that do, and state in the
+     test's Javadoc the kinds left out and why.
+   - **Cover the `return base` fall-through** of `resolveRepositoryRoot` (`:650-656`) with a test: no ancestor carries the
+     markers.
+   - **Size.** The class is 713 lines, over the `AGENTS.md` § Test Class Size guideline (500). Split the fixtures and
+     parser helpers from the three checks, or give the reason in the pull request body. The parameterisation
+     opportunity the code review named is part of the same decision.
+   - Skills: pm-dev-java:junit-core, pm-dev-java:java-core
+   - Persona: module-tester
+7. **COMMONS "Former identifiers" intro.** `doc/commons/requirements.adoc:334` says "a sub-ID follows its parent", but
+   COMMONS has no sub-ids; the sentence belongs to the VALIDATION table. Remove it from the COMMONS introduction
+   (`landings/PLAN-13.md`, L2-3). One sentence; no id changes.
+   - Skills: pm-documents:ref-asciidoc
+   - Persona: documenter
 
 **Done when:**
 
@@ -78,6 +103,13 @@ defects, and one client discovery guard. No requirement id changes.
   served by `serve-reports.sh` (at `0545cffd` it follows all three commands, `:30-43`).
 - A test fails when a URL-valued `ProviderMetadata` component is missing from the checked set: it fails against a
   deliberately incomplete set, and the fields checked today stay checked.
+- A test fails when an xref names a requirement id that is defined in its own catalog but has no anchor in the
+  linked document, and it fails against the case `xref:...#COMMONS-11[]` pointing at the validation document.
+- The guard's Javadoc names the file kinds it sweeps and the kinds it leaves out; a test covers the
+  `resolveRepositoryRoot` fall-through; the test class is at or under 500 lines, or the pull request body gives the
+  reason.
+- `doc/commons/requirements.adoc` no longer says a sub-ID follows its parent in the COMMONS "Former identifiers"
+  introduction (it does at `1022071f`).
 - The set of `CLIENT-`, `VALIDATION-` and `COMMONS-` ids is identical before and after.
 - `./mvnw -pl token-sheriff-validation,token-sheriff-client,benchmarking/benchmark-core -am verify` is green.
 - The AsciiDoc build of the documentation is clean, with no broken xref or link.
@@ -86,7 +118,7 @@ defects, and one client discovery guard. No requirement id changes.
 
 ## Standing Constraints
 
-- Requirement ids are frozen; the three prefixes were renumbered by PLAN-13 and PLAN-14, so cite the ids as they
+- Requirement ids are frozen (deliverable 6 changes how they are checked, never which exist); the three prefixes were renumbered by PLAN-13 and PLAN-14, so cite the ids as they
   stand when this plan runs.
 - Documentation and Javadoc changes alter no behaviour. Deliverables 4 and 5 are the only code changes, and
   deliverable 5 changes no behaviour for the fields checked today.
@@ -111,6 +143,14 @@ defects, and one client discovery guard. No requirement id changes.
 - OBSERVED: `JfrBenchmarkRunner.createConfiguration()` is declared at `benchmarking/benchmark-core/src/main/java/de/cuioss/sheriff/token/validation/benchmark/JfrBenchmarkRunner.java:57`; `DiscoveryResolver.validateEndpointSchemes` at `token-sheriff-client/src/main/java/de/cuioss/sheriff/token/client/discovery/DiscoveryResolver.java:269` — read at `0545cffd` (grep).
 - HYPOTHESIS: the runner overrides the `jmh.*` values with fixed ones and the builder validates the properties first — confirm/refute at `JfrBenchmarkRunner.java:57-73` and `BenchmarkConfiguration.java:67-78` (verify-at-outline).
 - HYPOTHESIS: `validateEndpointSchemes` lists the checked endpoints by hand and `ProviderMetadata` has URL-valued components it does not list — confirm/refute at `DiscoveryResolver.java:269` and `ProviderMetadata.java` (verify-at-outline).
+- OBSERVED: the guard resolves a reference against the prefix's own defined ids only (`findDanglingReferences`,
+  `RequirementIdIntegrityTest.java:485-493`); `SCANNED_EXTENSIONS = Set.of(".adoc", ".md", ".java")` at `:69`;
+  `resolveRepositoryRoot` ends in `return base` at `:650-656`; the file is 713 lines — all read at `1022071f`
+  (orchestrator re-read, 2026-11-25, `landings/PLAN-13.md` L3-1 to L3-3).
+- OBSERVED: `doc/commons/requirements.adoc:334` carries "a sub-ID follows its parent" and COMMONS declares no `COMMONS-n.m`
+  anchor — read at `1022071f` (orchestrator, `landings/PLAN-13.md` L2-3).
+- HYPOTHESIS: file kinds other than `.adoc`, `.md` and `.java` carry requirement-id citations today — confirm/refute with a
+  repository content search at outline (verify-at-outline); PLAN-13's leaf could not run one.
 - Verify-first clause: if a fix would change a requirement id or behaviour beyond deliverables 4 and 5, or needs a file outside the Expected Surface, stop and report instead of widening the plan; the orchestrator folds it into the plan that fits, or appends it here.
 - Not in this plan, deliberately: ADR-0031's deployment check evaluates an interface default method's scopes on their own. `ADR-0031:48` records that limit as ACCEPTED BY THE OPERATOR, so extending the check to the merged set is a reversal of an operator decision, not a residual. It is recorded as a Watch in `epic.md`.
 
@@ -128,12 +168,17 @@ defects, and one client discovery guard. No requirement id changes.
 - HYPOTHESIS: `token-sheriff-validation/doc/configuration/security-settings.adoc` (verify-at-outline; line 56 is the reference, edited only if it is the wrong side)
 - HYPOTHESIS: `token-sheriff-client/src/test/java/de/cuioss/sheriff/token/client/discovery/` — new or extended test (verify-at-outline)
 - HYPOTHESIS: `benchmarking/benchmark-core/src/test/java/` — a runner test, if deliverable 4 changes the code (verify-at-outline)
+- OBSERVED: `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/architecture/RequirementIdIntegrityTest.java` (deliverable 6)
+- OBSERVED: `doc/commons/requirements.adoc` (deliverable 7)
+- HYPOTHESIS: `token-sheriff-validation/src/test/java/de/cuioss/sheriff/token/architecture/` — a split-out helper class, if the size
+  decision of deliverable 6 splits the guard (verify-at-outline)
 
 ## Dependencies and Sequencing
 
 - Depends on: PLAN-14 (the documentation baseline is final and the ids renumbered; runs first).
-- Overlaps with: PLAN-13 and PLAN-14 on `doc/` and `benchmarking/doc/` (strictly sequential, hence the dependency); no
-  staged plan from PLAN-01 to PLAN-11 shares a file with it.
+- Overlaps with: PLAN-13 and PLAN-14 on `doc/` and `benchmarking/doc/` (strictly sequential, hence the dependency); PLAN-14
+  also edits `RequirementIdIntegrityTest` (it removes the CLIENT `PENDING` entry), so deliverable 6 starts from PLAN-14's
+  version of that file. No staged plan from PLAN-01 to PLAN-11 shares a file with it.
 - Adjacent to: `doc/validation/requirements.adoc` and `doc/client/` documents, which stay untouched.
 
 ## Hand-Off Command
